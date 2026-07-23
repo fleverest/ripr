@@ -1,10 +1,39 @@
 Package: ripr
-Title: What the Package Does (One Line, Title Case)
+Title: Reverse Information Projection via Frank-Wolfe and EM
 Version: 0.0.0.9000
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Authors@R:
+    person("Floyd", "Everest", , "me@floydeverest.com", role = c("aut", "cre"))
+Description: Computes reverse information projections (RIPr) of an alternative
+    distribution onto a union-structured null hypothesis, and the associated
+    duality-gap certificate for the rescaled e-variable. The projection is found
+    by Frank-Wolfe and EM algorithms over a mixture of atoms on the null faces,
+    with an exact finite-support engine for multinomial models and a Monte Carlo
+    engine (common random numbers) for continuous models. Problem components --
+    sampling family, null geometry, and alternative -- are S7 classes so new
+    sample spaces and null geometries drop in without touching the algorithms.
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.0.0
+Imports:
+    S7,
+    stats,
+    utils
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
+Collate:
+    'numerics.R'
+    'multinomial.R'
+    'family.R'
+    'alternative.R'
+    'faces.R'
+    'engine.R'
+    'state.R'
+    'steps.R'
+    'certificate.R'
+    'problem.R'
+    'scheduler.R'
+    'gaussian.R'
+    'ripr-package.R'
+    'zzz.R'

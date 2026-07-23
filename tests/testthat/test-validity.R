@@ -3,7 +3,7 @@
 
 test_that("certified e-variable satisfies E_{P_theta}[e] <= 1 on the null", {
   n <- 8
-  alt <- point_alt(theta_star = c(0.6, 0.25, 0.15))
+  alt <- point_dist(theta_star = c(0.6, 0.25, 0.15))
   fam <- multinomial_family(n, 3)
   faces <- plurality_faces(3)
   prob <- ripr_problem(fam, faces, alt)
@@ -17,10 +17,9 @@ test_that("certified e-variable satisfies E_{P_theta}[e] <= 1 on the null", {
   )
 
   X <- support(fam)
-  # e(x) = (Q / P*)(x) / E_star, with E_star = 1 + gap the oracle maximum.
-  lq <- q_log_density(alt, fam, X)
-  lp <- mixture_log_density(res$atoms, res$weights, fam)
-  e <- exp(lq - lp) / (1 + res$gap)
+  # The rescaled e-variable e(x) = (Q / P*)(x) / (1 + gap), straight from the
+  # fitted e_variable object.
+  e <- e_value(res$e_variable, X)
 
   E_e <- function(theta) sum(exp(log_density(fam, theta)) * e)
 

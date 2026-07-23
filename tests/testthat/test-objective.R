@@ -21,7 +21,7 @@ test_that("each EM iteration does not increase the KL objective", {
 
 test_that("the scheduler converges and the certificate is consistent", {
   n <- 8
-  alt <- point_alt(theta_star = c(0.6, 0.25, 0.15))
+  alt <- point_dist(theta_star = c(0.6, 0.25, 0.15))
   faces <- plurality_faces(3)
   prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
 
@@ -49,7 +49,7 @@ test_that("the scheduler converges and the certificate is consistent", {
 
 test_that("the best-so-far duality gap trace is non-increasing", {
   n <- 8
-  alt <- point_alt(theta_star = c(0.55, 0.3, 0.15))
+  alt <- point_dist(theta_star = c(0.55, 0.3, 0.15))
   faces <- plurality_faces(3)
   prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
 
@@ -63,4 +63,50 @@ test_that("the best-so-far duality gap trace is non-increasing", {
   )
   best_gap <- cummin(res$history$gap)
   expect_true(all(diff(best_gap) <= 1e-12))
+})
+
+test_that("prune_mixture drops dead atoms and renormalises", {
+  m <- mixture_dist(
+    components = matrix(c(0.5, 0.5, 0.4, 0.6, 0.3, 0.7), nrow = 2),
+    weights = c(0.7, 0.3 - 1e-9, 1e-9)
+  )
+  p <- prune_mixture(m, threshold = 1e-6)
+  expect_equal(ncol(p@components), 2L)
+  expect_equal(sum(p@weights), 1, tolerance = 1e-12)
+  expect_equal(p@components, m@components[, 1:2], tolerance = 1e-12)
+})
+
+test_that("run_ripr returns an e_variable and prune_threshold trims it", {
+  n <- 8
+  alt <- point_dist(theta_star = c(0.6, 0.25, 0.15))
+  faces <- plurality_faces(3)
+  prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
+  common <- list(
+    prob,
+    init_atoms = init_on_faces(faces, alt@theta_star),
+    init_atom_faces = seq_along(faces),
+    fw_iters = 20, em_iters = 5, n_seeds = 100, gap_tol = 1e-7, verbose = FALSE
+  )
+  # Same seed => identical trajectory; pruning only drops atoms afterwards.
+  set.seed(33)
+  res_full <- do.call(run_ripr, common)
+  set.seed(33)
+  res_pruned <- do.call(run_ripr, c(common, prune_threshold = 1e-6))
+
+  ev <- res_pruned$e_variable
+  expect_true(S7::S7_inherits(ev, e_variable))
+  expect_true(S7::S7_inherits(ev@projection, mixture_dist))
+  expect_identical(ev@numerator, alt)
+  # Pruning cannot enlarge the support, and the projection weights sum to 1.
+  expect_lte(ncol(ev@projection@components), length(res_full$weights))
+  expect_equal(sum(ev@projection@weights), 1, tolerance = 1e-12)
+  # The certificate on the pruned e-variable is what it carries as its gap.
+  expect_equal(ev@gap, res_pruned$certificate$gap_used)
+
+  # e_value: corrected divides the raw ratio by (1 + gap); log is consistent.
+  X <- support(prob$family)
+  raw <- e_value(ev, X, corrected = FALSE)
+  cor <- e_value(ev, X, corrected = TRUE)
+  expect_equal(cor, raw / (1 + ev@gap), tolerance = 1e-10)
+  expect_equal(e_value(ev, X, log = TRUE), log(cor), tolerance = 1e-10)
 })

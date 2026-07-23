@@ -24,15 +24,22 @@
 #'   in place (pairwise variant only).
 #' @param mirror_iters Max entropic-mirror-descent iterations per weight
 #'   reoptimisation (fully-corrective variant only).
+#' @param prune_threshold Drop projection atoms with weight `<= prune_threshold`
+#'   (renormalising the rest) before the final certification, so the returned
+#'   e-variable and certificate describe one clean mixture. Default `0` keeps
+#'   every atom.
 #' @param fw_variant Weight-update variant: `"line-search"` (default),
 #'   `"pairwise"`, `"vanilla"`, `"fully-corrective"`, or `"li-barron"` (the
 #'   exact-objective greedy step).
 #' @param checkpoint_iters Integer vector of outer-iteration indices (0 =
 #'   post-init) at which to snapshot the mixture. Default `NULL` records nothing.
 #' @param verbose Print per-iteration progress. Default TRUE.
-#' @return A list with the final `atoms`, `weights`, `atom_face_idx`, the
-#'   `kl_trace`/`history`/`metrics` records, the terminal `gap`, `kl`,
-#'   `converged` flag, `certificate`, and `state`.
+#' @return A list. Its principal element is `e_variable`, the fitted RIPr
+#'   [e_variable()] (numerator `Q`, projection `P*`, and the certified gap); call
+#'   [e_value()] on it to score data. Also returned: the projection's `atoms` /
+#'   `weights` / `atom_face_idx`, the `certificate`, the `kl_trace` / `history` /
+#'   `metrics` records, the terminal `gap`, `kl`, `converged` flag, and the raw
+#'   optimisation `state`.
 #' @export
 run_ripr <- function(
   problem,
@@ -47,6 +54,7 @@ run_ripr <- function(
   ls_tol = 1e-12,
   removal_thresh = 1e-8,
   mirror_iters = 500L,
+  prune_threshold = 0,
   fw_variant = c(
     "line-search",
     "pairwise",
@@ -301,21 +309,61 @@ run_ripr <- function(
     objective = history$kl_after_em
   )
 
+  # --- Prune, then certify the pruned projection ---
+  # Pruning drops the near-zero-weight atoms Frank-Wolfe leaves behind; the
+  # certificate is computed on the pruned mixture so it always describes the
+  # object we return. With the default `prune_threshold = 0` nothing is dropped
+  # and the final oracle sweep is reused.
   n_live <- state_n_atoms(state)
+  atoms <- state_atoms(state)[seq_len(n_live)]
+  weights <- state_weights(state)[seq_len(n_live)]
+  faces <- state_face_idx(state)[seq_len(n_live)]
+
+  keep <- weights > prune_threshold
+  if (!any(keep)) {
+    stop("`prune_threshold` removed every atom; lower it")
+  }
+  atoms <- atoms[keep]
+  faces <- faces[keep]
+  weights <- weights[keep] / sum(weights[keep])
+
+  if (all(keep)) {
+    cert <- certify(state, problem, oracle_result = fw)
+  } else {
+    pruned <- mixture_state(problem$engine, length(atoms))
+    for (k in seq_along(atoms)) {
+      state_add_atom(pruned, atoms[[k]], faces[k])
+    }
+    state_set_weights(pruned, weights)
+    cert <- certify(pruned, problem)
+  }
+
+  projection <- mixture_dist(
+    components = do.call(cbind, atoms),
+    weights = weights
+  )
+  ev <- e_variable(
+    numerator = problem$alternative,
+    projection = projection,
+    family = problem$family,
+    gap = cert$gap_used
+  )
+
   list(
-    atoms = state_atoms(state)[seq_len(n_live)],
-    atom_face_idx = state_face_idx(state)[seq_len(n_live)],
-    weights = state_weights(state)[seq_len(n_live)],
+    e_variable = ev,
+    atoms = atoms,
+    weights = weights,
+    atom_face_idx = faces,
     kl_trace = kl_trace,
     history = history,
-    gap = gap,
+    gap = cert$gap,
     oracle_theta = oracle_theta,
-    kl = kl,
+    kl = cert$kl,
     kl_ulb = kl_ulb,
     converged = converged,
     checkpoints = checkpoints,
     metrics = metrics,
-    certificate = certify(state, problem, oracle_result = fw),
+    certificate = cert,
     state = state
   )
 }

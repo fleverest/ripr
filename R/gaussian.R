@@ -10,14 +10,6 @@ mvn_log_density_matrix <- function(x_mat, mean, chol_l) {
     0.5 * colSums(z^2)
 }
 
-as_outcome_matrix <- function(x) {
-  if (is.null(dim(x))) {
-    matrix(x, nrow = 1L)
-  } else {
-    as.matrix(x)
-  }
-}
-
 #' Gaussian sampling family with known covariance
 #'
 #' Observations are single draws `X ~ N(theta, sigma)` with `sigma` known. The
@@ -127,11 +119,11 @@ method(support, gaussian_family) <- function(family) {
 #'
 #' @param prior_mean Numeric prior mean vector.
 #' @param prior_cov Prior covariance (symmetric positive definite).
-#' @return A `gaussian_prior_alt`.
+#' @return A `gaussian_marginal`.
 #' @export
-gaussian_prior_alt <- new_class(
-  "gaussian_prior_alt",
-  parent = alternative,
+gaussian_marginal <- new_class(
+  "gaussian_marginal",
+  parent = distribution,
   properties = list(
     prior_mean = class_numeric,
     prior_cov = class_any
@@ -147,28 +139,28 @@ gaussian_prior_alt <- new_class(
   }
 )
 
-method(q_log_density, list(gaussian_prior_alt, gaussian_family)) <- function(
-  alt,
+method(dist_log_density, list(gaussian_marginal, gaussian_family)) <- function(
+  dist,
   family,
   x = NULL
 ) {
   if (is.null(x)) {
     stop("gaussian alternatives need explicit outcomes `x`")
   }
-  marginal_chol <- t(chol(family@sigma + alt@prior_cov))
-  mvn_log_density_matrix(as_outcome_matrix(x), alt@prior_mean, marginal_chol)
+  marginal_chol <- t(chol(family@sigma + dist@prior_cov))
+  mvn_log_density_matrix(as_outcome_matrix(x), dist@prior_mean, marginal_chol)
 }
 
-method(q_sample, list(gaussian_prior_alt, gaussian_family)) <- function(
-  alt,
+method(dist_sample, list(gaussian_marginal, gaussian_family)) <- function(
+  dist,
   family,
   n_obs,
   seed = NULL
 ) {
   with_rng_seed(seed, {
-    d <- length(alt@prior_mean)
-    marginal_chol <- t(chol(family@sigma + alt@prior_cov))
+    d <- length(dist@prior_mean)
+    marginal_chol <- t(chol(family@sigma + dist@prior_cov))
     z <- matrix(rnorm(n_obs * d), nrow = d, ncol = n_obs)
-    t(marginal_chol %*% z + alt@prior_mean)
+    t(marginal_chol %*% z + dist@prior_mean)
   })
 }

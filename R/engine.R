@@ -312,7 +312,7 @@ method(entropy_q, expectation_engine) <- function(engine) {
 #' serves every expectation as a dense weighted sum in log space.
 #'
 #' @param family A `family` with a finite, enumerable support.
-#' @param alternative An `alternative`; its induced outcome distribution is the
+#' @param alternative A `distribution`; its induced outcome distribution is the
 #'   Q every expectation integrates against.
 #' @return An `exact_engine`.
 #' @export
@@ -321,10 +321,10 @@ exact_engine <- new_class(
   parent = expectation_engine,
   constructor = function(family, alternative) {
     family <- as_family(family)
-    alternative <- as_alternative(alternative)
+    alternative <- as_distribution(alternative)
     support_x <- support(family)
     M <- nrow(support_x)
-    log_q_mass <- q_log_density(alternative, family, support_x)
+    log_q_mass <- dist_log_density(alternative, family, support_x)
     q_mass <- exp(log_q_mass)
     finite_q <- q_mass > 0
     q_mass_f <- q_mass[finite_q]
@@ -357,7 +357,7 @@ exact_engine <- new_class(
 #' certificate layer to the inflated-gap rule.
 #'
 #' @param family A `family` whose alternative can be sampled from.
-#' @param alternative The Q to sample; must implement [q_sample()].
+#' @param alternative The Q to sample; must implement [dist_sample()].
 #' @param n_draws Number of common-random-number draws.
 #' @param seed Integer seed fully determining the draw set.
 #' @return An `mc_engine`.
@@ -371,13 +371,13 @@ mc_engine <- new_class(
   ),
   constructor = function(family, alternative, n_draws, seed) {
     family <- as_family(family)
-    alternative <- as_alternative(alternative)
+    alternative <- as_distribution(alternative)
     n_draws <- as.integer(n_draws)
-    outcomes <- q_sample(alternative, family, n_draws, seed = seed)
+    outcomes <- dist_sample(alternative, family, n_draws, seed = seed)
     log_q_mass <- rep(-log(n_draws), n_draws)
     q_mass <- exp(log_q_mass)
     finite_q <- q_mass > 0
-    log_q_at_draws <- q_log_density(alternative, family, outcomes)
+    log_q_at_draws <- dist_log_density(alternative, family, outcomes)
     H_Q <- -mean(nan_to_zero(log_q_at_draws))
     new_object(
       S7_object(),

@@ -84,3 +84,16 @@ matmul_0_ninf <- function(A, B) {
   result[ninf_hits > 0] <- -Inf
   result
 }
+
+#' Coerce an outcome argument to an `(N, d)` matrix
+#'
+#' A bare length-d vector is treated as a single outcome (one row).
+#' @keywords internal
+#' @noRd
+as_outcome_matrix <- function(x) {
+  if (is.null(dim(x))) {
+    matrix(x, nrow = 1L)
+  } else {
+    as.matrix(x)
+  }
+}

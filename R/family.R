@@ -164,7 +164,11 @@ method(log_density, multinomial_family) <- function(family, theta, x = NULL) {
   if (is.null(x)) {
     return(family@likelihood$log_pmf(theta))
   }
-  as.vector(mnom_logpmf(x, matrix(log(theta), ncol = 1L), family@n_trials))
+  as.vector(mnom_logpmf(
+    as_outcome_matrix(x),
+    matrix(log(theta), ncol = 1L),
+    family@n_trials
+  ))
 }
 
 method(log_density_batch, multinomial_family) <- function(
@@ -175,14 +179,14 @@ method(log_density_batch, multinomial_family) <- function(
   if (is.null(x)) {
     return(family@likelihood$log_pmf_batch(theta_mat))
   }
-  mnom_logpmf(x, log(theta_mat), family@n_trials)
+  mnom_logpmf(as_outcome_matrix(x), log(theta_mat), family@n_trials)
 }
 
 method(score, multinomial_family) <- function(family, theta, x = NULL) {
   if (is.null(x)) {
     return(family@likelihood$score(theta))
   }
-  sweep(as.matrix(x), 2L, theta, "/") - family@n_trials
+  sweep(as_outcome_matrix(x), 2L, theta, "/") - family@n_trials
 }
 
 method(param_dim, multinomial_family) <- function(family) {

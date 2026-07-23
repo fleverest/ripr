@@ -4,7 +4,7 @@
 
 test_that("mc_engine is stochastic with a non-zero standard error", {
   fam <- gaussian_family(2)
-  alt <- gaussian_prior_alt(prior_mean = c(1, 0), prior_cov = diag(2))
+  alt <- gaussian_marginal(prior_mean = c(1, 0), prior_cov = diag(2))
   eng <- mc_engine(fam, alt, n_draws = 500L, seed = 1L)
 
   expect_false(ripr:::deterministic(eng))
@@ -20,7 +20,7 @@ test_that("mc_engine is stochastic with a non-zero standard error", {
 test_that("Gaussian half-space RIPr runs and certifies a finite gap", {
   fam <- gaussian_family(2)
   # Alternative mean sits outside the null {theta_1 <= theta_2}.
-  alt <- gaussian_prior_alt(prior_mean = c(1, 0), prior_cov = 0.25 * diag(2))
+  alt <- gaussian_marginal(prior_mean = c(1, 0), prior_cov = 0.25 * diag(2))
   face <- halfspace_face(v = c(1, -1), c = 0, face_index = 1)
   null <- null_region(faces = list(face))
   eng <- mc_engine(fam, alt, n_draws = 800L, seed = 7L)

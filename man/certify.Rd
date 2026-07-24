@@ -8,6 +8,8 @@ certify(
   projection,
   problem,
   engine = NULL,
+  split = TRUE,
+  n_draws = NULL,
   oracle_result = NULL,
   n_seeds = 200L,
   conf = 0.95
@@ -20,14 +22,20 @@ atoms, or a \link{marginal} wrapping one.}
 \item{problem}{Problem list from \code{\link[=ripr_problem]{ripr_problem()}}; supplies the null faces and
 the default engine.}
 
-\item{engine}{Optional \code{expectation_engine} to certify against, overriding
-\code{problem$engine}. Must be over the same family and Q.}
+\item{engine}{Optional \code{expectation_engine} giving the Q/family to certify
+against, overriding \code{problem$engine}. Must be over the same family and Q.}
 
-\item{oracle_result}{Optional precomputed \code{\link[=oracle_step]{oracle_step()}} result for this
-projection and engine; when NULL the oracle is run here with \code{n_seeds} seeds
-per face.}
+\item{split}{Draw two independent samples -- one to select \verb{theta*}, one to
+estimate the gap at it -- removing the selection bias. Default \code{TRUE}. With
+\code{FALSE}, a single sample does both. Ignored for exact engines.}
 
-\item{n_seeds}{Oracle seeds per face when \code{oracle_result} is NULL.}
+\item{n_draws}{Draws per resample (Monte Carlo engines only). Default \code{NULL}
+uses the engine's own \code{n_draws}; \code{split = TRUE} draws this many twice.}
+
+\item{oracle_result}{Optional precomputed \code{\link[=oracle_step]{oracle_step()}} result; honoured
+only for exact engines (which do not resample).}
+
+\item{n_seeds}{Oracle seeds per face.}
 
 \item{conf}{One-sided confidence level for the Monte Carlo gap inflation.
 Default 0.95.}
@@ -52,15 +60,26 @@ e-variable \verb{(Q / P*) / (1 + gap)}, whose null expectation is at most 1 by
 construction.
 }
 
-Pass a different \code{engine} to certify against a different integration of Q --
-e.g. \code{resample_engine(problem$engine, n_draws)} for a fresh, larger Monte
-Carlo sample, or an \code{\link[=exact_engine]{exact_engine()}}. The default reuses the problem's engine.
+Monte Carlo certification does not reuse the passed engine's own draws: it
+resamples fresh outcomes from the engine's Q, with the engine's own \code{n_draws}
+(override with \code{n_draws}). By default (\code{split = TRUE}) it draws \strong{two}
+independent samples -- one to locate the worst-case \verb{theta*} (the oracle
+argmax over the faces), a second to estimate the gap and its standard error at
+that fixed \verb{theta*}. Because \verb{theta*} is then estimated on data independent of
+the data that selected it, the gap estimate is free of the selection
+("winner's curse") bias that a single sample incurs. With \code{split = FALSE} one
+sample does both, at half the draws but with an optimistically biased gap and
+an over-tight \code{gap_se}. Certification is therefore non-deterministic for Monte
+Carlo engines (governed by the global RNG). Exact engines integrate the true Q
+with \code{gap_se = 0}; \code{split} and \code{n_draws} do not apply.
 
-For Monte Carlo engines the gap is first inflated via \code{\link[=inflate_gap]{inflate_gap()}} at
-level \code{conf}; the returned \code{gap} is the raw estimate and \code{gap_used} the
-inflated value entering both certified quantities. Exact engines have
-\code{gap_se = 0}, making the two identical.
+Pass a different \code{engine} to certify against a different Q integration -- e.g.
+an \code{\link[=exact_engine]{exact_engine()}}, or another \code{mc_engine()}. The default is the problem's
+own engine (used only as the Q/family specification to resample from).
 
-Certification refuses to proceed if any face reports an inexact oracle: an
-undershooting oracle would silently overstate the certificate.
+For Monte Carlo engines the gap is inflated via \code{\link[=inflate_gap]{inflate_gap()}} at level
+\code{conf}; the returned \code{gap} is the raw estimate and \code{gap_used} the inflated
+value entering both certified quantities. Certification refuses to proceed if
+any face reports an inexact oracle: an undershooting oracle would silently
+overstate the certificate.
 }

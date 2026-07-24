@@ -19,6 +19,7 @@ run_ripr(
   mirror_iters = 500L,
   prune_threshold = 0,
   certify_draws = NULL,
+  certify_split = TRUE,
   fw_variant = c("line-search", "pairwise", "vanilla", "fully-corrective", "li-barron"),
   checkpoint_iters = NULL,
   verbose = TRUE
@@ -62,6 +63,12 @@ and its standard error are not optimistically biased by the fit. Default
 \code{NULL} matches the engine's fit sample size; pass a larger absolute count
 for a tighter certificate. Ignored (with a warning if set) for exact
 engines, which integrate the true Q and have nothing to resample.}
+
+\item{certify_split}{For Monte Carlo engines, split-sample the final
+certification (see \code{\link[=certify]{certify()}}): draw two independent \code{certify_draws}
+samples, one to locate the worst-case \verb{theta*} and one to estimate the gap
+at it, removing the selection bias. Default \code{TRUE}. \code{FALSE} uses a single
+sample. No effect on exact engines.}
 
 \item{fw_variant}{Weight-update variant: \code{"line-search"} (default),
 \code{"pairwise"}, \code{"vanilla"}, \code{"fully-corrective"}, or \code{"li-barron"} (the

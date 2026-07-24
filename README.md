@@ -137,8 +137,9 @@ null <- null_region(faces = faces)
 ```
 
 The sample space is continuous here, so we use the Monte Carlo engine:
-1000 draws for fitting the mixture, and an independent 5000-draw sample
-to certify the result.
+1000 draws to fit the mixture, and fresh `certify_draws = 5000` samples,
+independent of the fit, to certify the result (drawn twice by default —
+see below).
 
 ``` r
 set.seed(2)
@@ -187,32 +188,29 @@ c(
   growth_rate = res$certificate$growth_rate
 )
 ##         gap      gap_se growth_rate 
-##  0.09008602  0.04818660  0.09838999
+##  0.10495159  0.04916562  0.05122194
 ```
 
 ### Re-certifying on a larger sample
 
-The Monte Carlo certificate above is a stochastic estimate on the 5000
-draws `certify_draws` requested — independent of the draws the
-projection was fitted against. Its standard error shrinks like
-`1 / sqrt(n)`, so re-certifying the *same* fitted projection on a larger
-fresh sample tightens it, with no re-fitting. Pair the projection with a
-fresh engine via `resample_engine()`:
+The Monte Carlo certificate above is a stochastic estimate: `certify()`
+resamples fresh draws from `Q` (it does *not* reuse the fit draws) and,
+by default, split-samples — one sample to locate the worst-case
+direction `theta*`, a second to estimate the gap at it, so the estimate
+carries no selection bias. Its standard error shrinks like
+`1 / sqrt(n)`, so re-certifying the *same* fitted projection on more
+draws tightens it, with no re-fitting — just raise `n_draws`:
 
 ``` r
 set.seed(9)
-cert <- certify(
-  res$projection,
-  prob,
-  engine = resample_engine(prob$engine, n_draws = 50000)
-)
+cert <- certify(res$projection, prob, n_draws = 50000)
 c(new_gap = cert$gap, new_se = cert$gap_se)
 ##    new_gap     new_se 
-## 0.07081550 0.01353738
+## 0.08703831 0.01361741
 ```
 
-Certifying on a larger fresh sample shrinks the gap’s standard error
-accordingly (it scales like `1 / sqrt(n)`). `certify()` takes the fitted
-`projection` (or any `finite_mixing` of atoms on the null) and sweeps
-the oracle over the null faces under whichever `engine` you give it —
-the default is the problem’s own engine.
+`certify()` takes the fitted `projection` (or any `finite_mixing` of
+atoms on the null) and sweeps the oracle over the null faces. It
+resamples the problem’s own engine by default; pass `engine =` to
+certify against a different one (say an `exact_engine`), and
+`split = FALSE` for a single-sample estimate.

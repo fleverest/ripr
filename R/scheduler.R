@@ -35,6 +35,11 @@
 #'   `NULL` matches the engine's fit sample size; pass a larger absolute count
 #'   for a tighter certificate. Ignored (with a warning if set) for exact
 #'   engines, which integrate the true Q and have nothing to resample.
+#' @param certify_split For Monte Carlo engines, split-sample the final
+#'   certification (see [certify()]): draw two independent `certify_draws`
+#'   samples, one to locate the worst-case `theta*` and one to estimate the gap
+#'   at it, removing the selection bias. Default `TRUE`. `FALSE` uses a single
+#'   sample. No effect on exact engines.
 #' @param fw_variant Weight-update variant: `"line-search"` (default),
 #'   `"pairwise"`, `"vanilla"`, `"fully-corrective"`, or `"li-barron"` (the
 #'   exact-objective greedy step).
@@ -65,6 +70,7 @@ run_ripr <- function(
   mirror_iters = 500L,
   prune_threshold = 0,
   certify_draws = NULL,
+  certify_split = TRUE,
   fw_variant = c(
     "line-search",
     "pairwise",
@@ -341,36 +347,36 @@ run_ripr <- function(
     weights = weights
   )
 
-  # Certification. For exact engines the fit sample IS the population, so we
-  # certify against the same engine (reusing the final oracle sweep when nothing
-  # was pruned). For Monte Carlo engines we certify on a *fresh, independent*
-  # draw from Q: the mixture was optimised against the fit draws, so an in-sample
-  # gap would be optimistically biased. `certify_draws` defaults to the fit size.
-  if (deterministic(problem$engine)) {
-    if (!is.null(certify_draws)) {
-      warning(
-        "`certify_draws` is ignored for the exact (deterministic) engine, ",
-        "which integrates the true Q and has no sample to redraw."
-      )
-    }
-    cert <- certify(
-      proj_mixing,
-      problem,
-      oracle_result = if (all(keep)) fw else NULL
+  # Certification. Exact engines integrate the true Q, so we certify against the
+  # same engine (reusing the final oracle sweep when nothing was pruned). Monte
+  # Carlo engines resample fresh, independent draws inside `certify` -- the
+  # mixture was optimised against the fit draws, so an in-sample gap would be
+  # optimistically biased -- and by default split-sample to keep the gap estimate
+  # free of the theta*-selection bias too. `certify_draws` defaults to the fit
+  # size (drawn twice when `certify_split`).
+  if (deterministic(problem$engine) && !is.null(certify_draws)) {
+    warning(
+      "`certify_draws` is ignored for the exact (deterministic) engine, ",
+      "which integrates the true Q and has no sample to redraw."
     )
-  } else {
+  }
+  cert <- certify(
+    proj_mixing,
+    problem,
+    split = certify_split,
+    n_draws = certify_draws,
+    oracle_result = if (deterministic(problem$engine) && all(keep)) fw else NULL
+  )
+  if (verbose && !deterministic(problem$engine)) {
     n_cert <- certify_draws %||% problem$engine@n_draws
-    cert_engine <- resample_engine(problem$engine, n_draws = n_cert)
-    cert <- certify(proj_mixing, problem, engine = cert_engine)
-    if (verbose) {
-      message(sprintf(
-        "Certified on %d fresh draws: gap %e (se %.2e), gap_used %e",
-        n_cert,
-        cert$gap,
-        cert$gap_se,
-        cert$gap_used
-      ))
-    }
+    message(sprintf(
+      "Certified on %s%d fresh draws: gap %e (se %.2e), gap_used %e",
+      if (certify_split) "2x " else "",
+      n_cert,
+      cert$gap,
+      cert$gap_se,
+      cert$gap_used
+    ))
   }
 
   projection <- as_marginal(proj_mixing, problem$family)

@@ -23,15 +23,15 @@ plurality_faces <- function(K) {
 }
 
 # A K = 3 finite-mixture alternative with candidate 1 leading (strictly inside
-# the plurality alternative), expressed with the general mixture_dist.
+# the plurality alternative), expressed with the general finite_mixing.
 small_alt <- function() {
-  mixture_dist(
+  finite_mixing(
     components = matrix(c(0.6, 0.25, 0.15, 0.5, 0.3, 0.2), nrow = 3),
     weights = c(0.5, 0.5)
   )
 }
 
-# Mean parameter of a mixture_dist, a convenient reference for init points.
+# Mean parameter of a finite_mixing, a convenient reference for init points.
 alt_mean <- function(alt) as.vector(alt@components %*% alt@weights)
 
 # Central finite-difference gradient of a scalar function f: R^k -> R.
@@ -49,7 +49,7 @@ fd_grad <- function(f, x, eps = 1e-6) {
 # weighted sum, independent of the engine's log-space arithmetic.
 brute_expect_ratio <- function(alt, fam, theta, log_P) {
   X <- support(fam)
-  log_q <- dist_log_density(alt, fam, X)
+  log_q <- dist_log_density(as_marginal(alt, fam), X)
   log_p <- log_density(fam, theta)
   sum(exp(log_q) * exp(log_p - log_P))
 }

@@ -5,7 +5,8 @@ test_that("each EM iteration does not increase the KL objective", {
   n <- 6
   alt <- small_alt()
   faces <- plurality_faces(3)
-  prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
+  fam <- multinomial_family(n, 3)
+  prob <- ripr_problem(fam, faces, as_marginal(alt, fam))
   st <- mixture_state(prob$engine, 4L)
   for (k in seq_along(faces)) {
     ripr:::state_add_atom(st, init_point(faces[[k]], alt_mean(alt)), k)
@@ -21,9 +22,10 @@ test_that("each EM iteration does not increase the KL objective", {
 
 test_that("the scheduler converges and the certificate is consistent", {
   n <- 8
-  alt <- point_dist(theta_star = c(0.6, 0.25, 0.15))
+  alt <- point_mixing(theta_star = c(0.6, 0.25, 0.15))
   faces <- plurality_faces(3)
-  prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
+  fam <- multinomial_family(n, 3)
+  prob <- ripr_problem(fam, faces, as_marginal(alt, fam))
 
   set.seed(31)
   res <- run_ripr(
@@ -49,9 +51,10 @@ test_that("the scheduler converges and the certificate is consistent", {
 
 test_that("the best-so-far duality gap trace is non-increasing", {
   n <- 8
-  alt <- point_dist(theta_star = c(0.55, 0.3, 0.15))
+  alt <- point_mixing(theta_star = c(0.55, 0.3, 0.15))
   faces <- plurality_faces(3)
-  prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
+  fam <- multinomial_family(n, 3)
+  prob <- ripr_problem(fam, faces, as_marginal(alt, fam))
 
   set.seed(32)
   res <- run_ripr(
@@ -65,8 +68,28 @@ test_that("the best-so-far duality gap trace is non-increasing", {
   expect_true(all(diff(best_gap) <= 1e-12))
 })
 
+test_that("e_variable floors a negative gap so it never inflates", {
+  fam <- multinomial_family(6, 2)
+  Q <- point_mixing(theta_star = c(0.6, 0.4))
+  Pstar <- finite_mixing(components = matrix(c(0.5, 0.5), ncol = 1), weights = 1)
+
+  ev <- e_variable(
+    numerator = as_marginal(Q, fam),
+    projection = as_marginal(Pstar, fam),
+    gap = -1e-6
+  )
+  expect_equal(ev@gap, 0)
+  # With gap floored to 0, the corrected e-value equals the raw likelihood ratio.
+  X <- support(fam)
+  expect_equal(
+    e_value(ev, X, corrected = TRUE),
+    e_value(ev, X, corrected = FALSE),
+    tolerance = 1e-12
+  )
+})
+
 test_that("prune_mixture drops dead atoms and renormalises", {
-  m <- mixture_dist(
+  m <- finite_mixing(
     components = matrix(c(0.5, 0.5, 0.4, 0.6, 0.3, 0.7), nrow = 2),
     weights = c(0.7, 0.3 - 1e-9, 1e-9)
   )
@@ -78,9 +101,10 @@ test_that("prune_mixture drops dead atoms and renormalises", {
 
 test_that("run_ripr returns an e_variable and prune_threshold trims it", {
   n <- 8
-  alt <- point_dist(theta_star = c(0.6, 0.25, 0.15))
+  alt <- point_mixing(theta_star = c(0.6, 0.25, 0.15))
   faces <- plurality_faces(3)
-  prob <- ripr_problem(multinomial_family(n, 3), faces, alt)
+  fam <- multinomial_family(n, 3)
+  prob <- ripr_problem(fam, faces, as_marginal(alt, fam))
   common <- list(
     prob,
     init_atoms = init_on_faces(faces, alt@theta_star),
@@ -95,13 +119,16 @@ test_that("run_ripr returns an e_variable and prune_threshold trims it", {
 
   ev <- res_pruned$e_variable
   expect_true(S7::S7_inherits(ev, e_variable))
-  expect_true(S7::S7_inherits(ev@projection, mixture_dist))
-  expect_identical(ev@numerator, alt)
+  expect_true(S7::S7_inherits(ev@projection, marginal))
+  expect_true(S7::S7_inherits(ev@projection@mixing, finite_mixing))
+  # The projection is surfaced directly on the result too.
+  expect_identical(res_pruned$projection, ev@projection)
+  expect_identical(ev@numerator@mixing, alt)
   # Pruning cannot enlarge the support, and the projection weights sum to 1.
-  expect_lte(ncol(ev@projection@components), length(res_full$weights))
-  expect_equal(sum(ev@projection@weights), 1, tolerance = 1e-12)
-  # The certificate on the pruned e-variable is what it carries as its gap.
-  expect_equal(ev@gap, res_pruned$certificate$gap_used)
+  expect_lte(ncol(ev@projection@mixing@components), length(res_full$weights))
+  expect_equal(sum(ev@projection@mixing@weights), 1, tolerance = 1e-12)
+  # The e-variable carries the certified gap, floored at 0.
+  expect_equal(ev@gap, max(res_pruned$certificate$gap_used, 0))
 
   # e_value: corrected divides the raw ratio by (1 + gap); log is consistent.
   X <- support(prob$family)

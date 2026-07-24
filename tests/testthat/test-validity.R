@@ -3,10 +3,10 @@
 
 test_that("certified e-variable satisfies E_{P_theta}[e] <= 1 on the null", {
   n <- 8
-  alt <- point_dist(theta_star = c(0.6, 0.25, 0.15))
+  alt <- point_mixing(theta_star = c(0.6, 0.25, 0.15))
   fam <- multinomial_family(n, 3)
   faces <- plurality_faces(3)
-  prob <- ripr_problem(fam, faces, alt)
+  prob <- ripr_problem(fam, faces, as_marginal(alt, fam))
 
   set.seed(30)
   res <- run_ripr(

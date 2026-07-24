@@ -25,7 +25,7 @@ test_that("Frank-Wolfe on-face gradient matches finite differences", {
   n <- 6
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  eng <- exact_engine(fam, alt)
+  eng <- exact_engine(fam, as_marginal(alt, fam))
   log_P <- log(rep(1 / nrow(support(fam)), nrow(support(fam))))
   obj <- ripr:::fw_objective(eng, fam, log_P)
 
@@ -49,7 +49,7 @@ test_that("EM M-step on-face gradient matches finite differences", {
   n <- 6
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  eng <- exact_engine(fam, alt)
+  eng <- exact_engine(fam, as_marginal(alt, fam))
   M <- nrow(support(fam))
   set.seed(2)
   log_r <- log(runif(M)) # arbitrary positive responsibility weights
@@ -75,7 +75,7 @@ test_that("state KL weight-gradient matches finite differences", {
   n <- 6
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  prob <- ripr_problem(fam, plurality_faces(3), alt)
+  prob <- ripr_problem(fam, plurality_faces(3), as_marginal(alt, fam))
   st <- mixture_state(prob$engine, 3L)
   faces <- prob$null
   for (k in seq_len(2L)) {

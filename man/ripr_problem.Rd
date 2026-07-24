@@ -11,8 +11,8 @@ ripr_problem(family, null, alternative, engine = NULL)
 
 \item{null}{Null-hypothesis faces, in any form accepted by \code{\link[=as_faces]{as_faces()}}.}
 
-\item{alternative}{The numerator Q, in any form accepted by
-\code{\link[=as_alternative]{as_alternative()}}.}
+\item{alternative}{The numerator Q as an \link{outcome_distribution} over the
+sample space (e.g. \code{as_marginal(point_mixing(...), family)}).}
 
 \item{engine}{Optional \code{expectation_engine}; defaults to
 \code{exact_engine(family, alternative)}.}

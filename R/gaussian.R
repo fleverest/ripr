@@ -5,9 +5,7 @@
 mvn_log_density_matrix <- function(x_mat, mean, chol_l) {
   d <- length(mean)
   z <- forwardsolve(chol_l, t(x_mat) - mean)
-  -0.5 * d * log(2 * pi) -
-    sum(log(diag(chol_l))) -
-    0.5 * colSums(z^2)
+  -0.5 * d * log(2 * pi) - sum(log(diag(chol_l))) - 0.5 * colSums(z^2)
 }
 
 #' Gaussian sampling family with known covariance
@@ -65,7 +63,11 @@ method(log_density, gaussian_family) <- function(family, theta, x = NULL) {
   mvn_log_density_matrix(as_outcome_matrix(x), theta, family@chol_l)
 }
 
-method(log_density_batch, gaussian_family) <- function(family, theta_mat, x = NULL) {
+method(log_density_batch, gaussian_family) <- function(
+  family,
+  theta_mat,
+  x = NULL
+) {
   if (is.null(x)) {
     stop(
       "gaussian_family has no finite support; supply outcomes `x` ",
@@ -94,12 +96,10 @@ method(param_dim, gaussian_family) <- function(family) {
   as.integer(family@n_dim)
 }
 
-method(simulate, gaussian_family) <- function(family, theta, n_obs, seed = NULL) {
-  with_rng_seed(seed, {
-    d <- as.integer(family@n_dim)
-    z <- matrix(rnorm(n_obs * d), nrow = d, ncol = n_obs)
-    t(family@chol_l %*% z + theta)
-  })
+method(simulate, gaussian_family) <- function(family, theta, n_obs) {
+  d <- as.integer(family@n_dim)
+  z <- matrix(rnorm(n_obs * d), nrow = d, ncol = n_obs)
+  t(family@chol_l %*% z + theta)
 }
 
 method(support, gaussian_family) <- function(family) {
@@ -109,21 +109,21 @@ method(support, gaussian_family) <- function(family) {
   )
 }
 
-#' Gaussian-prior alternative: Q-bar with inflated covariance (closed form)
+#' Gaussian-prior mixing measure: Q-bar with inflated covariance (closed form)
 #'
 #' A Gaussian prior `mu ~ N(prior_mean, prior_cov)` over the mean of a
-#' [gaussian_family()] induces the marginal outcome distribution
-#' `Q-bar = N(prior_mean, sigma + prior_cov)` in closed form. The density uses
-#' the inflated covariance directly, and the sampler draws `mu` then `X | mu`,
-#' both seeded.
+#' [gaussian_family()] -- a continuous [mixing] measure over the parameter space.
+#' Paired with the family it induces the marginal outcome distribution
+#' `Q-bar = N(prior_mean, sigma + prior_cov)` in closed form: the induced density
+#' uses the inflated covariance directly, and the sampler draws `mu` then `X | mu`.
 #'
 #' @param prior_mean Numeric prior mean vector.
 #' @param prior_cov Prior covariance (symmetric positive definite).
-#' @return A `gaussian_marginal`.
+#' @return A `gaussian_mixing`.
 #' @export
-gaussian_marginal <- new_class(
-  "gaussian_marginal",
-  parent = distribution,
+gaussian_mixing <- new_class(
+  "gaussian_mixing",
+  parent = mixing,
   properties = list(
     prior_mean = class_numeric,
     prior_cov = class_any
@@ -139,28 +139,25 @@ gaussian_marginal <- new_class(
   }
 )
 
-method(dist_log_density, list(gaussian_marginal, gaussian_family)) <- function(
-  dist,
+method(induced_log_density, list(gaussian_mixing, gaussian_family)) <- function(
+  mixing,
   family,
   x = NULL
 ) {
   if (is.null(x)) {
-    stop("gaussian alternatives need explicit outcomes `x`")
+    stop("gaussian needs explicit outcomes `x`")
   }
-  marginal_chol <- t(chol(family@sigma + dist@prior_cov))
-  mvn_log_density_matrix(as_outcome_matrix(x), dist@prior_mean, marginal_chol)
+  marginal_chol <- t(chol(family@sigma + mixing@prior_cov))
+  mvn_log_density_matrix(as_outcome_matrix(x), mixing@prior_mean, marginal_chol)
 }
 
-method(dist_sample, list(gaussian_marginal, gaussian_family)) <- function(
-  dist,
+method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
+  mixing,
   family,
-  n_obs,
-  seed = NULL
+  n_obs
 ) {
-  with_rng_seed(seed, {
-    d <- length(dist@prior_mean)
-    marginal_chol <- t(chol(family@sigma + dist@prior_cov))
-    z <- matrix(rnorm(n_obs * d), nrow = d, ncol = n_obs)
-    t(marginal_chol %*% z + dist@prior_mean)
-  })
+  d <- length(mixing@prior_mean)
+  marginal_chol <- t(chol(family@sigma + mixing@prior_cov))
+  z <- matrix(rnorm(n_obs * d), nrow = d, ncol = n_obs)
+  t(marginal_chol %*% z + mixing@prior_mean)
 }

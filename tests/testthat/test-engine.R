@@ -5,7 +5,7 @@ test_that("exact engine G(theta) matches brute-force enumeration", {
   n <- 6
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  eng <- exact_engine(fam, alt)
+  eng <- exact_engine(fam, as_marginal(alt, fam))
   M <- nrow(support(fam))
 
   set.seed(10)
@@ -25,7 +25,7 @@ test_that("expect() is the Q-weighted sum and entropy_q is consistent", {
   n <- 5
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  eng <- exact_engine(fam, alt)
+  eng <- exact_engine(fam, as_marginal(alt, fam))
 
   f <- seq_len(ripr:::n_outcomes(eng)) + 0.5
   expect_equal(expect(eng, f), sum(eng@q_mass * f), tolerance = 1e-12)
@@ -39,7 +39,7 @@ test_that("batched expect_ratio equals looping the scalar version", {
   n <- 6
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  eng <- exact_engine(fam, alt)
+  eng <- exact_engine(fam, as_marginal(alt, fam))
   M <- nrow(support(fam))
   log_P <- log(rep(1 / M, M))
 

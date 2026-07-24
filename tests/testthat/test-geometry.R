@@ -33,7 +33,7 @@ test_that("polytope oracle returns a point on the face", {
   n <- 6
   alt <- small_alt()
   fam <- multinomial_family(n, 3)
-  eng <- exact_engine(fam, alt)
+  eng <- exact_engine(fam, as_marginal(alt, fam))
   M <- nrow(support(fam))
   obj <- ripr:::fw_objective(eng, fam, log(rep(1 / M, M)))
 

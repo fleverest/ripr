@@ -4,13 +4,15 @@
 
 test_that("mc_engine is stochastic with a non-zero standard error", {
   fam <- gaussian_family(2)
-  alt <- gaussian_marginal(prior_mean = c(1, 0), prior_cov = diag(2))
-  eng <- mc_engine(fam, alt, n_draws = 500L, seed = 1L)
+  alt <- gaussian_mixing(prior_mean = c(1, 0), prior_cov = diag(2))
+  set.seed(1)
+  eng <- mc_engine(fam, as_marginal(alt, fam), n_draws = 500L)
 
   expect_false(ripr:::deterministic(eng))
   expect_equal(ripr:::n_outcomes(eng), 500L)
-  # Same seed reproduces the identical draw set (common random numbers).
-  eng2 <- mc_engine(fam, alt, n_draws = 500L, seed = 1L)
+  # set.seed() reproduces the identical draw set (common random numbers).
+  set.seed(1)
+  eng2 <- mc_engine(fam, as_marginal(alt, fam), n_draws = 500L)
   expect_equal(eng@outcomes, eng2@outcomes)
 
   f <- ripr:::eval_log_density(eng, c(0.5, 0.2))
@@ -20,11 +22,13 @@ test_that("mc_engine is stochastic with a non-zero standard error", {
 test_that("Gaussian half-space RIPr runs and certifies a finite gap", {
   fam <- gaussian_family(2)
   # Alternative mean sits outside the null {theta_1 <= theta_2}.
-  alt <- gaussian_marginal(prior_mean = c(1, 0), prior_cov = 0.25 * diag(2))
+  alt <- gaussian_mixing(prior_mean = c(1, 0), prior_cov = 0.25 * diag(2))
+  Q <- as_marginal(alt, fam)
   face <- halfspace_face(v = c(1, -1), c = 0, face_index = 1)
   null <- null_region(faces = list(face))
-  eng <- mc_engine(fam, alt, n_draws = 800L, seed = 7L)
-  prob <- ripr_problem(fam, null, alt, engine = eng)
+  set.seed(7)
+  eng <- mc_engine(fam, Q, n_draws = 800L)
+  prob <- ripr_problem(fam, null, Q, engine = eng)
 
   init <- init_point(face, alt@prior_mean)
   set.seed(8)

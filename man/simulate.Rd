@@ -4,7 +4,7 @@
 \alias{simulate}
 \title{Draw observations from p_theta}
 \usage{
-simulate(family, theta, n_obs, seed = NULL)
+simulate(family, theta, n_obs)
 }
 \arguments{
 \item{family}{A \code{family}.}
@@ -12,14 +12,10 @@ simulate(family, theta, n_obs, seed = NULL)
 \item{theta}{Parameter vector.}
 
 \item{n_obs}{Number of draws.}
-
-\item{seed}{Optional integer seed.}
 }
 \value{
 \verb{(n_obs, d)} numeric matrix of draws.
 }
 \description{
-Contract: returns an \verb{(n_obs, d)}-like numeric matrix of draws. When \code{seed}
-is non-NULL the draw is a pure function of \verb{(theta, n_obs, seed)} and the
-caller's RNG state is left untouched.
+Contract: returns an \verb{(n_obs, d)}-like numeric matrix of draws.
 }

@@ -64,7 +64,9 @@ score <- new_generic("score", "family", function(family, theta, x = NULL) {
 #' @param family A `family`.
 #' @return Integer parameter dimension.
 #' @export
-param_dim <- new_generic("param_dim", "family", function(family) S7::S7_dispatch())
+param_dim <- new_generic("param_dim", "family", function(family) {
+  S7::S7_dispatch()
+})
 
 #' Score used inside the EM M-step gradient
 #'
@@ -77,7 +79,9 @@ param_dim <- new_generic("param_dim", "family", function(family) S7::S7_dispatch
 #' @param theta Parameter vector.
 #' @return `(M, d)` matrix of per-outcome M-step score contributions.
 #' @keywords internal
-em_score <- new_generic("em_score", "family", function(family, theta) S7::S7_dispatch())
+em_score <- new_generic("em_score", "family", function(family, theta) {
+  S7::S7_dispatch()
+})
 
 method(em_score, family) <- function(family, theta) {
   score(family, theta)
@@ -85,19 +89,16 @@ method(em_score, family) <- function(family, theta) {
 
 #' Draw observations from p_theta
 #'
-#' Contract: returns an `(n_obs, d)`-like numeric matrix of draws. When `seed`
-#' is non-NULL the draw is a pure function of `(theta, n_obs, seed)` and the
-#' caller's RNG state is left untouched.
+#' Contract: returns an `(n_obs, d)`-like numeric matrix of draws.
 #' @param family A `family`.
 #' @param theta Parameter vector.
 #' @param n_obs Number of draws.
-#' @param seed Optional integer seed.
 #' @return `(n_obs, d)` numeric matrix of draws.
 #' @export
 simulate <- new_generic(
   "simulate",
   "family",
-  function(family, theta, n_obs, seed = NULL) {
+  function(family, theta, n_obs) {
     S7::S7_dispatch()
   }
 )
@@ -111,25 +112,6 @@ simulate <- new_generic(
 #' @return `(M, d)` matrix of outcomes.
 #' @export
 support <- new_generic("support", "family", function(family) S7::S7_dispatch())
-
-# Restore the caller's RNG state after a seeded draw.
-with_rng_seed <- function(seed, code) {
-  if (!is.null(seed)) {
-    old_seed <- if (exists(".Random.seed", envir = globalenv())) {
-      get(".Random.seed", envir = globalenv())
-    } else {
-      NULL
-    }
-    on.exit(
-      if (!is.null(old_seed)) {
-        assign(".Random.seed", old_seed, envir = globalenv())
-      },
-      add = TRUE
-    )
-    set.seed(seed)
-  }
-  force(code)
-}
 
 #' Multinomial sampling family
 #'
@@ -197,13 +179,8 @@ method(em_score, multinomial_family) <- function(family, theta) {
   family@likelihood$score(theta) + family@likelihood$n
 }
 
-method(simulate, multinomial_family) <- function(
-  family,
-  theta,
-  n_obs,
-  seed = NULL
-) {
-  with_rng_seed(seed, t(rmultinom(n_obs, size = family@n_trials, prob = theta)))
+method(simulate, multinomial_family) <- function(family, theta, n_obs) {
+  t(rmultinom(n_obs, size = family@n_trials, prob = theta))
 }
 
 method(support, multinomial_family) <- function(family) {

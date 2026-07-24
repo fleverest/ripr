@@ -32,7 +32,7 @@ encapsulated in the `engine` class.
 
 ```{r install, eval = FALSE}
 # install from github
-#renv::install("fleverest/ripr")
+renv::install("fleverest/ripr")
 ```
 
 
@@ -45,8 +45,7 @@ the convex null is a **point mass at `p = 1/2`**. We demonstrate this using both
 the exact and Monte Carlo engines.
 
 ```{r ex1, message = FALSE}
-#library(ripr)
-devtools::load_all()
+library(ripr)
 n <- 10
 fam <- multinomial_family(n_trials = n, k = 2)
 # `ripr_problem` takes Q as an `outcome_distribution` over the sample space.

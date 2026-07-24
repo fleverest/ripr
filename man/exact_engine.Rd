@@ -9,8 +9,8 @@ exact_engine(family, alternative)
 \arguments{
 \item{family}{A \code{family} with a finite, enumerable support.}
 
-\item{alternative}{An \code{alternative}; its induced outcome distribution is the
-Q every expectation integrates against.}
+\item{alternative}{The Q every expectation integrates against, as an
+\code{outcome_distribution} (e.g. \code{as_marginal(mixing, family)}).}
 }
 \value{
 An \code{exact_engine}.

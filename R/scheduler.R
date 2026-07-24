@@ -28,17 +28,26 @@
 #'   (renormalising the rest) before the final certification, so the returned
 #'   e-variable and certificate describe one clean mixture. Default `0` keeps
 #'   every atom.
+#' @param certify_draws For Monte Carlo engines only, the number of fresh draws
+#'   from Q used to certify the final mixture. Certification always runs on a new
+#'   sample independent of the one `P_W` was fitted against, so the certified gap
+#'   and its standard error are not optimistically biased by the fit. Default
+#'   `NULL` matches the engine's fit sample size; pass a larger absolute count
+#'   for a tighter certificate. Ignored (with a warning if set) for exact
+#'   engines, which integrate the true Q and have nothing to resample.
 #' @param fw_variant Weight-update variant: `"line-search"` (default),
 #'   `"pairwise"`, `"vanilla"`, `"fully-corrective"`, or `"li-barron"` (the
 #'   exact-objective greedy step).
 #' @param checkpoint_iters Integer vector of outer-iteration indices (0 =
 #'   post-init) at which to snapshot the mixture. Default `NULL` records nothing.
 #' @param verbose Print per-iteration progress. Default TRUE.
-#' @return A list. Its principal element is `e_variable`, the fitted RIPr
-#'   [e_variable()] (numerator `Q`, projection `P*`, and the certified gap); call
-#'   [e_value()] on it to score data. Also returned: the projection's `atoms` /
-#'   `weights` / `atom_face_idx`, the `certificate`, the `kl_trace` / `history` /
-#'   `metrics` records, the terminal `gap`, `kl`, `converged` flag, and the raw
+#' @return A list. The two principal elements are `projection`, the fitted RIPr
+#'   `P*` as a [marginal] (its mixing measure is a [finite_mixing] over the
+#'   atoms), and `e_variable`, the [e_variable()] wrapping it with the numerator
+#'   `Q` and the certified gap (call [e_value()] on it to score data). Also
+#'   returned: the projection's `atoms` / `weights` /
+#'   `atom_face_idx`, the `certificate`, the `kl_trace` / `history` / `metrics`
+#'   records, the terminal `gap`, `kl`, `converged` flag, and the raw
 #'   optimisation `state`.
 #' @export
 run_ripr <- function(
@@ -55,6 +64,7 @@ run_ripr <- function(
   removal_thresh = 1e-8,
   mirror_iters = 500L,
   prune_threshold = 0,
+  certify_draws = NULL,
   fw_variant = c(
     "line-search",
     "pairwise",
@@ -312,8 +322,7 @@ run_ripr <- function(
   # --- Prune, then certify the pruned projection ---
   # Pruning drops the near-zero-weight atoms Frank-Wolfe leaves behind; the
   # certificate is computed on the pruned mixture so it always describes the
-  # object we return. With the default `prune_threshold = 0` nothing is dropped
-  # and the final oracle sweep is reused.
+  # object we return.
   n_live <- state_n_atoms(state)
   atoms <- state_atoms(state)[seq_len(n_live)]
   weights <- state_weights(state)[seq_len(n_live)]
@@ -327,29 +336,52 @@ run_ripr <- function(
   faces <- faces[keep]
   weights <- weights[keep] / sum(weights[keep])
 
-  if (all(keep)) {
-    cert <- certify(state, problem, oracle_result = fw)
-  } else {
-    pruned <- mixture_state(problem$engine, length(atoms))
-    for (k in seq_along(atoms)) {
-      state_add_atom(pruned, atoms[[k]], faces[k])
-    }
-    state_set_weights(pruned, weights)
-    cert <- certify(pruned, problem)
-  }
-
-  projection <- mixture_dist(
+  proj_mixing <- finite_mixing(
     components = do.call(cbind, atoms),
     weights = weights
   )
+
+  # Certification. For exact engines the fit sample IS the population, so we
+  # certify against the same engine (reusing the final oracle sweep when nothing
+  # was pruned). For Monte Carlo engines we certify on a *fresh, independent*
+  # draw from Q: the mixture was optimised against the fit draws, so an in-sample
+  # gap would be optimistically biased. `certify_draws` defaults to the fit size.
+  if (deterministic(problem$engine)) {
+    if (!is.null(certify_draws)) {
+      warning(
+        "`certify_draws` is ignored for the exact (deterministic) engine, ",
+        "which integrates the true Q and has no sample to redraw."
+      )
+    }
+    cert <- certify(
+      proj_mixing,
+      problem,
+      oracle_result = if (all(keep)) fw else NULL
+    )
+  } else {
+    n_cert <- certify_draws %||% problem$engine@n_draws
+    cert_engine <- resample_engine(problem$engine, n_draws = n_cert)
+    cert <- certify(proj_mixing, problem, engine = cert_engine)
+    if (verbose) {
+      message(sprintf(
+        "Certified on %d fresh draws: gap %e (se %.2e), gap_used %e",
+        n_cert,
+        cert$gap,
+        cert$gap_se,
+        cert$gap_used
+      ))
+    }
+  }
+
+  projection <- as_marginal(proj_mixing, problem$family)
   ev <- e_variable(
     numerator = problem$alternative,
     projection = projection,
-    family = problem$family,
     gap = cert$gap_used
   )
 
   list(
+    projection = projection,
     e_variable = ev,
     atoms = atoms,
     weights = weights,

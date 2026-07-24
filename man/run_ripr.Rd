@@ -17,6 +17,8 @@ run_ripr(
   ls_tol = 1e-12,
   removal_thresh = 1e-08,
   mirror_iters = 500L,
+  prune_threshold = 0,
+  certify_draws = NULL,
   fw_variant = c("line-search", "pairwise", "vanilla", "fully-corrective", "li-barron"),
   checkpoint_iters = NULL,
   verbose = TRUE
@@ -48,6 +50,19 @@ in place (pairwise variant only).}
 \item{mirror_iters}{Max entropic-mirror-descent iterations per weight
 reoptimisation (fully-corrective variant only).}
 
+\item{prune_threshold}{Drop projection atoms with weight \verb{<= prune_threshold}
+(renormalising the rest) before the final certification, so the returned
+e-variable and certificate describe one clean mixture. Default \code{0} keeps
+every atom.}
+
+\item{certify_draws}{For Monte Carlo engines only, the number of fresh draws
+from Q used to certify the final mixture. Certification always runs on a new
+sample independent of the one \code{P_W} was fitted against, so the certified gap
+and its standard error are not optimistically biased by the fit. Default
+\code{NULL} matches the engine's fit sample size; pass a larger absolute count
+for a tighter certificate. Ignored (with a warning if set) for exact
+engines, which integrate the true Q and have nothing to resample.}
+
 \item{fw_variant}{Weight-update variant: \code{"line-search"} (default),
 \code{"pairwise"}, \code{"vanilla"}, \code{"fully-corrective"}, or \code{"li-barron"} (the
 exact-objective greedy step).}
@@ -58,9 +73,14 @@ post-init) at which to snapshot the mixture. Default \code{NULL} records nothing
 \item{verbose}{Print per-iteration progress. Default TRUE.}
 }
 \value{
-A list with the final \code{atoms}, \code{weights}, \code{atom_face_idx}, the
-\code{kl_trace}/\code{history}/\code{metrics} records, the terminal \code{gap}, \code{kl},
-\code{converged} flag, \code{certificate}, and \code{state}.
+A list. The two principal elements are \code{projection}, the fitted RIPr
+\verb{P*} as a \link{marginal} (its mixing measure is a \link{finite_mixing} over the
+atoms), and \code{e_variable}, the \code{\link[=e_variable]{e_variable()}} wrapping it with the numerator
+\code{Q} and the certified gap (call \code{\link[=e_value]{e_value()}} on it to score data). Also
+returned: the projection's \code{atoms} / \code{weights} /
+\code{atom_face_idx}, the \code{certificate}, the \code{kl_trace} / \code{history} / \code{metrics}
+records, the terminal \code{gap}, \code{kl}, \code{converged} flag, and the raw
+optimisation \code{state}.
 }
 \description{
 The sole public entry point. Runs the reference hybrid schedule on a

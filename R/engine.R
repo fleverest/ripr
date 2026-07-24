@@ -156,6 +156,22 @@ expect_se <- new_generic("expect_se", "engine", function(engine, f, ...) {
 #' @keywords internal
 deterministic <- new_generic("deterministic", "engine", function(engine) S7::S7_dispatch())
 
+#' A fresh, independent engine over a newly drawn sample from Q
+#'
+#' Returns an engine of the same kind that integrates against a fresh realisation
+#' of Q. Deterministic (enumerating) engines integrate the true Q exactly, so
+#' there is nothing to resample and the engine is returned unchanged. Monte Carlo
+#' engines draw a new `n_draws` sample, independent of the one used to fit `P*` --
+#' the honest basis for certifying a mixture that was optimised against a
+#' different sample. Pair it with [certify()] to re-certify a fitted projection
+#' on a fresh or larger sample, e.g.
+#' `certify(res$projection, problem, engine = resample_engine(problem$engine, 1e6))`.
+#' @param engine An `expectation_engine`.
+#' @param n_draws Draws for the fresh sample (ignored by deterministic engines).
+#' @return An `expectation_engine` of the same class as `engine`.
+#' @export
+resample_engine <- new_generic("resample_engine", "engine", function(engine, n_draws) S7::S7_dispatch())
+
 #' Log density of a candidate parameter over the engine's outcome set
 #'
 #' Contract: a length-M vector of `log p_theta` evaluated exactly where the
@@ -271,6 +287,11 @@ method(deterministic, expectation_engine) <- function(engine) {
   TRUE
 }
 
+method(resample_engine, expectation_engine) <- function(engine, n_draws) {
+  # Enumerating engines integrate the true Q; the "sample" is the whole support.
+  engine
+}
+
 method(eval_log_density, expectation_engine) <- function(engine, theta) {
   log_density(engine@family, theta)
 }
@@ -312,8 +333,8 @@ method(entropy_q, expectation_engine) <- function(engine) {
 #' serves every expectation as a dense weighted sum in log space.
 #'
 #' @param family A `family` with a finite, enumerable support.
-#' @param alternative A `distribution`; its induced outcome distribution is the
-#'   Q every expectation integrates against.
+#' @param alternative The Q every expectation integrates against, as an
+#'   `outcome_distribution` (e.g. `as_marginal(mixing, family)`).
 #' @return An `exact_engine`.
 #' @export
 exact_engine <- new_class(
@@ -321,10 +342,10 @@ exact_engine <- new_class(
   parent = expectation_engine,
   constructor = function(family, alternative) {
     family <- as_family(family)
-    alternative <- as_distribution(alternative)
+    alternative <- as_outcome_distribution(alternative)
     support_x <- support(family)
     M <- nrow(support_x)
-    log_q_mass <- dist_log_density(alternative, family, support_x)
+    log_q_mass <- dist_log_density(alternative, support_x)
     q_mass <- exp(log_q_mass)
     finite_q <- q_mass > 0
     q_mass_f <- q_mass[finite_q]
@@ -350,40 +371,40 @@ exact_engine <- new_class(
 #' Monte Carlo expectation engine with common random numbers
 #'
 #' For families with continuous (or impractically large) sample spaces. Draws
-#' `n_draws` outcomes from Q once at construction and reuses the same draw set
-#' for every candidate theta, line search, and iteration. Expectations are plain
-#' Monte Carlo means; [expect_se()] returns the usual `sd / sqrt(n_draws)`
-#' standard error and [deterministic()] is `FALSE`, which switches the
-#' certificate layer to the inflated-gap rule.
+#' `n_draws` outcomes from Q once at construction and reuses the same stored draw
+#' set for every candidate theta, line search, and iteration -- that storage is
+#' what supplies the common random numbers. Expectations are plain Monte Carlo
+#' means; [expect_se()] returns the usual `sd / sqrt(n_draws)` standard error and
+#' [deterministic()] is `FALSE`, which switches the certificate layer to the
+#' inflated-gap rule.
 #'
 #' @param family A `family` whose alternative can be sampled from.
-#' @param alternative The Q to sample; must implement [dist_sample()].
+#' @param alternative The Q to sample, as an `outcome_distribution` (e.g.
+#'   `as_marginal(mixing, family)`).
 #' @param n_draws Number of common-random-number draws.
-#' @param seed Integer seed fully determining the draw set.
 #' @return An `mc_engine`.
 #' @export
 mc_engine <- new_class(
   "mc_engine",
   parent = expectation_engine,
   properties = list(
-    n_draws = class_numeric,
-    seed = class_numeric
+    n_draws = class_numeric
   ),
-  constructor = function(family, alternative, n_draws, seed) {
+  constructor = function(family, alternative, n_draws) {
     family <- as_family(family)
-    alternative <- as_distribution(alternative)
+    alternative <- as_outcome_distribution(alternative)
     n_draws <- as.integer(n_draws)
-    outcomes <- dist_sample(alternative, family, n_draws, seed = seed)
+    outcomes <- dist_sample(alternative, n_draws)
     log_q_mass <- rep(-log(n_draws), n_draws)
     q_mass <- exp(log_q_mass)
     finite_q <- q_mass > 0
-    log_q_at_draws <- dist_log_density(alternative, family, outcomes)
+    log_q_at_draws <- dist_log_density(alternative, outcomes)
     H_Q <- -mean(nan_to_zero(log_q_at_draws))
     new_object(
       S7_object(),
       family = family,
       alternative = alternative,
-      id = paste0("mc-N", n_draws, "-seed", seed),
+      id = paste0("mc-N", n_draws),
       M = n_draws,
       outcomes = outcomes,
       log_q_mass = log_q_mass,
@@ -392,8 +413,7 @@ mc_engine <- new_class(
       q_mass_f = q_mass,
       M_f = n_draws,
       H_Q = H_Q,
-      n_draws = as.numeric(n_draws),
-      seed = as.numeric(seed)
+      n_draws = as.numeric(n_draws)
     )
   }
 )
@@ -404,6 +424,14 @@ method(expect_se, mc_engine) <- function(engine, f, ...) {
 
 method(deterministic, mc_engine) <- function(engine) {
   FALSE
+}
+
+method(resample_engine, mc_engine) <- function(engine, n_draws) {
+  mc_engine(
+    family = engine@family,
+    alternative = engine@alternative,
+    n_draws = n_draws
+  )
 }
 
 method(eval_log_density, mc_engine) <- function(engine, theta) {

@@ -4,25 +4,25 @@
 \alias{mc_engine}
 \title{Monte Carlo expectation engine with common random numbers}
 \usage{
-mc_engine(family, alternative, n_draws, seed)
+mc_engine(family, alternative, n_draws)
 }
 \arguments{
 \item{family}{A \code{family} whose alternative can be sampled from.}
 
-\item{alternative}{The Q to sample; must implement \code{\link[=q_sample]{q_sample()}}.}
+\item{alternative}{The Q to sample, as an \code{outcome_distribution} (e.g.
+\code{as_marginal(mixing, family)}).}
 
 \item{n_draws}{Number of common-random-number draws.}
-
-\item{seed}{Integer seed fully determining the draw set.}
 }
 \value{
 An \code{mc_engine}.
 }
 \description{
 For families with continuous (or impractically large) sample spaces. Draws
-\code{n_draws} outcomes from Q once at construction and reuses the same draw set
-for every candidate theta, line search, and iteration. Expectations are plain
-Monte Carlo means; \code{\link[=expect_se]{expect_se()}} returns the usual \code{sd / sqrt(n_draws)}
-standard error and \code{\link[=deterministic]{deterministic()}} is \code{FALSE}, which switches the
-certificate layer to the inflated-gap rule.
+\code{n_draws} outcomes from Q once at construction and reuses the same stored draw
+set for every candidate theta, line search, and iteration -- that storage is
+what supplies the common random numbers. Expectations are plain Monte Carlo
+means; \code{\link[=expect_se]{expect_se()}} returns the usual \code{sd / sqrt(n_draws)} standard error and
+\code{\link[=deterministic]{deterministic()}} is \code{FALSE}, which switches the certificate layer to the
+inflated-gap rule.
 }

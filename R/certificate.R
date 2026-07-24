@@ -15,18 +15,23 @@ inflate_gap <- function(gap_hat, se, conf = 0.95) {
   gap_hat + qnorm(conf) * se
 }
 
-#' Certify a candidate mixture: duality gap and e-variable growth rate
+#' Certify a projection: duality gap and e-variable growth rate
 #'
-#' The common evaluation tool for every algorithm and engine. Runs the
-#' Frank-Wolfe oracle over all null faces (or consumes a caller-supplied oracle
-#' result to avoid a duplicate sweep), and converts the gap into the certified
-#' quantities:
+#' The common evaluation tool for every algorithm and engine. Takes a fitted
+#' projection `P*` (a [finite_mixing] of atoms on the null faces, or the
+#' [marginal] wrapping one -- e.g. the `projection` from a [run_ripr()] result),
+#' runs the Frank-Wolfe oracle over all null faces, and converts the gap into the
+#' certified quantities:
 #'
 #' - `kl_lower_bound = KL - gap`: the Frank-Wolfe lower bound on the optimal KL
 #'   divergence.
 #' - `growth_rate = KL - log1p(gap)`: the guaranteed e-power of the rescaled
-#'   e-variable `(Q / P_W) / (1 + gap)`, whose null expectation is at most 1 by
+#'   e-variable `(Q / P*) / (1 + gap)`, whose null expectation is at most 1 by
 #'   construction.
+#'
+#' Pass a different `engine` to certify against a different integration of Q --
+#' e.g. `resample_engine(problem$engine, n_draws)` for a fresh, larger Monte
+#' Carlo sample, or an [exact_engine()]. The default reuses the problem's engine.
 #'
 #' For Monte Carlo engines the gap is first inflated via [inflate_gap()] at
 #' level `conf`; the returned `gap` is the raw estimate and `gap_used` the
@@ -36,10 +41,15 @@ inflate_gap <- function(gap_hat, se, conf = 0.95) {
 #' Certification refuses to proceed if any face reports an inexact oracle: an
 #' undershooting oracle would silently overstate the certificate.
 #'
-#' @param state A `mixture_state` for the candidate W.
-#' @param problem Problem list from [ripr_problem()].
-#' @param oracle_result Optional result of a fresh [oracle_step()] at this
-#'   state; when NULL the oracle is run here with `n_seeds` seeds per face.
+#' @param projection The candidate `P*`: a [finite_mixing] over the null-face
+#'   atoms, or a [marginal] wrapping one.
+#' @param problem Problem list from [ripr_problem()]; supplies the null faces and
+#'   the default engine.
+#' @param engine Optional `expectation_engine` to certify against, overriding
+#'   `problem$engine`. Must be over the same family and Q.
+#' @param oracle_result Optional precomputed [oracle_step()] result for this
+#'   projection and engine; when NULL the oracle is run here with `n_seeds` seeds
+#'   per face.
 #' @param n_seeds Oracle seeds per face when `oracle_result` is NULL.
 #' @param conf One-sided confidence level for the Monte Carlo gap inflation.
 #'   Default 0.95.
@@ -47,8 +57,9 @@ inflate_gap <- function(gap_hat, se, conf = 0.95) {
 #'   `growth_rate`, `oracle_theta`, `oracle_face`, and `conf`.
 #' @export
 certify <- function(
-  state,
+  projection,
   problem,
+  engine = NULL,
   oracle_result = NULL,
   n_seeds = 200L,
   conf = 0.95
@@ -62,8 +73,38 @@ certify <- function(
       "Inexact-oracle certification is not implemented."
     )
   }
+
+  mixing <- if (S7_inherits(projection, marginal)) {
+    projection@mixing
+  } else {
+    projection
+  }
+  if (!S7_inherits(mixing, finite_mixing)) {
+    stop(
+      "`projection` must be a `finite_mixing` (or a `marginal` wrapping one)"
+    )
+  }
+
+  # Certify against the chosen engine: rebuild the projection's per-outcome
+  # columns over its outcome set, and sweep the oracle with that engine in place.
+  engine <- engine %||% problem$engine
+  cert_problem <- problem
+  cert_problem$engine <- engine
+  cert_problem$family <- engine@family
+
+  atoms <- lapply(
+    seq_len(ncol(mixing@components)),
+    function(k) mixing@components[, k]
+  )
+  state <- build_mixture_state(
+    engine,
+    atoms,
+    rep(1L, length(atoms)), # face indices are irrelevant to certification
+    mixing@weights
+  )
+
   if (is.null(oracle_result)) {
-    oracle_result <- oracle_step(state, problem, n_seeds = n_seeds)
+    oracle_result <- oracle_step(state, cert_problem, n_seeds = n_seeds)
   }
 
   kl <- state_objective(state)$loss

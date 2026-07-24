@@ -34,6 +34,26 @@ mixture_state <- new_class(
   }
 )
 
+#' Build a mixture_state from explicit atoms, faces, and weights on an engine
+#'
+#' Rehydrates a fitted mixture against a (possibly different) engine, so its
+#' per-outcome log-density columns are recomputed over that engine's outcome set.
+#' Used to move a fitted `P_W` onto a fresh certification sample.
+#' @param engine An `expectation_engine`.
+#' @param atoms List of length-d parameter vectors.
+#' @param faces Integer face index per atom.
+#' @param weights Numeric mixture weights (same length as `atoms`).
+#' @return A `mixture_state`.
+#' @keywords internal
+build_mixture_state <- function(engine, atoms, faces, weights) {
+  state <- mixture_state(engine, length(atoms))
+  for (k in seq_along(atoms)) {
+    state_add_atom(state, atoms[[k]], faces[k])
+  }
+  state_set_weights(state, weights)
+  state
+}
+
 # Evaluate and cache atom k's log-density column (full and q-positive).
 write_atom_col <- function(e, k, theta) {
   lm <- eval_log_density(e$engine, theta)

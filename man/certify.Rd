@@ -2,17 +2,30 @@
 % Please edit documentation in R/certificate.R
 \name{certify}
 \alias{certify}
-\title{Certify a candidate mixture: duality gap and e-variable growth rate}
+\title{Certify a projection: duality gap and e-variable growth rate}
 \usage{
-certify(state, problem, oracle_result = NULL, n_seeds = 200L, conf = 0.95)
+certify(
+  projection,
+  problem,
+  engine = NULL,
+  oracle_result = NULL,
+  n_seeds = 200L,
+  conf = 0.95
+)
 }
 \arguments{
-\item{state}{A \code{mixture_state} for the candidate W.}
+\item{projection}{The candidate \verb{P*}: a \link{finite_mixing} over the null-face
+atoms, or a \link{marginal} wrapping one.}
 
-\item{problem}{Problem list from \code{\link[=ripr_problem]{ripr_problem()}}.}
+\item{problem}{Problem list from \code{\link[=ripr_problem]{ripr_problem()}}; supplies the null faces and
+the default engine.}
 
-\item{oracle_result}{Optional result of a fresh \code{\link[=oracle_step]{oracle_step()}} at this
-state; when NULL the oracle is run here with \code{n_seeds} seeds per face.}
+\item{engine}{Optional \code{expectation_engine} to certify against, overriding
+\code{problem$engine}. Must be over the same family and Q.}
+
+\item{oracle_result}{Optional precomputed \code{\link[=oracle_step]{oracle_step()}} result for this
+projection and engine; when NULL the oracle is run here with \code{n_seeds} seeds
+per face.}
 
 \item{n_seeds}{Oracle seeds per face when \code{oracle_result} is NULL.}
 
@@ -24,19 +37,24 @@ List with \code{kl}, \code{gap}, \code{gap_se}, \code{gap_used}, \code{kl_lower_
 \code{growth_rate}, \code{oracle_theta}, \code{oracle_face}, and \code{conf}.
 }
 \description{
-The common evaluation tool for every algorithm and engine. Runs the
-Frank-Wolfe oracle over all null faces (or consumes a caller-supplied oracle
-result to avoid a duplicate sweep), and converts the gap into the certified
-quantities:
+The common evaluation tool for every algorithm and engine. Takes a fitted
+projection \verb{P*} (a \link{finite_mixing} of atoms on the null faces, or the
+\link{marginal} wrapping one -- e.g. the \code{projection} from a \code{\link[=run_ripr]{run_ripr()}} result),
+runs the Frank-Wolfe oracle over all null faces, and converts the gap into the
+certified quantities:
 }
 \details{
 \itemize{
 \item \code{kl_lower_bound = KL - gap}: the Frank-Wolfe lower bound on the optimal KL
 divergence.
 \item \code{growth_rate = KL - log1p(gap)}: the guaranteed e-power of the rescaled
-e-variable \code{(Q / P_W) / (1 + gap)}, whose null expectation is at most 1 by
+e-variable \verb{(Q / P*) / (1 + gap)}, whose null expectation is at most 1 by
 construction.
 }
+
+Pass a different \code{engine} to certify against a different integration of Q --
+e.g. \code{resample_engine(problem$engine, n_draws)} for a fresh, larger Monte
+Carlo sample, or an \code{\link[=exact_engine]{exact_engine()}}. The default reuses the problem's engine.
 
 For Monte Carlo engines the gap is first inflated via \code{\link[=inflate_gap]{inflate_gap()}} at
 level \code{conf}; the returned \code{gap} is the raw estimate and \code{gap_used} the

@@ -96,13 +96,15 @@ e_value(res$e_variable, rbind(c(8, 2), c(5, 5)))
 ## [1] 6.4074351 0.2373047
 ```
 
-**Monte Carlo engine** (sample 4000 draws from `Q`) reaches the same
+**Monte Carlo engine** (1000 draws from `Q`) reaches the same
 projection:
 
 ``` r
+set.seed(3)
 eng_mc <- mc_engine(fam, Q, n_draws = 1000)
+prob_mc <- ripr_problem(fam, null, Q, engine = eng_mc)
 res_mc <- run_ripr(
-  ripr_problem(fam, null, Q, engine = eng_mc),
+  prob_mc,
   init_atoms = matrix(c(0.25, 0.75), ncol = 1),
   init_atom_faces = 1L,
   fw_iters = 10,
@@ -116,163 +118,72 @@ cbind(
   weight = res_mc$projection@mixing@weights
 )
 ##              p weight
-## [1,] 0.4999904      1
+## [1,] 0.4999895      1
 ```
 
-## Example 2: a 2-D Gaussian cone null (union of half-spaces)
+`set.seed()` matters here: an `mc_engine` freezes its draw set at
+construction, so a run is reproducible, but certification resamples and
+is not deterministic across seeds.
 
-Now let `X ~ N(mu, I_2)` and test the **cone alternative**
-`H_1: mu_1 > |mu_2|` — equivalently `mu_1 > mu_2` **and** `mu_1 > -mu_2`
-— with the point alternative `mu = (2, 1)`. Its complement, the null
-`H_0 = {mu_1 <= mu_2} ∪ {mu_1 <= -mu_2}`, is a union of two half-spaces.
-
-``` r
-fam <- gaussian_family(dim = 2) # standard: sigma = I
-mu <- c(2, 1)
-Q <- as_marginal(point_mixing(theta_star = mu), fam)
-
-faces <- list(
-  halfspace_face(v = c(1, -1), c = 0, face_index = 1), # mu_1 <= mu_2
-  halfspace_face(v = c(1, 1), c = 0, face_index = 2) # mu_1 <= -mu_2
-)
-null <- null_region(faces = faces)
-```
-
-The sample space is continuous here, so we use the Monte Carlo engine:
-1000 draws to fit the mixture, and fresh `certify_draws` samples,
-independent of the fit, to certify the result. Certification is a single
-oracle sweep rather than a per-iteration cost, so it is cheap to certify
-on far more draws than were used to fit.
-
-``` r
-set.seed(2)
-eng <- mc_engine(fam, Q, n_draws = 1000)
-prob <- ripr_problem(fam, null, Q, engine = eng)
-init <- cbind(
-  init_point(faces[[1]], mu),
-  init_point(faces[[2]], mu)
-)
-
-res <- run_ripr(
-  prob,
-  init_atoms = init,
-  init_atom_faces = c(1, 2),
-  fw_iters = 25,
-  em_iters = 5,
-  n_seeds = 50,
-  gap_tol = 1e-3,
-  certify_draws = 1e5,
-  verbose = FALSE
-)
-
-M <- res$projection@mixing@components
-cbind(
-  mu1 = M[1, ],
-  mu2 = M[2, ],
-  weight = round(res$projection@mixing@weights, 3)
-)
-##           mu1       mu2 weight
-## [1,] 1.590529  1.590529  0.952
-## [2,] 1.173325 -1.173325  0.046
-## [3,] 2.727689 -2.727873  0.001
-## [4,] 2.746701 -2.746856  0.000
-## [5,] 2.734800 -2.734900  0.000
-## [6,] 2.721591 -2.721612  0.000
-## [7,] 2.715216 -2.715345  0.000
-```
-
-The projection concentrates on the `mu_1 = mu_2` tie-point — the null
-boundary nearest the alternative `mu = (2, 1)` — with a little mass on
-the `mu_1 = -mu_2` face.
+## The result of a fit
 
 `run_ripr()` returns six elements, partitioned by where each number came
-from: `projection` and `e_variable` are the deliverables; `certificate`
-holds everything measured on the fresh certification sample; `history`
-and `checkpoints` hold everything measured on the fit sample;
+from: `projection` and `e_variable` are the deliverables, `certificate`
+holds everything measured on a fresh certification sample, `history` and
+`checkpoints` hold everything measured on the fit sample, and
 `converged` reports whether the *fit* gap met `gap_tol`.
 
 ``` r
-names(res)
+names(res_mc)
 ## [1] "projection"  "e_variable"  "certificate" "history"     "checkpoints"
 ## [6] "converged"
 ```
 
 The certificate reports the guaranteed e-value growth rate, the standard
-error of the estimated gap, and the settings that produced it:
+error of the estimated gap, and the settings that produced it.
+Certification always runs on draws independent of the fit, and on `10x`
+as many by default – it is a single oracle sweep, not a per-iteration
+cost, so it is cheap to certify far more thoroughly than you fit:
 
 ``` r
-c(
-  gap = res$certificate$gap,
-  gap_se = res$certificate$gap_se,
-  gap_used = res$certificate$gap_used,
-  growth_rate = res$certificate$growth_rate,
-  n_draws = res$certificate$n_draws
-)
-##          gap       gap_se     gap_used  growth_rate      n_draws 
-## 6.577533e-02 9.356132e-03 8.116479e-02 1.546482e-01 1.000000e+05
+unlist(res_mc$certificate[c(
+  "gap", "gap_se", "gap_used", "growth_rate", "n_draws", "ess"
+)])
+##          gap       gap_se     gap_used  growth_rate      n_draws          ess 
+## 8.063488e-05 4.393297e-07 8.135751e-05 1.338687e+00 1.000000e+04 1.000000e+04
 ```
 
-The fit record is one row per outer iteration, with the inner init/FW/EM
+`history` is one row per outer iteration, with the inner init/FW/EM
 steps and the oracle argmax nested as list columns:
 
 ``` r
-head(res$history[, c("iter", "gap", "gap_se", "support_size", "kl_after_em")], 4)
-##   iter        gap    gap_se support_size kl_after_em
-## 1    0 0.60480100 1.2035782            2   0.2672932
-## 2    1 0.03081736 0.5445636            3   0.2646040
-## 3    2 0.00875255 0.5028009            4   0.2644918
-## 4    3 0.00393853 0.4919312            5   0.2644852
-res$history$kl_trace[[2]] # the FW + EM steps inside iteration 1
-##   step_type n_atoms        kl
-## 1        fw       3 0.2671015
-## 2        em       3 0.2658268
-## 3        em       3 0.2651965
-## 4        em       3 0.2648708
-## 5        em       3 0.2646978
-## 6        em       3 0.2646040
+res_mc$history[, c("iter", "gap", "gap_se", "support_size", "kl_after_em")]
+##   iter          gap       gap_se support_size kl_after_em
+## 1    0 7.706625e-05 1.409271e-06            1    1.234616
+head(res_mc$history$kl_trace[[1]], 4) # the init + EM steps inside iteration 0
+##   step_type n_atoms       kl
+## 1      init       1 5.345847
+## 2        em       1 1.234616
+## 3        em       1 1.234616
 ```
 
 `checkpoints$final` is always present and describes the returned
-`projection` after pruning. Its three fields are exactly the arguments
-needed to resume the fit, so a run can be continued without re-deriving
-anything:
+`projection` *after* pruning. Its three fields are exactly the
+`init_atoms`, `init_atom_faces` and `init_weights` arguments needed to
+resume the fit, so a run can be continued without re-deriving anything
+(`init_weights` matters once a projection has more than one atom —
+without it the atoms carry over but the mixture restarts from uniform
+weights):
 
 ``` r
-fin <- res$checkpoints$final
-str(fin, max.level = 1)
+str(res_mc$checkpoints$final, max.level = 1)
 ## List of 5
 ##  $ iter         : int NA
-##  $ atoms        :List of 7
-##  $ weights      : num [1:7] 9.52e-01 4.64e-02 1.01e-03 1.15e-04 3.59e-05 ...
-##  $ atom_face_idx: int [1:7] 1 2 2 2 2 2 2
+##  $ atoms        :List of 1
+##  $ weights      : num 1
+##  $ atom_face_idx: int 1
 ##  $ oracle_theta : logi NA
-
-resume_kl <- function(w) {
-  run_ripr(
-    prob,
-    init_atoms = do.call(cbind, fin$atoms),
-    init_atom_faces = fin$atom_face_idx,
-    init_weights = w,
-    fw_iters = 0, em_iters = 0, # measure the starting point only
-    certify_ess_min = 0, # not certifying here; see the accuracy note below
-    verbose = FALSE
-  )$history$kl_trace[[1]]$kl[1]
-}
-c(with_weights = resume_kl(fin$weights), uniform = resume_kl(NULL))
-## with_weights      uniform 
-##    0.2644847    1.6642254
 ```
-
-`init_weights` is what makes the resume a true continuation: without it
-the atoms carry over but the mixture restarts from uniform weights, and
-EM has to rediscover them.
-
-This problem has a known closed form, so the cost of the certificate is
-measurable. The exact RIPr is two atoms, at `(1.548311, 1.548311)` with
-weight `0.95099` and `(1.267288, -1.267288)` with weight `0.04901`,
-giving `KL* = 0.231375`. The shortfall of `growth_rate` below `KL*` is
-what the certificate gives up: part optimisation slack, part Monte Carlo
-inflation.
 
 ### Re-certifying on a larger sample
 
@@ -282,19 +193,27 @@ conservative one. `certify()` resamples fresh draws from `Q` (it does
 faces; that maximum is biased *upward* for the true `sup_theta G`, which
 is the safe direction, and `gap_used` inflates it further to a one-sided
 bound at level `conf`. **`gap_used` is the only quantity that may be
-used to rescale an e-variable.** The inflation term shrinks like
-`1 / sqrt(n)`, so re-certifying the *same* fitted projection on more
-draws sharpens the certificate, with no re-fitting — just raise
-`n_draws`:
+used to rescale an e-variable.** Re-certifying the *same* fitted
+projection on more draws needs no re-fitting — just raise `n_draws`:
 
 ``` r
 set.seed(9)
-cert <- certify(res$projection, prob, n_draws = 5e5)
-c(new_gap = cert$gap, new_se = cert$gap_se, new_gap_used = cert$gap_used,
-  ess = cert$ess)
-##      new_gap       new_se new_gap_used          ess 
-## 7.861821e-02 4.249878e-03 8.560864e-02 5.706310e+04
+cert <- certify(res_mc$projection, prob_mc, n_draws = 1e5)
+c(gap = cert$gap, se = cert$gap_se, gap_used = cert$gap_used, ess = cert$ess)
+##          gap           se     gap_used          ess 
+## 7.979517e-05 1.377463e-07 8.002174e-05 1.000000e+05
 ```
+
+`certify()` takes the fitted `projection` (or any `finite_mixing` of
+atoms on the null) and sweeps the oracle over the null faces. It
+resamples the problem’s own engine by default; pass `engine =` to
+certify against a different one (say an `exact_engine`).
+
+`estimate = TRUE` draws a second independent sample and adds `gap_est`,
+an *unbiased* point estimate of the gap at the selected `theta*`. It is
+a diagnostic — useful for comparing `fw_variant`s or deciding whether to
+keep optimising — and is biased downward relative to `sup_theta G`. It
+must never be used to rescale an e-variable.
 
 ### When not to trust a certificate
 
@@ -309,24 +228,11 @@ the sample too.
 
 `certificate$ess` is the effective sample size behind the certified gap.
 Healthy certificates report `ess` within an order of magnitude of
-`n_draws`; noise-driven ones collapse to single digits, and `certify()`
-warns below `ess_min`. Treat a warned certificate as uninformative
-rather than as evidence of a large true gap — re-run it, or certify a
-better-optimised projection.
+`n_draws` (above, the whole sample); noise-driven ones collapse to
+single digits, and `certify()` warns below `ess_min`. Treat a warned
+certificate as uninformative rather than as evidence of a large true gap
+— re-run it, or certify a better-optimised projection.
 
-Note that “sharper” does not mean “smaller”: the inflation term halves,
-but the raw maximum climbs toward the true `sup_theta G` for this
-(unpruned, imperfectly optimised) mixture. More draws buys a more
-faithful bound, not automatically a looser or tighter one. To actually
-lower `gap_used`, improve the projection.
+## Example 2
 
-`certify()` takes the fitted `projection` (or any `finite_mixing` of
-atoms on the null) and sweeps the oracle over the null faces. It
-resamples the problem’s own engine by default; pass `engine =` to
-certify against a different one (say an `exact_engine`).
-
-`estimate = TRUE` draws a second independent sample and adds `gap_est`,
-an *unbiased* point estimate of the gap at the selected `theta*`. It is
-a diagnostic — useful for comparing `fw_variant`s or deciding whether to
-keep optimising — and is biased downward relative to `sup_theta G`. It
-must never be used to rescale an e-variable.
+TODO: Gaussian plurality via quadrature/monte carlo.

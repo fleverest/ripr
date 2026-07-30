@@ -2,8 +2,10 @@
 # from a single fresh sample, and `estimate = TRUE` only ever *adds* a
 # diagnostic. Nothing about the diagnostic may reach the rescaling constant.
 
-# README Example 2: X ~ N(mu, I_2), null = {mu_1 <= mu_2} U {mu_1 <= -mu_2},
-# alternative mu = (2, 1).
+# A 2-D Gaussian cone null: X ~ N(mu, I_2), H_0 = {mu_1 <= mu_2} U
+# {mu_1 <= -mu_2}, alternative mu = (2, 1). Kept as a test fixture -- it is the
+# smallest problem with a union-structured null, unbounded faces, and a known
+# closed-form RIPr -- though it is no longer a documented example.
 cone_problem <- function(n_draws = 1000L) {
   fam <- gaussian_family(dim = 2)
   Q <- as_marginal(point_mixing(theta_star = c(2, 1)), fam)

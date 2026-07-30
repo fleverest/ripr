@@ -37,12 +37,14 @@ test_that("Gaussian half-space RIPr runs and certifies a finite gap", {
     init_atoms = matrix(init, ncol = 1L),
     init_atom_faces = 1L,
     fw_iters = 8, em_iters = 3, n_seeds = 40,
-    gap_tol = 1e-3, verbose = FALSE
+    gap_tol = 1e-3, verbose = FALSE,
+    certify_ess_min = 0 # certificate quality is not what this test checks
   )
 
-  expect_true(is.finite(res$gap))
-  expect_true(is.finite(res$kl))
   cert <- res$certificate
+  expect_true(is.finite(cert$gap))
+  expect_true(is.finite(cert$kl))
+  expect_equal(res$e_variable@gap, max(cert$gap_used, 0))
   expect_gte(cert$gap_se, 0)
   # Monte Carlo certificate inflates the gap: gap_used >= raw gap.
   expect_gte(cert$gap_used, cert$gap - 1e-12)

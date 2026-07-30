@@ -104,16 +104,27 @@ init_point <- new_generic("init_point", "face", function(face, ref) {
 #' Contract: maximises the supplied objective over the face and returns
 #' `list(theta = , value = )` with `theta` on the face. `objective` is a list of
 #' closures over parameter vectors: `value(theta)`, `grad_theta(theta)`, and
-#' `value_batch(theta_mat)`. The maximiser is exact only up to the face's search
-#' strategy; consult [oracle_exactness()] before certifying anything derived
-#' from the result.
+#' `value_batch(theta_mat)`. Every implementation is a heuristic global search
+#' over a generally non-convex objective, so the returned value is a *lower*
+#' bound on the true face maximum, not the maximum itself. Callers that need an
+#' upper bound on `sup G` -- certification, above all -- must account for that
+#' separately; nothing here guarantees it.
 #' @param face A `face`.
 #' @param objective List of `value`, `grad_theta`, `value_batch` closures.
 #' @param ... Ignored.
-#' @param n_seeds Random seeds for the global search.
+#' @param n_seeds Random seeds for the global search. Treated as a floor:
+#'   implementations that stratify over `seed_centres` may draw more so that
+#'   every centre receives a minimum share.
 #' @param n_restarts Number of best seeds refined by BFGS.
 #' @param seed_alpha Optional single seed for a local refinement (skips the
 #'   global search).
+#' @param seed_centres Optional `d x m` matrix of parameter-space points to
+#'   centre the random search on -- in practice the current mixture's atoms.
+#'   Points are projected onto the face before use, so centres lying on other
+#'   faces are admissible. `NULL` leaves the choice to the implementation.
+#'   Unbounded faces have no intrinsic scale, so without this hint their search
+#'   is centred on an arbitrary anchor and can miss the optimum badly; bounded
+#'   faces parametrised by their own vertices do not need it.
 #' @return `list(theta = , value = )` with `theta` on the face.
 #' @export
 oracle <- new_generic(
@@ -125,24 +136,12 @@ oracle <- new_generic(
     ...,
     n_seeds = NULL,
     n_restarts = 25L,
-    seed_alpha = NULL
+    seed_alpha = NULL,
+    seed_centres = NULL
   ) {
     S7::S7_dispatch()
   }
 )
-
-#' Oracle exactness declaration
-#'
-#' Contract: `"exact"` when the face's oracle can be trusted to find the global
-#' maximiser (up to its documented search budget), `"inexact"` when it is a
-#' heuristic whose value may undershoot. The certificate layer refuses to
-#' certify runs involving inexact oracles.
-#' @param face A `face`.
-#' @return `"exact"` or `"inexact"`.
-#' @export
-oracle_exactness <- new_generic("oracle_exactness", "face", function(face) {
-  S7::S7_dispatch()
-})
 
 #' Union-structured null hypothesis region
 #'
@@ -347,10 +346,6 @@ method(init_point, polytope_face) <- function(face, ref) {
   project(face, ref)
 }
 
-method(oracle_exactness, polytope_face) <- function(face) {
-  "exact"
-}
-
 # Chain-rule wrapper: (value, grad_theta) -> BFGS objective in softmax coords.
 # Caches the last (input, output) pair since `optim` calls `fn` and `gr`
 # separately at the same point.
@@ -379,7 +374,11 @@ method(oracle, polytope_face) <- function(
   ...,
   n_seeds = NULL,
   n_restarts = 25L,
-  seed_alpha = NULL
+  # A polytope face is parametrised by its own vertices, so Dirichlet seeds are
+  # already adapted to its geometry; `seed_centres` is accepted for signature
+  # compatibility and deliberately unused.
+  seed_alpha = NULL,
+  seed_centres = NULL
 ) {
   n_vertices <- face@n_vertices
   obj_and_grad <- make_face_objective(
@@ -581,17 +580,14 @@ method(init_point, halfspace_face) <- function(face, ref) {
   project(face, ref)
 }
 
-method(oracle_exactness, halfspace_face) <- function(face) {
-  "exact"
-}
-
 method(oracle, halfspace_face) <- function(
   face,
   objective,
   ...,
   n_seeds = NULL,
   n_restarts = 25L,
-  seed_alpha = NULL
+  seed_alpha = NULL,
+  seed_centres = NULL
 ) {
   d <- length(face@v)
   n_par <- d # (d - 1) boundary coordinates plus one slack coordinate
@@ -629,14 +625,95 @@ method(oracle, halfspace_face) <- function(
     return(list(theta = parametrise(face, res$par), value = -res$value))
   }
 
-  # Gaussian seeds spread over the boundary hyperplane, with the slack
-  # coordinate biased toward the boundary (softplus(-2) is a small inset).
-  u_mat <- matrix(rnorm(n_seeds * n_par), nrow = n_seeds, ncol = n_par)
-  u_mat[, n_par] <- u_mat[, n_par] - 2
+  # Boundary-hyperplane coordinates of the seed centres. A half-space is
+  # unbounded and so has no intrinsic scale: centring on `anchor` (the boundary
+  # point nearest the origin) with unit spread is arbitrary, and misses the
+  # optimum badly whenever it sits more than a couple of units away. Centring on
+  # the mixture's own atoms removes that failure mode.
+  z_centres <- if (is.null(seed_centres)) {
+    matrix(0, nrow = n_par - 1L, ncol = 1L)
+  } else {
+    seed_centres <- as.matrix(seed_centres)
+    # Points on other faces are admissible: project first, then take
+    # coordinates (the projection of a point already in the face is itself).
+    zc <- vapply(
+      seq_len(ncol(seed_centres)),
+      function(k) face_coordinates(face, project(face, seed_centres[, k]))[
+        seq_len(n_par - 1L)
+      ],
+      numeric(max(n_par - 1L, 1L))
+    )
+    zc <- matrix(zc, nrow = n_par - 1L)
+    zc <- zc[, is.finite(colSums(zc)), drop = FALSE]
+    # The anchor is always a centre. Two reasons: with a single atom there is no
+    # centre cloud to calibrate a spread from, and without this the search would
+    # be *narrower* than the anchor-only default and blind to the region between
+    # the support and the anchor. Including it makes the seeded region a strict
+    # superset of the unhinted one, and makes the spread scale with how far the
+    # support sits from the anchor.
+    cbind(zc, matrix(0, nrow = n_par - 1L, ncol = 1L))
+  }
+  if (ncol(z_centres) == 0L) {
+    z_centres <- matrix(0, nrow = n_par - 1L, ncol = 1L)
+  }
+  m <- ncol(z_centres)
+
+  # Spread: a heavy-tailed radius calibrated so `p_out` of the seeds around each
+  # centre land beyond the radius of the centre cloud. Cauchy rather than
+  # Gaussian because the screen is cheap and the polish budget capped, which
+  # makes far-out seeds nearly free insurance against a mis-estimated scale.
+  p_out <- 0.30
+  centroid <- rowMeans(z_centres)
+  radius <- if (m > 1L) {
+    max(sqrt(colSums((z_centres - centroid)^2)))
+  } else {
+    0
+  }
+  scale_c <- max(radius, 1) / tan((pi / 2) * (1 - p_out))
+
+  # `n_seeds` is a floor: every centre gets a minimum share, so a growing
+  # support is searched proportionally harder.
+  seeds_per_centre_min <- 8L
+  n_total <- max(as.integer(n_seeds), m * seeds_per_centre_min)
+  stratum <- rep(seq_len(m), length.out = n_total)
+
+  # Isotropic direction x half-Cauchy radius: exact control of the proportion
+  # outside the cloud in any dimension, unlike per-coordinate draws.
+  n_bnd <- n_par - 1L
+  offset <- if (n_bnd >= 1L) {
+    g <- matrix(rnorm(n_total * n_bnd), nrow = n_total, ncol = n_bnd)
+    norms <- sqrt(rowSums(g^2))
+    norms[norms == 0] <- 1
+    (g / norms) * abs(rcauchy(n_total, location = 0, scale = scale_c))
+  } else {
+    matrix(0, nrow = n_total, ncol = 0L)
+  }
+  u_mat <- cbind(
+    t(z_centres)[stratum, , drop = FALSE] + offset,
+    rnorm(n_total) - 2 # slack: softplus(N(-2, 1)) hugs the boundary
+  )
 
   theta_mat <- parametrise_batch(face, u_mat)
   vals <- objective$value_batch(theta_mat)
-  top_idx <- order(vals, decreasing = TRUE)[seq_len(min(n_restarts, n_seeds))]
+  vals[!is.finite(vals)] <- -Inf
+
+  # Stratified polish: the best seed from each centre first, so no atom's
+  # neighbourhood is dropped by a noisy screen, then fill by global value.
+  n_pol <- min(n_restarts, n_total)
+  per_centre <- vapply(
+    seq_len(m),
+    function(k) {
+      idx <- which(stratum == k)
+      idx[which.max(vals[idx])]
+    },
+    integer(1L)
+  )
+  per_centre <- per_centre[order(vals[per_centre], decreasing = TRUE)]
+  top_idx <- utils::head(per_centre, n_pol)
+  if (length(top_idx) < n_pol) {
+    rest <- setdiff(order(vals, decreasing = TRUE), top_idx)
+    top_idx <- c(top_idx, utils::head(rest, n_pol - length(top_idx)))
+  }
 
   best <- list(par = NULL, value = Inf)
   for (idx in top_idx) {

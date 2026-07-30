@@ -37,7 +37,7 @@ test_that("the scheduler converges and the certificate is consistent", {
   )
 
   expect_true(res$converged)
-  expect_lt(res$gap, 1e-6)
+  expect_lt(res$certificate$gap, 1e-6)
 
   cert <- res$certificate
   expect_equal(cert$gap_se, 0) # exact engine
@@ -125,7 +125,10 @@ test_that("run_ripr returns an e_variable and prune_threshold trims it", {
   expect_identical(res_pruned$projection, ev@projection)
   expect_identical(ev@numerator@mixing, alt)
   # Pruning cannot enlarge the support, and the projection weights sum to 1.
-  expect_lte(ncol(ev@projection@mixing@components), length(res_full$weights))
+  expect_lte(
+    ncol(ev@projection@mixing@components),
+    length(res_full$checkpoints$final$weights)
+  )
   expect_equal(sum(ev@projection@mixing@weights), 1, tolerance = 1e-12)
   # The e-variable carries the certified gap, floored at 0.
   expect_equal(ev@gap, max(res_pruned$certificate$gap_used, 0))

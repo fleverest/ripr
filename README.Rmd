@@ -13,8 +13,10 @@ knitr::opts_chunk$set(collapse = TRUE)
 `ripr` computes the **reverse information projection** (RIPr) `P*` of an
 alternative distribution `Q` onto a (possibly non-convex, union-structured)
 null hypothesis, together with the **duality-gap certificate** for the rescaled
-e-variable `(Q / P*) / (1 + gap)`, whose expectation under every null
-distribution is at most 1.
+e-variable `(Q / P*) / (1 + gap)`. With an exact engine the rescaled e-variable's
+expectation under every null distribution is at most 1. With a Monte Carlo engine
+the gap is estimated, so the bound is stochastic: it holds at level `conf`
+(default 0.95), at the worst-case `theta*` the certifying sample selects.
 
 The projection is found by Frank--Wolfe and EM over a mixture of atoms on the
 null faces. It requires the specification of a sampling `family` (the model
@@ -45,7 +47,7 @@ the convex null is a **point mass at `p = 1/2`**. We demonstrate this using both
 the exact and Monte Carlo engines.
 
 ```{r ex1, message = FALSE}
-library(ripr)
+devtools::load_all()
 n <- 10
 fam <- multinomial_family(n_trials = n, k = 2)
 # `ripr_problem` takes Q as an `outcome_distribution` over the sample space.
@@ -133,8 +135,10 @@ null <- null_region(faces = faces)
 ```
 
 The sample space is continuous here, so we use the Monte Carlo engine: 1000
-draws to fit the mixture, and fresh `certify_draws = 5000` samples, independent
-of the fit, to certify the result (drawn twice by default — see below).
+draws to fit the mixture, and fresh `certify_draws` samples, independent of the
+fit, to certify the result. Certification is a single oracle sweep rather than a
+per-iteration cost, so it is cheap to certify on far more draws than were used
+to fit.
 
 ```{r ex2-mc}
 set.seed(2)
@@ -153,7 +157,7 @@ res <- run_ripr(
   em_iters = 5,
   n_seeds = 50,
   gap_tol = 1e-3,
-  certify_draws = 5000,
+  certify_draws = 1e5,
   verbose = FALSE
 )
 
@@ -167,33 +171,119 @@ cbind(
 
 The projection concentrates on the `mu_1 = mu_2` tie-point — the null boundary
 nearest the alternative `mu = (2, 1)` — with a little mass on the `mu_1 = -mu_2`
-face. The certificate reports the guaranteed e-value growth rate and, for a
-Monte Carlo engine, the standard error of the estimated gap:
+face.
+
+`run_ripr()` returns six elements, partitioned by where each number came from:
+`projection` and `e_variable` are the deliverables; `certificate` holds
+everything measured on the fresh certification sample; `history` and
+`checkpoints` hold everything measured on the fit sample; `converged` reports
+whether the *fit* gap met `gap_tol`.
+
+```{r ex2-str}
+names(res)
+```
+
+The certificate reports the guaranteed e-value growth rate, the standard error
+of the estimated gap, and the settings that produced it:
 
 ```{r ex2-cert}
 c(
-  gap = res$gap,
+  gap = res$certificate$gap,
   gap_se = res$certificate$gap_se,
-  growth_rate = res$certificate$growth_rate
+  gap_used = res$certificate$gap_used,
+  growth_rate = res$certificate$growth_rate,
+  n_draws = res$certificate$n_draws
 )
 ```
 
+The fit record is one row per outer iteration, with the inner init/FW/EM steps
+and the oracle argmax nested as list columns:
+
+```{r ex2-history}
+head(res$history[, c("iter", "gap", "gap_se", "support_size", "kl_after_em")], 4)
+res$history$kl_trace[[2]] # the FW + EM steps inside iteration 1
+```
+
+`checkpoints$final` is always present and describes the returned `projection`
+after pruning. Its three fields are exactly the arguments needed to resume the
+fit, so a run can be continued without re-deriving anything:
+
+```{r ex2-final}
+fin <- res$checkpoints$final
+str(fin, max.level = 1)
+
+resume_kl <- function(w) {
+  run_ripr(
+    prob,
+    init_atoms = do.call(cbind, fin$atoms),
+    init_atom_faces = fin$atom_face_idx,
+    init_weights = w,
+    fw_iters = 0, em_iters = 0, # measure the starting point only
+    certify_ess_min = 0, # not certifying here; see the accuracy note below
+    verbose = FALSE
+  )$history$kl_trace[[1]]$kl[1]
+}
+c(with_weights = resume_kl(fin$weights), uniform = resume_kl(NULL))
+```
+
+`init_weights` is what makes the resume a true continuation: without it the
+atoms carry over but the mixture restarts from uniform weights, and EM has to
+rediscover them.
+
+This problem has a known closed form, so the cost of the certificate is
+measurable. The exact RIPr is two atoms, at `(1.548311, 1.548311)` with weight
+`0.95099` and `(1.267288, -1.267288)` with weight `0.04901`, giving
+`KL* = 0.231375`. The shortfall of `growth_rate` below `KL*` is what the
+certificate gives up: part optimisation slack, part Monte Carlo inflation.
+
 ### Re-certifying on a larger sample
 
-The Monte Carlo certificate above is a stochastic estimate: `certify()` resamples
-fresh draws from `Q` (it does *not* reuse the fit draws) and, by default,
-split-samples — one sample to locate the worst-case direction `theta*`, a second
-to estimate the gap at it, so the estimate carries no selection bias. Its
-standard error shrinks like `1 / sqrt(n)`, so re-certifying the *same* fitted
-projection on more draws tightens it, with no re-fitting — just raise `n_draws`:
+The Monte Carlo certificate is a stochastic bound, and deliberately a
+conservative one. `certify()` resamples fresh draws from `Q` (it does *not*
+reuse the fit draws) and takes the oracle maximum over the null faces; that
+maximum is biased *upward* for the true `sup_theta G`, which is the safe
+direction, and `gap_used` inflates it further to a one-sided bound at level
+`conf`. **`gap_used` is the only quantity that may be used to rescale an
+e-variable.** The inflation term shrinks like `1 / sqrt(n)`, so re-certifying the
+*same* fitted projection on more draws sharpens the certificate, with no
+re-fitting — just raise `n_draws`:
 
 ```{r ex2-recert}
 set.seed(9)
-cert <- certify(res$projection, prob, n_draws = 50000)
-c(new_gap = cert$gap, new_se = cert$gap_se)
+cert <- certify(res$projection, prob, n_draws = 5e5)
+c(new_gap = cert$gap, new_se = cert$gap_se, new_gap_used = cert$gap_used,
+  ess = cert$ess)
 ```
+
+### When not to trust a certificate
+
+`Var[G(theta)]` grows like `exp(|theta - a|^2)` in the distance from the nearest
+atom, so a `theta` far from the support needs roughly `exp(|theta - a|^2)` draws
+before its estimate means anything. A capable oracle will sometimes find such a
+`theta` and report a large gap that is entirely sampling noise. The direction is
+safe — the certificate only ever gets looser — but it can be vacuous, and **more
+draws do not fix it**, because the radius the oracle can profitably exploit grows
+with the sample too.
+
+`certificate$ess` is the effective sample size behind the certified gap. Healthy
+certificates report `ess` within an order of magnitude of `n_draws`;
+noise-driven ones collapse to single digits, and `certify()` warns below
+`ess_min`. Treat a warned certificate as
+uninformative rather than as evidence of a large true gap — re-run it, or
+certify a better-optimised projection.
+
+Note that "sharper" does not mean "smaller": the inflation term halves, but the
+raw maximum climbs toward the true `sup_theta G` for this (unpruned, imperfectly
+optimised) mixture. More draws buys a more faithful bound, not automatically a
+looser or tighter one. To actually lower `gap_used`, improve the projection.
 
 `certify()` takes the fitted `projection` (or any `finite_mixing` of atoms on the
 null) and sweeps the oracle over the null faces. It resamples the problem's own
 engine by default; pass `engine =` to certify against a different one (say an
-`exact_engine`), and `split = FALSE` for a single-sample estimate.
+`exact_engine`).
+
+`estimate = TRUE` draws a second independent sample and adds `gap_est`, an
+*unbiased* point estimate of the gap at the selected `theta*`. It is a
+diagnostic — useful for comparing `fw_variant`s or deciding whether to keep
+optimising — and is biased downward relative to `sup_theta G`. It must never be
+used to rescale an e-variable.

@@ -173,6 +173,19 @@ mirror_descent_weights <- function(
 # Steps
 # =============================================================================
 
+# Seed centres for a face's global search: the current mixture's atoms, as a
+# `d x m` matrix. Each face projects them onto itself, so atoms belonging to
+# other faces still contribute a (projected) centre rather than nothing. Faces
+# holding no atoms of their own therefore search around the projection of the
+# support -- `init_point()`'s map -- instead of an arbitrary anchor.
+state_seed_centres <- function(state) {
+  atoms <- state_atoms(state)[seq_len(state_n_atoms(state))]
+  if (length(atoms) == 0L) {
+    return(NULL)
+  }
+  do.call(cbind, atoms)
+}
+
 #' Frank-Wolfe oracle sweep over every null face
 #'
 #' Finds `argmax_theta G(theta) = E_Q[p_theta / P_W]` over the union of faces at
@@ -189,24 +202,34 @@ mirror_descent_weights <- function(
 oracle_step <- function(state, problem, n_seeds) {
   log_Pw <- state_log_p_mixture(state)
   objective <- fw_objective(problem$engine, problem$family, log_Pw)
+  centres <- state_seed_centres(state)
   face_results <- lapply(problem$null, function(f) {
-    oracle(f, objective, n_seeds = n_seeds)
+    oracle(f, objective, n_seeds = n_seeds, seed_centres = centres)
   })
   E_ratios <- vapply(face_results, `[[`, "value", FUN.VALUE = numeric(1L))
   best_fi <- which.max(E_ratios)
   best_theta <- face_results[[best_fi]]$theta
-  se <- if (deterministic(problem$engine)) {
-    0
-  } else {
+  se <- 0
+  ess <- NA_real_
+  if (!deterministic(problem$engine)) {
     log_tm_best <- eval_log_density(problem$engine, best_theta)
     ratio_best <- exp(nan_to_neginf(log_tm_best - log_Pw))
-    expect_se(problem$engine, ratio_best)
+    se <- expect_se(problem$engine, ratio_best)
+    # Kish effective sample size of the importance ratio at the selected
+    # theta*. `E_star` is a mean of `ratio_best`, so this is the number of
+    # draws the estimate is *effectively* built from. It collapses when the
+    # oracle picks a theta almost no draw supports -- the regime where the
+    # maximum reflects sampling noise rather than the true face maximum.
+    s1 <- sum(ratio_best)
+    s2 <- sum(ratio_best^2)
+    ess <- if (is.finite(s1) && is.finite(s2) && s2 > 0) s1^2 / s2 else 0
   }
   list(
     E_star = E_ratios[best_fi],
     best_theta = best_theta,
     best_fi = best_fi,
     se = se,
+    ess = ess,
     face_results = face_results,
     log_Pw = log_Pw
   )
@@ -499,8 +522,9 @@ li_barron_step <- function(state, problem, n_seeds, ls_tol = 1e-12) {
     }
   )
 
+  centres <- state_seed_centres(state)
   face_results <- lapply(problem$null, function(f) {
-    oracle(f, objective, n_seeds = n_seeds)
+    oracle(f, objective, n_seeds = n_seeds, seed_centres = centres)
   })
   values <- vapply(face_results, `[[`, "value", FUN.VALUE = numeric(1L))
   best_fi <- which.max(values)

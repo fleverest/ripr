@@ -8,11 +8,12 @@ certify(
   projection,
   problem,
   engine = NULL,
-  split = TRUE,
+  estimate = FALSE,
   n_draws = NULL,
   oracle_result = NULL,
   n_seeds = 200L,
-  conf = 0.95
+  conf = 0.95,
+  ess_min = 100
 )
 }
 \arguments{
@@ -25,12 +26,12 @@ the default engine.}
 \item{engine}{Optional \code{expectation_engine} giving the Q/family to certify
 against, overriding \code{problem$engine}. Must be over the same family and Q.}
 
-\item{split}{Draw two independent samples -- one to select \verb{theta*}, one to
-estimate the gap at it -- removing the selection bias. Default \code{TRUE}. With
-\code{FALSE}, a single sample does both. Ignored for exact engines.}
+\item{estimate}{Additionally draw a second independent sample and return the
+unbiased diagnostic \code{gap_est} (see Details). Default \code{FALSE}. Never affects
+\code{gap_used}. Ignored for exact engines.}
 
 \item{n_draws}{Draws per resample (Monte Carlo engines only). Default \code{NULL}
-uses the engine's own \code{n_draws}; \code{split = TRUE} draws this many twice.}
+uses the engine's own \code{n_draws}; drawn twice only when \code{estimate = TRUE}.}
 
 \item{oracle_result}{Optional precomputed \code{\link[=oracle_step]{oracle_step()}} result; honoured
 only for exact engines (which do not resample).}
@@ -39,10 +40,24 @@ only for exact engines (which do not resample).}
 
 \item{conf}{One-sided confidence level for the Monte Carlo gap inflation.
 Default 0.95.}
+
+\item{ess_min}{Warn when the effective sample size behind the certified gap
+falls below this (Monte Carlo engines only). Default 100. Set \code{0} to
+silence. See the accuracy section.}
 }
 \value{
 List with \code{kl}, \code{gap}, \code{gap_se}, \code{gap_used}, \code{kl_lower_bound},
-\code{growth_rate}, \code{oracle_theta}, \code{oracle_face}, and \code{conf}.
+\code{growth_rate}, \code{oracle_theta}, \code{oracle_face}, \code{conf}, \code{gap_est}, \code{ess}, and
+the settings that produced it: \code{n_draws} (\code{NA} for exact engines) and
+\code{n_seeds}. \code{gap_est} is \code{NA_real_} unless \code{estimate = TRUE}; it is an
+unbiased diagnostic estimate of the gap at the selected \verb{theta*}, biased
+downward relative to \verb{sup_theta G}, and \strong{must never be used to rescale an
+e-variable} -- use \code{gap_used} for that.
+
+\code{n_seeds} is recorded because it governs an error the certificate does not
+otherwise account for: \code{gap_se} quantifies the Monte Carlo error from
+finite \code{n_draws}, but an under-seeded oracle \emph{undershoots} \verb{sup_theta G},
+biasing \code{gap_used} downward -- the unsafe direction.
 }
 \description{
 The common evaluation tool for every algorithm and engine. Takes a fitted
@@ -60,18 +75,21 @@ e-variable \verb{(Q / P*) / (1 + gap)}, whose null expectation is at most 1 by
 construction.
 }
 
-Monte Carlo certification does not reuse the passed engine's own draws: it
-resamples fresh outcomes from the engine's Q, with the engine's own \code{n_draws}
-(override with \code{n_draws}). By default (\code{split = TRUE}) it draws \strong{two}
-independent samples -- one to locate the worst-case \verb{theta*} (the oracle
-argmax over the faces), a second to estimate the gap and its standard error at
-that fixed \verb{theta*}. Because \verb{theta*} is then estimated on data independent of
-the data that selected it, the gap estimate is free of the selection
-("winner's curse") bias that a single sample incurs. With \code{split = FALSE} one
-sample does both, at half the draws but with an optimistically biased gap and
-an over-tight \code{gap_se}. Certification is therefore non-deterministic for Monte
+For Monte Carlo engines, certification draws one fresh sample from Q --
+independent of the sample \verb{P*} was fitted against, with the engine's own
+\code{n_draws} (override with \code{n_draws}) -- and takes the oracle maximum over the
+null faces. That maximum is deliberately upward-biased for \verb{sup_theta G}: it
+is the conservative direction, and \code{gap_used} inflates it further by
+\code{qnorm(conf) * gap_se}. \code{gap_used} is the only quantity that may be used to
+rescale an e-variable. Certification is therefore non-deterministic for Monte
 Carlo engines (governed by the global RNG). Exact engines integrate the true Q
-with \code{gap_se = 0}; \code{split} and \code{n_draws} do not apply.
+with \code{gap_se = 0}; \code{estimate} and \code{n_draws} do not apply.
+
+\code{estimate = TRUE} additionally draws a second independent sample and returns
+\code{gap_est}, an unbiased point estimate of the gap at the selected \verb{theta*}. It
+is a diagnostic -- for comparing algorithm variants, monitoring convergence,
+or deciding whether to keep optimising -- and is biased \emph{downward} relative to
+\verb{sup_theta G}. \strong{It must never be used to rescale an e-variable.}
 
 Pass a different \code{engine} to certify against a different Q integration -- e.g.
 an \code{\link[=exact_engine]{exact_engine()}}, or another \code{mc_engine()}. The default is the problem's
@@ -79,7 +97,37 @@ own engine (used only as the Q/family specification to resample from).
 
 For Monte Carlo engines the gap is inflated via \code{\link[=inflate_gap]{inflate_gap()}} at level
 \code{conf}; the returned \code{gap} is the raw estimate and \code{gap_used} the inflated
-value entering both certified quantities. Certification refuses to proceed if
-any face reports an inexact oracle: an undershooting oracle would silently
-overstate the certificate.
+value entering both certified quantities.
 }
+\section{What \code{gap_used} does and does not cover}{
+\code{gap_used} accounts for \strong{Monte Carlo error only} -- the sampling error in
+estimating \code{G} at a fixed \code{theta}, reported by \code{gap_se} and inflated at level
+\code{conf}. It does \strong{not} account for optimisation error. \code{\link[=oracle]{oracle()}} maximises
+a generally non-convex objective by multi-start BFGS, so \code{E_star} is a lower
+bound on the true face maximum: if the search misses the global optimum,
+\code{gap} is too small, \code{gap_used} is too small, and the rescaled e-variable is
+under-corrected. That error is one-sided in the unsafe direction and is
+currently neither bounded nor estimated.
+
+The practical mitigations are to raise \code{n_seeds} (recorded in the return
+value for exactly this reason) and to treat a certificate as evidence rather
+than proof on nulls whose faces have a multimodal \code{G}. A deterministic upper
+bound on \verb{sup_theta G} would remove the caveat; none is implemented.
+
+There is a second, opposite failure mode, and unlike the first it is
+detectable. \code{Var[G_hat(theta)]} grows like \verb{exp(|theta - a|^2)} in the
+distance from the nearest atom \code{a}, so a \code{theta} far from the support needs
+roughly \verb{exp(|theta - a|^2)} draws before its estimate means anything. A
+capable oracle will find such a \code{theta} and report a large \code{gap} that is
+pure sampling noise. This direction is \emph{safe} -- the certificate only gets
+looser -- but it can make it vacuous, and \strong{more draws do not fix it}: the
+radius the oracle can profitably exploit grows with the sample.
+
+The returned \code{ess} is the Kish effective sample size of the importance ratio
+at the selected \verb{theta*}: the number of draws the certified gap is
+effectively built from. Healthy certificates report \code{ess} within an order of
+magnitude of \code{n_draws}; noise-driven ones collapse to single digits, and
+\code{certify()} warns below \code{ess_min}. Treat a warned certificate as
+uninformative rather than as a large true gap.
+}
+

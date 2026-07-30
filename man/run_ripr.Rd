@@ -10,6 +10,7 @@ run_ripr(
   init_atom_faces,
   fw_iters,
   em_iters,
+  init_weights = NULL,
   n_seeds = 200L,
   kl_atol = 1e-12,
   kl_rtol = 1e-08,
@@ -19,7 +20,7 @@ run_ripr(
   mirror_iters = 500L,
   prune_threshold = 0,
   certify_draws = NULL,
-  certify_split = TRUE,
+  certify_ess_min = 100,
   fw_variant = c("line-search", "pairwise", "vanilla", "fully-corrective", "li-barron"),
   checkpoint_iters = NULL,
   verbose = TRUE
@@ -37,7 +38,17 @@ faces. Each column is one atom.}
 
 \item{em_iters}{Max EM iterations per outer step. Set to \code{0L} to skip EM.}
 
-\item{n_seeds}{Random Dirichlet/Gaussian seeds per face for the oracle.}
+\item{init_weights}{Optional starting mixture weights, one per column of
+\code{init_atoms}. Default \code{NULL} starts uniform. Pass
+\code{checkpoints$final$weights} from a previous result to resume that fit
+where it left off rather than re-deriving the weights by EM. Must be
+finite and non-negative with a positive sum; renormalised to sum to 1.}
+
+\item{n_seeds}{Random Dirichlet/Gaussian seeds per face for the oracle. The
+final certification sweep uses \code{10 * n_seeds}, matching the factor applied
+to \code{certify_draws}: a wider seed pool costs almost nothing (BFGS polishing
+is capped inside \code{\link[=oracle]{oracle()}}), and an under-seeded oracle undershoots the
+duality gap, which is the unsafe direction for a certificate.}
 
 \item{kl_atol, kl_rtol}{Absolute/relative tolerances for EM convergence.}
 
@@ -60,15 +71,19 @@ every atom.}
 from Q used to certify the final mixture. Certification always runs on a new
 sample independent of the one \code{P_W} was fitted against, so the certified gap
 and its standard error are not optimistically biased by the fit. Default
-\code{NULL} matches the engine's fit sample size; pass a larger absolute count
-for a tighter certificate. Ignored (with a warning if set) for exact
+\code{NULL} uses \verb{10 *} the engine's fit sample size. Certification is a single
+oracle sweep, not a per-iteration cost, so its cost is linear in this
+count. More draws tighten the \emph{typical} certificate, but they do not bound
+its worst case: the certified gap is a maximum over the null faces of a
+Monte Carlo estimate, and the region the oracle can profitably exploit
+moves outward as the sample grows. See the accuracy section of \code{\link[=certify]{certify()}},
+and check \code{certificate$ess}. Ignored (with a warning if set) for exact
 engines, which integrate the true Q and have nothing to resample.}
 
-\item{certify_split}{For Monte Carlo engines, split-sample the final
-certification (see \code{\link[=certify]{certify()}}): draw two independent \code{certify_draws}
-samples, one to locate the worst-case \verb{theta*} and one to estimate the gap
-at it, removing the selection bias. Default \code{TRUE}. \code{FALSE} uses a single
-sample. No effect on exact engines.}
+\item{certify_ess_min}{Warn when the final certificate rests on fewer than
+this many effective draws (Monte Carlo engines only; see \code{\link[=certify]{certify()}}).
+Default 100. Set \code{0} to silence -- but a warned certificate is
+uninformative rather than merely loose, so prefer investigating it.}
 
 \item{fw_variant}{Weight-update variant: \code{"line-search"} (default),
 \code{"pairwise"}, \code{"vanilla"}, \code{"fully-corrective"}, or \code{"li-barron"} (the
@@ -80,14 +95,34 @@ post-init) at which to snapshot the mixture. Default \code{NULL} records nothing
 \item{verbose}{Print per-iteration progress. Default TRUE.}
 }
 \value{
-A list. The two principal elements are \code{projection}, the fitted RIPr
-\verb{P*} as a \link{marginal} (its mixing measure is a \link{finite_mixing} over the
-atoms), and \code{e_variable}, the \code{\link[=e_variable]{e_variable()}} wrapping it with the numerator
-\code{Q} and the certified gap (call \code{\link[=e_value]{e_value()}} on it to score data). Also
-returned: the projection's \code{atoms} / \code{weights} /
-\code{atom_face_idx}, the \code{certificate}, the \code{kl_trace} / \code{history} / \code{metrics}
-records, the terminal \code{gap}, \code{kl}, \code{converged} flag, and the raw
-optimisation \code{state}.
+A list of six elements, grouped so that each one has a single
+provenance -- results, the certificate, and the fit record are not mixed.
+\itemize{
+\item \code{projection}: the fitted RIPr \verb{P*} as a \link{marginal} (its mixing measure is a
+\link{finite_mixing} over the atoms), after pruning.
+\item \code{e_variable}: the \code{\link[=e_variable]{e_variable()}} wrapping \code{projection} with the numerator
+\code{Q} and \code{certificate$gap_used}. Call \code{\link[=e_value]{e_value()}} on it to score data.
+\item \code{certificate}: the \code{\link[=certify]{certify()}} result for \code{projection}, computed on a fresh
+sample independent of the fit (see \code{certify_draws}). Everything derived
+from the certification sample lives here and nowhere else, including the
+certified worst-case \code{oracle_theta} / \code{oracle_face} and the \code{n_draws} /
+\code{n_seeds} that produced it.
+\item \code{history}: a data.frame with one row per outer iteration, holding every
+fit-sample quantity: \code{gap}, \code{gap_se}, \code{kl_after_fw} / \code{kl_after_em},
+\code{kl_ulb}, \code{gr} / \code{best_gr}, \code{support_size}, \code{face_idx}, \code{eps_star} /
+\code{prop_star}, and \code{elapsed_s}. Two list columns nest the finer records:
+\code{kl_trace} (a data.frame of the init/FW/EM steps within that iteration) and
+\code{oracle_theta} (the fit-sample oracle argmax at that iteration).
+\item \code{checkpoints}: a named list of mixture snapshots. \verb{$final} is always
+present and describes the returned \code{projection} \emph{after} pruning -- its
+\code{atoms}, \code{atom_face_idx}, and \code{weights} are exactly the \code{init_atoms},
+\code{init_atom_faces}, and \code{init_weights} needed to resume this fit. Iteration
+snapshots
+(\verb{$iter_0}, \verb{$iter_3}, ...) appear only if \code{checkpoint_iters} asked for
+them, and are recorded \emph{before} pruning.
+\item \code{converged}: whether the fit-sample gap fell below \code{gap_tol}. A statement
+about the fit only; it can be \code{TRUE} alongside a large certified gap.
+}
 }
 \description{
 The sole public entry point. Runs the reference hybrid schedule on a
@@ -97,7 +132,8 @@ recording. All variant behaviour comes from which weight-update step
 \code{fw_variant} selects; the loop itself is variant-agnostic.
 }
 \details{
-The result carries the atoms/weights of the final mixture, the KL and gap
-traces, a \code{metrics} data.frame (one row per outer iteration), and the
-terminal \code{\link[=certify]{certify()}} result at the final state.
+The result is deliberately partitioned by provenance: \code{projection} and
+\code{e_variable} are the deliverables, \code{certificate} holds everything measured on
+the fresh certification sample, and \code{history} / \code{checkpoints} hold everything
+measured on the fit sample. No quantity appears in more than one of those.
 }

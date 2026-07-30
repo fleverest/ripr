@@ -10,7 +10,8 @@ oracle(
   ...,
   n_seeds = NULL,
   n_restarts = 25L,
-  seed_alpha = NULL
+  seed_alpha = NULL,
+  seed_centres = NULL
 )
 }
 \arguments{
@@ -20,12 +21,22 @@ oracle(
 
 \item{...}{Ignored.}
 
-\item{n_seeds}{Random seeds for the global search.}
+\item{n_seeds}{Random seeds for the global search. Treated as a floor:
+implementations that stratify over \code{seed_centres} may draw more so that
+every centre receives a minimum share.}
 
 \item{n_restarts}{Number of best seeds refined by BFGS.}
 
 \item{seed_alpha}{Optional single seed for a local refinement (skips the
 global search).}
+
+\item{seed_centres}{Optional \verb{d x m} matrix of parameter-space points to
+centre the random search on -- in practice the current mixture's atoms.
+Points are projected onto the face before use, so centres lying on other
+faces are admissible. \code{NULL} leaves the choice to the implementation.
+Unbounded faces have no intrinsic scale, so without this hint their search
+is centred on an arbitrary anchor and can miss the optimum badly; bounded
+faces parametrised by their own vertices do not need it.}
 }
 \value{
 \code{list(theta = , value = )} with \code{theta} on the face.
@@ -34,7 +45,9 @@ global search).}
 Contract: maximises the supplied objective over the face and returns
 \code{list(theta = , value = )} with \code{theta} on the face. \code{objective} is a list of
 closures over parameter vectors: \code{value(theta)}, \code{grad_theta(theta)}, and
-\code{value_batch(theta_mat)}. The maximiser is exact only up to the face's search
-strategy; consult \code{\link[=oracle_exactness]{oracle_exactness()}} before certifying anything derived
-from the result.
+\code{value_batch(theta_mat)}. Every implementation is a heuristic global search
+over a generally non-convex objective, so the returned value is a \emph{lower}
+bound on the true face maximum, not the maximum itself. Callers that need an
+upper bound on \verb{sup G} -- certification, above all -- must account for that
+separately; nothing here guarantees it.
 }

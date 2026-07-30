@@ -6,17 +6,27 @@
 #' recording. All variant behaviour comes from which weight-update step
 #' `fw_variant` selects; the loop itself is variant-agnostic.
 #'
-#' The result carries the atoms/weights of the final mixture, the KL and gap
-#' traces, a `metrics` data.frame (one row per outer iteration), and the
-#' terminal [certify()] result at the final state.
+#' The result is deliberately partitioned by provenance: `projection` and
+#' `e_variable` are the deliverables, `certificate` holds everything measured on
+#' the fresh certification sample, and `history` / `checkpoints` hold everything
+#' measured on the fit sample. No quantity appears in more than one of those.
 #'
 #' @param problem Problem list from [ripr_problem()].
 #' @param init_atoms `d x l` matrix of initial atom locations on the null
 #'   faces. Each column is one atom.
 #' @param init_atom_faces Integer vector of face indices, one per column.
+#' @param init_weights Optional starting mixture weights, one per column of
+#'   `init_atoms`. Default `NULL` starts uniform. Pass
+#'   `checkpoints$final$weights` from a previous result to resume that fit
+#'   where it left off rather than re-deriving the weights by EM. Must be
+#'   finite and non-negative with a positive sum; renormalised to sum to 1.
 #' @param fw_iters Number of Frank-Wolfe iterations. Set to `0L` for pure EM.
 #' @param em_iters Max EM iterations per outer step. Set to `0L` to skip EM.
-#' @param n_seeds Random Dirichlet/Gaussian seeds per face for the oracle.
+#' @param n_seeds Random Dirichlet/Gaussian seeds per face for the oracle. The
+#'   final certification sweep uses `10 * n_seeds`, matching the factor applied
+#'   to `certify_draws`: a wider seed pool costs almost nothing (BFGS polishing
+#'   is capped inside [oracle()]), and an under-seeded oracle undershoots the
+#'   duality gap, which is the unsafe direction for a certificate.
 #' @param kl_atol,kl_rtol Absolute/relative tolerances for EM convergence.
 #' @param gap_tol Convergence tolerance on the FW gap (`E_star - 1`).
 #' @param ls_tol Line-search tolerance.
@@ -32,28 +42,51 @@
 #'   from Q used to certify the final mixture. Certification always runs on a new
 #'   sample independent of the one `P_W` was fitted against, so the certified gap
 #'   and its standard error are not optimistically biased by the fit. Default
-#'   `NULL` matches the engine's fit sample size; pass a larger absolute count
-#'   for a tighter certificate. Ignored (with a warning if set) for exact
+#'   `NULL` uses `10 *` the engine's fit sample size. Certification is a single
+#'   oracle sweep, not a per-iteration cost, so its cost is linear in this
+#'   count. More draws tighten the *typical* certificate, but they do not bound
+#'   its worst case: the certified gap is a maximum over the null faces of a
+#'   Monte Carlo estimate, and the region the oracle can profitably exploit
+#'   moves outward as the sample grows. See the accuracy section of [certify()],
+#'   and check `certificate$ess`. Ignored (with a warning if set) for exact
 #'   engines, which integrate the true Q and have nothing to resample.
-#' @param certify_split For Monte Carlo engines, split-sample the final
-#'   certification (see [certify()]): draw two independent `certify_draws`
-#'   samples, one to locate the worst-case `theta*` and one to estimate the gap
-#'   at it, removing the selection bias. Default `TRUE`. `FALSE` uses a single
-#'   sample. No effect on exact engines.
+#' @param certify_ess_min Warn when the final certificate rests on fewer than
+#'   this many effective draws (Monte Carlo engines only; see [certify()]).
+#'   Default 100. Set `0` to silence -- but a warned certificate is
+#'   uninformative rather than merely loose, so prefer investigating it.
 #' @param fw_variant Weight-update variant: `"line-search"` (default),
 #'   `"pairwise"`, `"vanilla"`, `"fully-corrective"`, or `"li-barron"` (the
 #'   exact-objective greedy step).
 #' @param checkpoint_iters Integer vector of outer-iteration indices (0 =
 #'   post-init) at which to snapshot the mixture. Default `NULL` records nothing.
 #' @param verbose Print per-iteration progress. Default TRUE.
-#' @return A list. The two principal elements are `projection`, the fitted RIPr
-#'   `P*` as a [marginal] (its mixing measure is a [finite_mixing] over the
-#'   atoms), and `e_variable`, the [e_variable()] wrapping it with the numerator
-#'   `Q` and the certified gap (call [e_value()] on it to score data). Also
-#'   returned: the projection's `atoms` / `weights` /
-#'   `atom_face_idx`, the `certificate`, the `kl_trace` / `history` / `metrics`
-#'   records, the terminal `gap`, `kl`, `converged` flag, and the raw
-#'   optimisation `state`.
+#' @return A list of six elements, grouped so that each one has a single
+#'   provenance -- results, the certificate, and the fit record are not mixed.
+#'
+#' - `projection`: the fitted RIPr `P*` as a [marginal] (its mixing measure is a
+#'   [finite_mixing] over the atoms), after pruning.
+#' - `e_variable`: the [e_variable()] wrapping `projection` with the numerator
+#'   `Q` and `certificate$gap_used`. Call [e_value()] on it to score data.
+#' - `certificate`: the [certify()] result for `projection`, computed on a fresh
+#'   sample independent of the fit (see `certify_draws`). Everything derived
+#'   from the certification sample lives here and nowhere else, including the
+#'   certified worst-case `oracle_theta` / `oracle_face` and the `n_draws` /
+#'   `n_seeds` that produced it.
+#' - `history`: a data.frame with one row per outer iteration, holding every
+#'   fit-sample quantity: `gap`, `gap_se`, `kl_after_fw` / `kl_after_em`,
+#'   `kl_ulb`, `gr` / `best_gr`, `support_size`, `face_idx`, `eps_star` /
+#'   `prop_star`, and `elapsed_s`. Two list columns nest the finer records:
+#'   `kl_trace` (a data.frame of the init/FW/EM steps within that iteration) and
+#'   `oracle_theta` (the fit-sample oracle argmax at that iteration).
+#' - `checkpoints`: a named list of mixture snapshots. `$final` is always
+#'   present and describes the returned `projection` *after* pruning -- its
+#'   `atoms`, `atom_face_idx`, and `weights` are exactly the `init_atoms`,
+#'   `init_atom_faces`, and `init_weights` needed to resume this fit. Iteration
+#'   snapshots
+#'   (`$iter_0`, `$iter_3`, ...) appear only if `checkpoint_iters` asked for
+#'   them, and are recorded *before* pruning.
+#' - `converged`: whether the fit-sample gap fell below `gap_tol`. A statement
+#'   about the fit only; it can be `TRUE` alongside a large certified gap.
 #' @export
 run_ripr <- function(
   problem,
@@ -61,6 +94,7 @@ run_ripr <- function(
   init_atom_faces,
   fw_iters,
   em_iters,
+  init_weights = NULL,
   n_seeds = 200L,
   kl_atol = 1e-12,
   kl_rtol = 1e-8,
@@ -70,7 +104,7 @@ run_ripr <- function(
   mirror_iters = 500L,
   prune_threshold = 0,
   certify_draws = NULL,
-  certify_split = TRUE,
+  certify_ess_min = 100,
   fw_variant = c(
     "line-search",
     "pairwise",
@@ -89,6 +123,31 @@ run_ripr <- function(
       n_init
     ))
   }
+  # `state_set_weights()` does no validation, so a bad vector here would surface
+  # much later as a silently wrong objective. Check it at the boundary instead.
+  if (is.null(init_weights)) {
+    init_weights <- rep(1 / n_init, n_init)
+  } else {
+    init_weights <- as.numeric(init_weights)
+    if (length(init_weights) != n_init) {
+      stop(sprintf(
+        "length(init_weights) (%d) must equal ncol(init_atoms) (%d).",
+        length(init_weights),
+        n_init
+      ))
+    }
+    if (anyNA(init_weights) || any(!is.finite(init_weights))) {
+      stop("`init_weights` must be finite and non-missing.")
+    }
+    if (any(init_weights < 0)) {
+      stop("`init_weights` must be non-negative.")
+    }
+    total <- sum(init_weights)
+    if (total <= 0) {
+      stop("`init_weights` must have a positive sum.")
+    }
+    init_weights <- init_weights / total
+  }
 
   state <- mixture_state(problem$engine, n_init + fw_iters)
   t_start <- proc.time()[["elapsed"]]
@@ -98,6 +157,7 @@ run_ripr <- function(
   outer_rows <- list()
   support_sizes <- integer(0L)
   gap_ses <- numeric(0L)
+  oracle_thetas <- list()
   checkpoints <- list()
   kl_ulb <- -Inf
   best_gr <- -Inf
@@ -111,12 +171,14 @@ run_ripr <- function(
     )
   }
 
+  # Checkpoints are keyed by name so the always-present post-prune `final` entry
+  # cannot collide with an iteration checkpoint recorded at the same `iter`.
   record_checkpoint <- function(iter, oracle_theta_cp = NULL) {
     if (is.null(checkpoint_iters) || !(iter %in% checkpoint_iters)) {
       return(invisible(NULL))
     }
     snap <- state_snapshot(state)
-    checkpoints[[length(checkpoints) + 1L]] <<- list(
+    checkpoints[[sprintf("iter_%d", iter)]] <<- list(
       iter = iter,
       atoms = snap$atoms,
       weights = snap$weights,
@@ -148,7 +210,7 @@ run_ripr <- function(
   for (j in seq_len(n_init)) {
     state_add_atom(state, init_atoms[, j], init_atom_faces[j])
   }
-  state_set_weights(state, rep(1 / n_init, n_init))
+  state_set_weights(state, init_weights)
   kl <- state_objective(state)$loss
   record_trace(0L, "init", state_n_atoms(state), kl)
 
@@ -164,7 +226,6 @@ run_ripr <- function(
   converged <- FALSE
   fw <- oracle_step(state, problem, n_seeds = n_seeds)
   gap <- fw$E_star - 1
-  oracle_theta <- fw$best_theta
   kl_ulb <- kl - gap
   gr <- kl - log1p(gap)
   best_gr <- max(best_gr, gr)
@@ -183,6 +244,7 @@ run_ripr <- function(
   )
   support_sizes <- c(support_sizes, state_n_atoms(state))
   gap_ses <- c(gap_ses, fw$se %||% 0)
+  oracle_thetas[[length(oracle_thetas) + 1L]] <- fw$best_theta
   if (verbose) {
     message(sprintf(
       "Init [%d atoms]: Gap %e, KL %e, ULB %e, GR %e",
@@ -265,7 +327,6 @@ run_ripr <- function(
     # Oracle -- single call per iteration; result used for next iteration's step.
     fw <- oracle_step(state, problem, n_seeds = n_seeds)
     gap <- fw$E_star - 1
-    oracle_theta <- fw$best_theta
     kl_ulb <- max(kl_ulb, kl - gap)
     gr <- kl - log1p(gap)
     best_gr <- max(best_gr, gr)
@@ -284,6 +345,7 @@ run_ripr <- function(
     )
     support_sizes <- c(support_sizes, state_n_atoms(state))
     gap_ses <- c(gap_ses, fw$se %||% 0)
+    oracle_thetas[[length(oracle_thetas) + 1L]] <- fw$best_theta
     if (verbose) {
       message(sprintf(
         "Iter %d [%d atoms]: Gap %e, KL %e (delta %.1e), ULB %e, KL-ULB %e, GR %e, alpha* %.2e, prop* %.2f",
@@ -314,16 +376,19 @@ run_ripr <- function(
     kl_prev <- kl
   }
 
+  # One row per outer iteration. The inner (init/FW/EM) KL trace and the oracle
+  # argmax are nested as list columns rather than kept as parallel objects, so
+  # every fit-sample record is keyed by the iteration it belongs to.
   kl_trace <- do.call(rbind, trace_rows)
   history <- do.call(rbind, outer_rows)
-  metrics <- data.frame(
-    iteration = history$iter,
-    wall_clock = history$elapsed_s,
-    gap = history$gap,
-    gap_se = gap_ses,
-    support_size = support_sizes,
-    objective = history$kl_after_em
-  )
+  history$gap_se <- gap_ses
+  history$support_size <- support_sizes
+  history$oracle_theta <- oracle_thetas
+  history$kl_trace <- lapply(history$iter, function(i) {
+    rows <- kl_trace[kl_trace$iter == i, setdiff(names(kl_trace), "iter"), drop = FALSE]
+    rownames(rows) <- NULL
+    rows
+  })
 
   # --- Prune, then certify the pruned projection ---
   # Pruning drops the near-zero-weight atoms Frank-Wolfe leaves behind; the
@@ -351,27 +416,37 @@ run_ripr <- function(
   # same engine (reusing the final oracle sweep when nothing was pruned). Monte
   # Carlo engines resample fresh, independent draws inside `certify` -- the
   # mixture was optimised against the fit draws, so an in-sample gap would be
-  # optimistically biased -- and by default split-sample to keep the gap estimate
-  # free of the theta*-selection bias too. `certify_draws` defaults to the fit
-  # size (drawn twice when `certify_split`).
+  # optimistically biased. Certification is one oracle sweep rather than a
+  # per-iteration cost, so `certify_draws` defaults well above the fit size.
   if (deterministic(problem$engine) && !is.null(certify_draws)) {
     warning(
       "`certify_draws` is ignored for the exact (deterministic) engine, ",
       "which integrates the true Q and has no sample to redraw."
     )
   }
+  n_cert <- if (deterministic(problem$engine)) {
+    NULL
+  } else {
+    certify_draws %||% (10L * as.integer(problem$engine@n_draws))
+  }
+  # Certification inherits the run's `n_seeds`, scaled up by the same factor as
+  # the draw count. Widening the seed pool is nearly free: `oracle()` caps BFGS
+  # polishing at its own `n_restarts` (25), so extra seeds only enlarge the
+  # cheap batched screen. Under-seeding *undershoots* sup G, biasing `gap_used`
+  # down -- the unsafe direction -- so the certification sweep should never
+  # search less thoroughly than the fit sweeps that placed the atoms.
+  n_seeds_cert <- 10L * as.integer(n_seeds)
   cert <- certify(
     proj_mixing,
     problem,
-    split = certify_split,
-    n_draws = certify_draws,
+    n_draws = n_cert,
+    n_seeds = n_seeds_cert,
+    ess_min = certify_ess_min,
     oracle_result = if (deterministic(problem$engine) && all(keep)) fw else NULL
   )
   if (verbose && !deterministic(problem$engine)) {
-    n_cert <- certify_draws %||% problem$engine@n_draws
     message(sprintf(
-      "Certified on %s%d fresh draws: gap %e (se %.2e), gap_used %e",
-      if (certify_split) "2x " else "",
+      "Certified on %d fresh draws: gap %e (se %.2e), gap_used %e",
       n_cert,
       cert$gap,
       cert$gap_se,
@@ -386,22 +461,27 @@ run_ripr <- function(
     gap = cert$gap_used
   )
 
-  list(
-    projection = projection,
-    e_variable = ev,
+  # The `final` checkpoint is always recorded, after pruning, so its atoms,
+  # weights, and face indices describe exactly the returned `projection`. That
+  # makes it the round-trip record: its three fields are the `init_atoms`,
+  # `init_atom_faces`, and `init_weights` needed to resume this fit.
+  # `oracle_theta` is
+  # NA because no fit-sample sweep was run on the pruned mixture -- the
+  # certified worst case lives in `certificate$oracle_theta`, on its own sample.
+  checkpoints$final <- list(
+    iter = NA_integer_,
     atoms = atoms,
     weights = weights,
     atom_face_idx = faces,
-    kl_trace = kl_trace,
-    history = history,
-    gap = cert$gap,
-    oracle_theta = oracle_theta,
-    kl = cert$kl,
-    kl_ulb = kl_ulb,
-    converged = converged,
-    checkpoints = checkpoints,
-    metrics = metrics,
+    oracle_theta = NA
+  )
+
+  list(
+    projection = projection,
+    e_variable = ev,
     certificate = cert,
-    state = state
+    history = history,
+    checkpoints = checkpoints,
+    converged = converged
   )
 }

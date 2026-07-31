@@ -24,6 +24,7 @@ Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
 Collate:
     'numerics.R'
+    'bernstein.R'
     'multinomial.R'
     'family.R'
     'distribution.R'
@@ -32,6 +33,7 @@ Collate:
     'e_variable.R'
     'faces.R'
     'engine.R'
+    'oracle_bound.R'
     'state.R'
     'steps.R'
     'certificate.R'

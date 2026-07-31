@@ -113,6 +113,46 @@ simulate <- new_generic(
 #' @export
 support <- new_generic("support", "family", function(family) S7::S7_dispatch())
 
+#' Is `p_theta(x)` a Bernstein basis function of `theta`?
+#'
+#' The capability behind the deterministic certified bound (see
+#' [oracle_bound()]). Contract: return `NULL` when the family's density is not a
+#' simplicial Bernstein basis function of its parameter, and otherwise
+#' `list(n = , K = , tally = )` where `n` is the Bernstein degree, `K` the
+#' number of barycentric coordinates (so `theta` ranges over the `(K-1)`-simplex
+#' and `param_dim()` is `K`), and `tally` the `(M, K)` matrix of exponent
+#' multi-indices **in the same row order as the family's [support()]** -- and
+#' hence as `engine@outcomes` for an [exact_engine()] over that family.
+#'
+#' The capability belongs to the family, not the engine: being exact is
+#' necessary but not sufficient. It is the *multinomial* pmf that happens to be
+#' the degree-`n` Bernstein basis function at count vector `x`, so an exact
+#' engine over some other finite-support family does not qualify. Families
+#' without a method inherit the `NULL` default and degrade to the heuristic
+#' oracle rather than being silently certified.
+#' @param family A `family`.
+#' @return `NULL`, or `list(n = , K = , tally = )`.
+#' @keywords internal
+bernstein_form <- new_generic("bernstein_form", "family", function(family) {
+  S7::S7_dispatch()
+})
+
+method(bernstein_form, family) <- function(family) {
+  NULL
+}
+
+#' Number of Bernstein coefficients implied by a [bernstein_form()]
+#' @param bf A [bernstein_form()] result, or `NULL`.
+#' @return Integer count, or `NA_integer_` for `NULL`.
+#' @keywords internal
+#' @noRd
+n_coefficients <- function(bf) {
+  if (is.null(bf)) {
+    return(NA_integer_)
+  }
+  as.numeric(choose(bf$n + bf$K - 1L, bf$K - 1L))
+}
+
 #' Multinomial sampling family
 #'
 #' The n-trial, K-category multinomial. The support enumeration and log
@@ -185,6 +225,16 @@ method(simulate, multinomial_family) <- function(family, theta, n_obs) {
 
 method(support, multinomial_family) <- function(family) {
   family@likelihood$support
+}
+
+method(bernstein_form, multinomial_family) <- function(family) {
+  # P_theta(x) = choose(n; x) prod theta_j^{x_j} is exactly the degree-n
+  # simplicial Bernstein basis function indexed by the count vector x.
+  list(
+    n = as.integer(family@n_trials),
+    K = as.integer(family@k),
+    tally = family@likelihood$support
+  )
 }
 
 #' Normalise a sampling-model argument into a `family`

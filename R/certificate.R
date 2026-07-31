@@ -55,6 +55,22 @@ inflate_gap <- function(gap_hat, se, conf = 0.95) {
 #'
 #' # What `gap_used` does and does not cover
 #'
+#' Read `gap_certified` first: it says which of the two regimes below the
+#' certificate is in, and it is the machine-readable form of this section.
+#'
+#' ## When `gap_certified` is `TRUE`
+#'
+#' `gap_used` covers **both** error sources, because there are none left to
+#' cover. The engine is exact (`gap_se` is 0 by construction), and `gap` came
+#' from [oracle_bound()], a branch-and-bound upper bound on `sup_theta G` over
+#' every face rather than a search for it. `1 + gap_used >= sup_theta G` holds
+#' as a proven inequality, so `(Q / P*) / (1 + gap_used)` has null expectation
+#' at most 1 at every `theta` in the null, not merely at the ones the oracle
+#' visited. `bnb_iterations` records the work that took; `gap_method` is
+#' `"bernstein_bnb"`.
+#'
+#' ## When `gap_certified` is `FALSE`
+#'
 #' `gap_used` accounts for **Monte Carlo error only** -- the sampling error in
 #' estimating `G` at a fixed `theta`, reported by `gap_se` and inflated at level
 #' `conf`. It does **not** account for optimisation error. [oracle()] maximises
@@ -62,12 +78,14 @@ inflate_gap <- function(gap_hat, se, conf = 0.95) {
 #' bound on the true face maximum: if the search misses the global optimum,
 #' `gap` is too small, `gap_used` is too small, and the rescaled e-variable is
 #' under-corrected. That error is one-sided in the unsafe direction and is
-#' currently neither bounded nor estimated.
+#' neither bounded nor estimated on this path.
 #'
-#' The practical mitigations are to raise `n_seeds` (recorded in the return
-#' value for exactly this reason) and to treat a certificate as evidence rather
-#' than proof on nulls whose faces have a multimodal `G`. A deterministic upper
-#' bound on `sup_theta G` would remove the caveat; none is implemented.
+#' This is the regime for Monte Carlo engines, for non-multinomial families, and
+#' for unbounded ([halfspace_face()]) geometries -- the three cases
+#' [certifiable()] rejects, the last of them permanently. The practical
+#' mitigations are to raise `n_seeds` (recorded in the return value for exactly
+#' this reason) and to treat a certificate as evidence rather than proof on
+#' nulls whose faces have a multimodal `G`.
 #'
 #' There is a second, opposite failure mode, and unlike the first it is
 #' detectable. `Var[G_hat(theta)]` grows like `exp(|theta - a|^2)` in the
@@ -104,18 +122,39 @@ inflate_gap <- function(gap_hat, se, conf = 0.95) {
 #' @param ess_min Warn when the effective sample size behind the certified gap
 #'   falls below this (Monte Carlo engines only). Default 100. Set `0` to
 #'   silence. See the accuracy section.
+#' @param bnb Opt in to the deterministic bound: a [bnb_control()] list, or
+#'   `NULL` (default) for the heuristic-oracle behaviour this function has
+#'   always had. When supplied *and* every null face passes [certifiable()], the
+#'   gap comes from [oracle_bound()] instead of [oracle_step()] and
+#'   `gap_certified` is `TRUE`. Otherwise it is ignored and the heuristic path
+#'   runs unchanged. Has no effect for Monte Carlo engines.
+#' @param require_certified Error rather than fall back when the gap cannot be
+#'   certified, naming the face or family that blocked it. Implies `bnb`, so
+#'   `require_certified = TRUE` alone is enough to ask for a certified gap and
+#'   refuse a heuristic one. Default `FALSE`.
 #' @return List with `kl`, `gap`, `gap_se`, `gap_used`, `kl_lower_bound`,
-#'   `growth_rate`, `oracle_theta`, `oracle_face`, `conf`, `gap_est`, `ess`, and
-#'   the settings that produced it: `n_draws` (`NA` for exact engines) and
-#'   `n_seeds`. `gap_est` is `NA_real_` unless `estimate = TRUE`; it is an
-#'   unbiased diagnostic estimate of the gap at the selected `theta*`, biased
-#'   downward relative to `sup_theta G`, and **must never be used to rescale an
-#'   e-variable** -- use `gap_used` for that.
+#'   `growth_rate`, `oracle_theta`, `oracle_face`, `conf`, `gap_est`, `ess`,
+#'   `gap_certified`, `gap_method`, `bnb_iterations`, and the settings that
+#'   produced it: `n_draws` (`NA` for exact engines) and `n_seeds`. `gap_est` is
+#'   `NA_real_` unless `estimate = TRUE`; it is an unbiased diagnostic estimate
+#'   of the gap at the selected `theta*`, biased downward relative to
+#'   `sup_theta G`, and **must never be used to rescale an e-variable** -- use
+#'   `gap_used` for that.
 #'
-#'   `n_seeds` is recorded because it governs an error the certificate does not
-#'   otherwise account for: `gap_se` quantifies the Monte Carlo error from
-#'   finite `n_draws`, but an under-seeded oracle *undershoots* `sup_theta G`,
-#'   biasing `gap_used` downward -- the unsafe direction.
+#'   `gap_certified` is the guarantee level, and the field to assert on: `TRUE`
+#'   means `gap_used` is a proven upper bound on `sup_theta G - 1` over the
+#'   whole null, `FALSE` that it rests on a heuristic oracle whose error is
+#'   one-sided in the unsafe direction. It is the AND across faces --
+#'   certification is over a union, so a gap is only valid if *every* face was
+#'   bounded. `gap_method` names the mechanism (`"bernstein_bnb"` or
+#'   `"multistart_bfgs"`) and `bnb_iterations` the total bisections, `NA` when
+#'   uncertified.
+#'
+#'   `n_seeds` is recorded because it governs an error the *uncertified*
+#'   certificate does not otherwise account for: `gap_se` quantifies the Monte
+#'   Carlo error from finite `n_draws`, but an under-seeded oracle *undershoots*
+#'   `sup_theta G`, biasing `gap_used` downward -- the unsafe direction. It is
+#'   irrelevant to a certified gap, which does not search.
 #' @export
 certify <- function(
   projection,
@@ -126,7 +165,9 @@ certify <- function(
   oracle_result = NULL,
   n_seeds = 200L,
   conf = 0.95,
-  ess_min = 100
+  ess_min = 100,
+  bnb = NULL,
+  require_certified = FALSE
 ) {
   mixing <- if (S7_inherits(projection, marginal)) {
     projection@mixing
@@ -164,7 +205,10 @@ certify <- function(
     oracle_face,
     gap_est = NA_real_,
     n_draws_used = NA_integer_,
-    ess = NA_real_
+    ess = NA_real_,
+    gap_certified = FALSE,
+    gap_method = "multistart_bfgs",
+    bnb_iterations = NA_integer_
   ) {
     gap_used <- inflate_gap(gap, gap_se, conf = conf)
     list(
@@ -180,7 +224,32 @@ certify <- function(
       gap_est = gap_est,
       n_draws = n_draws_used,
       n_seeds = as.integer(n_seeds),
-      ess = ess
+      ess = ess,
+      gap_certified = gap_certified,
+      gap_method = gap_method,
+      bnb_iterations = bnb_iterations
+    )
+  }
+
+  # Certifiability is settled up front, over *every* face: certification is a
+  # statement about the union, so a partly-bounded null is not bounded at all.
+  if (require_certified && is.null(bnb)) {
+    bnb <- bnb_control()
+  }
+  blockers <- if (is.null(bnb)) {
+    NULL
+  } else {
+    unique(unlist(lapply(
+      problem$null,
+      function(f) certifiable_reason(f, engine, engine@family, bnb)
+    )))
+  }
+  certified_possible <- !is.null(bnb) && length(blockers) == 0L
+  if (require_certified && !certified_possible) {
+    stop(
+      "`require_certified = TRUE` but the duality gap cannot be certified: ",
+      paste(blockers, collapse = "; "),
+      call. = FALSE
     )
   }
 
@@ -188,9 +257,38 @@ certify <- function(
   # `se = 0`. Reuse a supplied oracle_result when given.
   if (deterministic(engine)) {
     state <- build(engine)
-    orr <- oracle_result %||% oracle_step(state, swap(engine), n_seeds = n_seeds)
+    kl <- state_objective(state)$loss
+
+    if (!is.null(bnb) && certified_possible) {
+      # A proven bound per face; the gap is the worst of them, since the null is
+      # their union. `oracle_result` is deliberately not reused -- it holds a
+      # lower bound, which is the wrong side.
+      log_Pw <- state_log_p_mixture(state)
+      bounds <- lapply(problem$null, function(f) {
+        oracle_bound(f, engine, log_Pw, engine@family, control = bnb)
+      })
+      b <- vapply(bounds, `[[`, "bound", FUN.VALUE = numeric(1L))
+      best_fi <- which.max(b)
+      return(finish(
+        kl,
+        b[[best_fi]] - 1,
+        0,
+        bounds[[best_fi]]$theta,
+        best_fi,
+        gap_certified = TRUE,
+        gap_method = "bernstein_bnb",
+        bnb_iterations = as.integer(sum(vapply(
+          bounds,
+          function(x) as.integer(x$iterations),
+          integer(1L)
+        )))
+      ))
+    }
+
+    orr <- oracle_result %||%
+      oracle_step(state, swap(engine), n_seeds = n_seeds)
     return(finish(
-      state_objective(state)$loss,
+      kl,
       orr$E_star - 1,
       orr$se %||% 0,
       orr$best_theta,
@@ -210,16 +308,20 @@ certify <- function(
   gap_se <- orr$se %||% 0
   ess <- orr$ess %||% NA_real_
   if (is.finite(ess) && ess < ess_min) {
-    warning(sprintf(
-      paste0(
-        "certified gap rests on an effective sample size of %.0f (of %d ",
-        "draws): the oracle selected a theta* that almost no draw from Q ",
-        "supports, so `gap` reflects sampling noise more than sup_theta G. ",
-        "The certificate stays conservative but is likely far too loose. ",
-        "See the accuracy section of ?certify."
+    warning(
+      sprintf(
+        paste0(
+          "certified gap rests on an effective sample size of %.0f (of %d ",
+          "draws): the oracle selected a theta* that almost no draw from Q ",
+          "supports, so `gap` reflects sampling noise more than sup_theta G. ",
+          "The certificate stays conservative but is likely far too loose. ",
+          "See the accuracy section of ?certify."
+        ),
+        ess,
+        n
       ),
-      ess, n
-    ), call. = FALSE)
+      call. = FALSE
+    )
   }
 
   # Diagnostic only: a second independent sample gives an unbiased estimate of

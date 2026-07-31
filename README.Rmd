@@ -13,10 +13,20 @@ knitr::opts_chunk$set(collapse = TRUE)
 `ripr` computes the **reverse information projection** (RIPr) `P*` of an
 alternative distribution `Q` onto a (possibly non-convex, union-structured)
 null hypothesis, together with the **duality-gap certificate** for the rescaled
-e-variable `(Q / P*) / (1 + gap)`. With an exact engine the rescaled e-variable's
-expectation under every null distribution is at most 1. With a Monte Carlo engine
-the gap is estimated, so the bound is stochastic: it holds at level `conf`
-(default 0.95), at the worst-case `theta*` the certifying sample selects.
+e-variable `(Q / P*) / (1 + gap)`.
+
+How strong that certificate is depends on how the gap was obtained, and every
+certificate says which case it is in via `gap_certified`. For a multinomial
+family on simplex-shaped null faces with an exact engine, pass
+`bnb = bnb_control()` and the gap comes from a Bernstein branch-and-bound
+**upper** bound on `sup_theta G`: the rescaled e-variable's expectation under
+every null distribution is then at most 1 as a proven inequality. Otherwise the
+gap comes from a multi-start BFGS search, which returns a *lower* bound on the
+face maximum — so a missed global optimum leaves the e-variable
+under-corrected, and the guarantee is evidence rather than proof. With a Monte
+Carlo engine there is a second, separate error: the gap is estimated, so the
+bound is stochastic and holds at level `conf` (default 0.95), at the worst-case
+`theta*` the certifying sample selects.
 
 The projection is found by Frank--Wolfe and EM over a mixture of atoms on the
 null faces. It requires the specification of a sampling `family` (the model
@@ -47,7 +57,7 @@ the convex null is a **point mass at `p = 1/2`**. We demonstrate this using both
 the exact and Monte Carlo engines.
 
 ```{r ex1, message = FALSE}
-devtools::load_all()
+library(ripr)
 n <- 10
 fam <- multinomial_family(n_trials = n, k = 2)
 # `ripr_problem` takes Q as an `outcome_distribution` over the sample space.
@@ -92,8 +102,100 @@ yields evidence in favour of it:
 
 ```{r ex1-evalue}
 res$e_variable
+```
+
+```{r}
 e_value(res$e_variable, rbind(c(8, 2), c(5, 5)))
 ```
+
+### Certifying the gap deterministically
+
+`gap` is what makes the rescaling valid, and by default it comes from a search:
+`oracle()` maximises `G(theta) = E_Q[p_theta / P*]` by multi-start BFGS, so it
+returns a *lower* bound on the face maximum. For a multinomial family on
+simplex-shaped faces with an exact engine, the gap can instead be **proved**.
+`p_theta(x)` is the degree-`n` Bernstein basis function at the count vector `x`,
+so `G` already *is* a Bernstein form, with coefficients `q(x) / P*(x)`. That
+basis is non-negative and sums to one, so the largest coefficient bounds `G`
+across the whole face for free, and de Casteljau subdivision refines it.
+`certifiable()` reports whether a problem qualifies:
+
+```{r ex1-certifiable}
+certifiable(face, prob$engine, fam)
+```
+
+```{r ex1-bnb}
+heuristic <- certify(res$projection, prob, n_draws = 1e5)
+certified <- certify(res$projection, prob, bnb = bnb_control())
+
+data.frame(
+  method = c(heuristic$gap_method, certified$gap_method),
+  theta_star = c(heuristic$oracle_theta[1], certified$oracle_theta[1]),
+  gap_used = c(heuristic$gap_used, certified$gap_used),
+  certified = c(heuristic$gap_certified, certified$gap_certified)
+)
+```
+
+The certified gap is the *larger* of the two, and that is the whole point. `G`
+is increasing on this null, so its supremum sits at the face's boundary vertex
+`p = 1/2` — but `oracle()` searches in a softmax parametrisation that covers
+only the face's *interior*, and the objective is nearly flat there, so BFGS
+stops just short, at the projection's own atom. The bound evaluates the vertex
+exactly.
+
+Small as the difference is (in this example), it is the difference between an
+e-variable and not one. `E_theta[e(X)]` must be at most 1 at every `theta` inthe null:
+
+```{r ex1-guarantee}
+X <- support(fam)
+null_expectation <- function(gap, p) {
+  ev <- e_variable(numerator = Q, projection = res$projection, gap = gap)
+  sum(exp(log_density(fam, c(p, 1 - p)) + e_value(ev, X, log = TRUE)))
+}
+# Distance above 1 at the worst-case theta. Positive is a violation.
+c(
+  heuristic = null_expectation(heuristic$gap_used, 0.5) - 1,
+  certified = null_expectation(certified$gap_used, 0.5) - 1
+)
+```
+
+`bnb_iterations` is 0 here: the largest Bernstein coefficient already sits at
+the vertex attaining the maximum; with a single atom mixture, the likelihood
+ratio in monotone in `p`. The bound is exactly tight before any subdivision
+happens. Harder faces bisect until `bound - incumbent <= tol`. The bound is
+valid at *every* iteration, so `tol` and `max_iter` buy tightness, never
+validity.
+
+To carry the guarantee through a fit rather than re-certifying afterwards, pass
+`certify_bnb` — the returned `e_variable` then records the guarantee level, so a
+caller holding only that object can still tell a proven rescaling from a
+heuristic one:
+
+```{r ex1-run-certified}
+set.seed(1)
+res_cert <- run_ripr(
+  prob,
+  init_atoms = matrix(c(0.25, 0.75), ncol = 1),
+  init_atom_faces = 1L,
+  fw_iters = 8,
+  em_iters = 5,
+  prune_threshold = 1e-6,
+  verbose = FALSE,
+  certify_bnb = bnb_control()
+)
+res_cert$e_variable
+```
+
+This path needs all three of an exact engine, a family whose density is a
+Bernstein basis function of `theta` (the multinomial's is; a Gaussian's is not),
+and bounded simplex faces — `halfspace_face` has no simplex to subdivide, which
+is a permanent gap rather than a missing feature. Every other combination
+degrades to the heuristic path and reports `gap_certified = FALSE` rather than
+pretending; `require_certified = TRUE` turns that fallback into an error naming
+what blocked it. See `?certify` for what the two regimes cover, and
+`bnb_control()`'s `max_coef` for the cost ceiling — coefficients per sub-simplex
+are `choose(n + K - 1, K - 1)`, so certification caps the usable batch size more
+tightly than optimisation does.
 
 **Monte Carlo engine** (1000 draws from `Q`) reaches the same projection:
 
@@ -141,7 +243,12 @@ certify far more thoroughly than you fit:
 
 ```{r ex1-cert}
 unlist(res_mc$certificate[c(
-  "gap", "gap_se", "gap_used", "growth_rate", "n_draws", "ess"
+  "gap",
+  "gap_se",
+  "gap_used",
+  "growth_rate",
+  "n_draws",
+  "ess"
 )])
 ```
 
@@ -192,23 +299,70 @@ diagnostic — useful for comparing `fw_variant`s or deciding whether to keep
 optimising — and is biased downward relative to `sup_theta G`. It must never be
 used to rescale an e-variable.
 
-### When not to trust a certificate
+## Example 2: A 4-category plurality null
 
-`Var[G(theta)]` grows like `exp(|theta - a|^2)` in the distance from the nearest
-atom, so a `theta` far from the support needs roughly `exp(|theta - a|^2)` draws
-before its estimate means anything. A capable oracle will sometimes find such a
-`theta` and report a large gap that is entirely sampling noise. The direction is
-safe — the certificate only ever gets looser — but it can be vacuous, and **more
-draws do not fix it**, because the radius the oracle can profitably exploit grows
-with the sample too.
+Let `X ~ Multinomial(25, theta)`. Consider testing `H_0: theta_1 <= theta_i` for
+some `i!=1` against `H_1: theta_1 > theta_i` for all `i!=1`, adopting the simple
+alternative `Q = Multinomial(25, (0.3, 0.27, 0.23, 0.15, 0.05))`. The RIPr of `Q` onto
+the null is no longer a point mass on the boundary.
 
-`certificate$ess` is the effective sample size behind the certified gap. Healthy
-certificates report `ess` within an order of magnitude of `n_draws` (above, the
-whole sample); noise-driven ones collapse to single digits, and `certify()` warns
-below `ess_min`. Treat a warned certificate as uninformative rather than as
-evidence of a large true gap — re-run it, or certify a better-optimised
-projection.
+```{r ex2, message = FALSE}
+n <- 25
+k <- 5
+q <- c(0.3, 0.27, 0.23, 0.15, 0.05)
 
-## Example 2
+# The plurality null can be written as H_0 = H_02 ∪ H_03 ∪ H_04, where
+# H_0i = {theta_1 <= theta_i} is a subsimplex with vertices satisfying
+# (i) theta_1=theta_i=1/2, (ii) theta_1=theta_i=0, and
+# (iii) theta_j = 1 for all other j.
+plurality_faces <- function(K) {
+  lapply(2:K, function(j) {
+    basis <- lapply(setdiff(seq_len(K), 1L), function(k) {
+      v <- numeric(K)
+      v[k] <- 1
+      v
+    })
+    tie <- numeric(K)
+    tie[c(1L, j)] <- 0.5
+    polytope_face(
+      vertices = do.call(cbind, c(basis, list(tie))),
+      face_index = j
+    )
+  })
+}
+
+fam <- multinomial_family(n_trials = n, k = k)
+Q <- as_marginal(point_mixing(theta_star = q), fam)
+faces <- plurality_faces(k)
+null <- null_region(faces = faces)
+prob <- ripr_problem(fam, null, Q)
+
+# atoms to start from: one for each face
+init <- do.call(
+  cbind,
+  lapply(faces, function(f) init_point(f, q))
+)
+
+res <- run_ripr(
+  prob,
+  init_atoms = init,
+  init_atom_faces = seq_len(k - 1),
+  fw_iters = 10,
+  em_iters = 10,
+  verbose = FALSE
+)
+
+heuristic <- certify(res$projection, prob, n_draws = 1e5)
+certified <- certify(res$projection, prob, bnb = bnb_control(tol = 1e-9))
+
+data.frame(
+  method = c(heuristic$gap_method, certified$gap_method),
+  gap_used = c(heuristic$gap_used, certified$gap_used),
+  certified = c(heuristic$gap_certified, certified$gap_certified)
+)
+```
+
+
+## Example 3
 
 TODO: Gaussian plurality via quadrature/monte carlo.

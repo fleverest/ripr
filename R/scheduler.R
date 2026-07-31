@@ -54,6 +54,12 @@
 #'   this many effective draws (Monte Carlo engines only; see [certify()]).
 #'   Default 100. Set `0` to silence -- but a warned certificate is
 #'   uninformative rather than merely loose, so prefer investigating it.
+#' @param certify_bnb Pass a [bnb_control()] to certify the final gap with the
+#'   deterministic Bernstein branch-and-bound bound instead of the heuristic
+#'   oracle, when the problem qualifies (see [certifiable()]). Default `NULL`
+#'   keeps the heuristic behaviour. This is what makes the returned
+#'   `e_variable`'s `gap_certified` `TRUE`; it only ever *raises* the gap, so
+#'   the rescaled e-variable gets more conservative, not less.
 #' @param fw_variant Weight-update variant: `"line-search"` (default),
 #'   `"pairwise"`, `"vanilla"`, `"fully-corrective"`, or `"li-barron"` (the
 #'   exact-objective greedy step).
@@ -66,7 +72,9 @@
 #' - `projection`: the fitted RIPr `P*` as a [marginal] (its mixing measure is a
 #'   [finite_mixing] over the atoms), after pruning.
 #' - `e_variable`: the [e_variable()] wrapping `projection` with the numerator
-#'   `Q` and `certificate$gap_used`. Call [e_value()] on it to score data.
+#'   `Q` and `certificate$gap_used`. Call [e_value()] on it to score data. Its
+#'   `gap_certified` carries `certificate$gap_certified`, so the guarantee level
+#'   survives being passed around on its own.
 #' - `certificate`: the [certify()] result for `projection`, computed on a fresh
 #'   sample independent of the fit (see `certify_draws`). Everything derived
 #'   from the certification sample lives here and nowhere else, including the
@@ -105,6 +113,7 @@ run_ripr <- function(
   prune_threshold = 0,
   certify_draws = NULL,
   certify_ess_min = 100,
+  certify_bnb = NULL,
   fw_variant = c(
     "line-search",
     "pairwise",
@@ -442,6 +451,7 @@ run_ripr <- function(
     n_draws = n_cert,
     n_seeds = n_seeds_cert,
     ess_min = certify_ess_min,
+    bnb = certify_bnb,
     oracle_result = if (deterministic(problem$engine) && all(keep)) fw else NULL
   )
   if (verbose && !deterministic(problem$engine)) {
@@ -458,7 +468,10 @@ run_ripr <- function(
   ev <- e_variable(
     numerator = problem$alternative,
     projection = projection,
-    gap = cert$gap_used
+    gap = cert$gap_used,
+    # The guarantee level travels with the object, so a caller holding only the
+    # e-variable can still tell a proven rescaling from a heuristic one.
+    gap_certified = isTRUE(cert$gap_certified)
   )
 
   # The `final` checkpoint is always recorded, after pruning, so its atoms,

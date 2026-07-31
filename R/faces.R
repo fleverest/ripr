@@ -108,7 +108,10 @@ init_point <- new_generic("init_point", "face", function(face, ref) {
 #' over a generally non-convex objective, so the returned value is a *lower*
 #' bound on the true face maximum, not the maximum itself. Callers that need an
 #' upper bound on `sup G` -- certification, above all -- must account for that
-#' separately; nothing here guarantees it.
+#' separately; nothing here guarantees it. [oracle_bound()] is the upper-bound
+#' counterpart, and returns a proven bound rather than a search result; it
+#' exists only for the (face, engine, family) combinations [certifiable()]
+#' accepts, which is why this contract cannot simply be strengthened.
 #' @param face A `face`.
 #' @param objective List of `value`, `grad_theta`, `value_batch` closures.
 #' @param ... Ignored.

@@ -13,7 +13,9 @@ certify(
   oracle_result = NULL,
   n_seeds = 200L,
   conf = 0.95,
-  ess_min = 100
+  ess_min = 100,
+  bnb = NULL,
+  require_certified = FALSE
 )
 }
 \arguments{
@@ -44,20 +46,43 @@ Default 0.95.}
 \item{ess_min}{Warn when the effective sample size behind the certified gap
 falls below this (Monte Carlo engines only). Default 100. Set \code{0} to
 silence. See the accuracy section.}
+
+\item{bnb}{Opt in to the deterministic bound: a \code{\link[=bnb_control]{bnb_control()}} list, or
+\code{NULL} (default) for the heuristic-oracle behaviour this function has
+always had. When supplied \emph{and} every null face passes \code{\link[=certifiable]{certifiable()}}, the
+gap comes from \code{\link[=oracle_bound]{oracle_bound()}} instead of \code{\link[=oracle_step]{oracle_step()}} and
+\code{gap_certified} is \code{TRUE}. Otherwise it is ignored and the heuristic path
+runs unchanged. Has no effect for Monte Carlo engines.}
+
+\item{require_certified}{Error rather than fall back when the gap cannot be
+certified, naming the face or family that blocked it. Implies \code{bnb}, so
+\code{require_certified = TRUE} alone is enough to ask for a certified gap and
+refuse a heuristic one. Default \code{FALSE}.}
 }
 \value{
 List with \code{kl}, \code{gap}, \code{gap_se}, \code{gap_used}, \code{kl_lower_bound},
-\code{growth_rate}, \code{oracle_theta}, \code{oracle_face}, \code{conf}, \code{gap_est}, \code{ess}, and
-the settings that produced it: \code{n_draws} (\code{NA} for exact engines) and
-\code{n_seeds}. \code{gap_est} is \code{NA_real_} unless \code{estimate = TRUE}; it is an
-unbiased diagnostic estimate of the gap at the selected \verb{theta*}, biased
-downward relative to \verb{sup_theta G}, and \strong{must never be used to rescale an
-e-variable} -- use \code{gap_used} for that.
+\code{growth_rate}, \code{oracle_theta}, \code{oracle_face}, \code{conf}, \code{gap_est}, \code{ess},
+\code{gap_certified}, \code{gap_method}, \code{bnb_iterations}, and the settings that
+produced it: \code{n_draws} (\code{NA} for exact engines) and \code{n_seeds}. \code{gap_est} is
+\code{NA_real_} unless \code{estimate = TRUE}; it is an unbiased diagnostic estimate
+of the gap at the selected \verb{theta*}, biased downward relative to
+\verb{sup_theta G}, and \strong{must never be used to rescale an e-variable} -- use
+\code{gap_used} for that.
 
-\code{n_seeds} is recorded because it governs an error the certificate does not
-otherwise account for: \code{gap_se} quantifies the Monte Carlo error from
-finite \code{n_draws}, but an under-seeded oracle \emph{undershoots} \verb{sup_theta G},
-biasing \code{gap_used} downward -- the unsafe direction.
+\code{gap_certified} is the guarantee level, and the field to assert on: \code{TRUE}
+means \code{gap_used} is a proven upper bound on \verb{sup_theta G - 1} over the
+whole null, \code{FALSE} that it rests on a heuristic oracle whose error is
+one-sided in the unsafe direction. It is the AND across faces --
+certification is over a union, so a gap is only valid if \emph{every} face was
+bounded. \code{gap_method} names the mechanism (\code{"bernstein_bnb"} or
+\code{"multistart_bfgs"}) and \code{bnb_iterations} the total bisections, \code{NA} when
+uncertified.
+
+\code{n_seeds} is recorded because it governs an error the \emph{uncertified}
+certificate does not otherwise account for: \code{gap_se} quantifies the Monte
+Carlo error from finite \code{n_draws}, but an under-seeded oracle \emph{undershoots}
+\verb{sup_theta G}, biasing \code{gap_used} downward -- the unsafe direction. It is
+irrelevant to a certified gap, which does not search.
 }
 \description{
 The common evaluation tool for every algorithm and engine. Takes a fitted
@@ -100,6 +125,22 @@ For Monte Carlo engines the gap is inflated via \code{\link[=inflate_gap]{inflat
 value entering both certified quantities.
 }
 \section{What \code{gap_used} does and does not cover}{
+Read \code{gap_certified} first: it says which of the two regimes below the
+certificate is in, and it is the machine-readable form of this section.
+\subsection{When \code{gap_certified} is \code{TRUE}}{
+
+\code{gap_used} covers \strong{both} error sources, because there are none left to
+cover. The engine is exact (\code{gap_se} is 0 by construction), and \code{gap} came
+from \code{\link[=oracle_bound]{oracle_bound()}}, a branch-and-bound upper bound on \verb{sup_theta G} over
+every face rather than a search for it. \verb{1 + gap_used >= sup_theta G} holds
+as a proven inequality, so \verb{(Q / P*) / (1 + gap_used)} has null expectation
+at most 1 at every \code{theta} in the null, not merely at the ones the oracle
+visited. \code{bnb_iterations} records the work that took; \code{gap_method} is
+\code{"bernstein_bnb"}.
+}
+
+\subsection{When \code{gap_certified} is \code{FALSE}}{
+
 \code{gap_used} accounts for \strong{Monte Carlo error only} -- the sampling error in
 estimating \code{G} at a fixed \code{theta}, reported by \code{gap_se} and inflated at level
 \code{conf}. It does \strong{not} account for optimisation error. \code{\link[=oracle]{oracle()}} maximises
@@ -107,12 +148,14 @@ a generally non-convex objective by multi-start BFGS, so \code{E_star} is a lowe
 bound on the true face maximum: if the search misses the global optimum,
 \code{gap} is too small, \code{gap_used} is too small, and the rescaled e-variable is
 under-corrected. That error is one-sided in the unsafe direction and is
-currently neither bounded nor estimated.
+neither bounded nor estimated on this path.
 
-The practical mitigations are to raise \code{n_seeds} (recorded in the return
-value for exactly this reason) and to treat a certificate as evidence rather
-than proof on nulls whose faces have a multimodal \code{G}. A deterministic upper
-bound on \verb{sup_theta G} would remove the caveat; none is implemented.
+This is the regime for Monte Carlo engines, for non-multinomial families, and
+for unbounded (\code{\link[=halfspace_face]{halfspace_face()}}) geometries -- the three cases
+\code{\link[=certifiable]{certifiable()}} rejects, the last of them permanently. The practical
+mitigations are to raise \code{n_seeds} (recorded in the return value for exactly
+this reason) and to treat a certificate as evidence rather than proof on
+nulls whose faces have a multimodal \code{G}.
 
 There is a second, opposite failure mode, and unlike the first it is
 detectable. \code{Var[G_hat(theta)]} grows like \verb{exp(|theta - a|^2)} in the
@@ -129,5 +172,6 @@ effectively built from. Healthy certificates report \code{ess} within an order o
 magnitude of \code{n_draws}; noise-driven ones collapse to single digits, and
 \code{certify()} warns below \code{ess_min}. Treat a warned certificate as
 uninformative rather than as a large true gap.
+}
 }
 

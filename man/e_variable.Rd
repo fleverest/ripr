@@ -4,7 +4,7 @@
 \alias{e_variable}
 \title{RIPr e-variable}
 \usage{
-e_variable(numerator, projection, gap = 0)
+e_variable(numerator, projection, gap = 0, gap_certified = FALSE)
 }
 \arguments{
 \item{numerator}{The numerator \code{Q} as an \link{outcome_distribution}.}
@@ -16,6 +16,16 @@ e_variable(numerator, projection, gap = 0)
 \item{gap}{The certified duality gap used to rescale. Default \code{0}. Floored at
 \code{0}, since a negative gap is numerical noise and would otherwise inflate the
 e-value.}
+
+\item{gap_certified}{Is \code{gap} a \emph{proven} upper bound on \verb{sup_theta G - 1}
+over the null? Default \code{FALSE}, which is the honest default: it means the
+rescaling rests on a heuristic oracle (\code{\link[=oracle]{oracle()}}, multi-start BFGS on a
+generally non-convex objective) whose error is one-sided in the \strong{unsafe}
+direction -- a missed global optimum makes \code{gap} too small and the
+e-variable under-corrected, so its null expectation may exceed 1. \code{TRUE}
+means the gap came from \code{\link[=oracle_bound]{oracle_bound()}} and the expectation bound holds as
+an inequality, not as evidence. Take it from \code{certify()}'s \code{gap_certified};
+do not set it by hand.}
 }
 \value{
 An \code{e_variable}.

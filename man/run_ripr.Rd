@@ -21,6 +21,7 @@ run_ripr(
   prune_threshold = 0,
   certify_draws = NULL,
   certify_ess_min = 100,
+  certify_bnb = NULL,
   fw_variant = c("line-search", "pairwise", "vanilla", "fully-corrective", "li-barron"),
   checkpoint_iters = NULL,
   verbose = TRUE
@@ -85,6 +86,13 @@ this many effective draws (Monte Carlo engines only; see \code{\link[=certify]{c
 Default 100. Set \code{0} to silence -- but a warned certificate is
 uninformative rather than merely loose, so prefer investigating it.}
 
+\item{certify_bnb}{Pass a \code{\link[=bnb_control]{bnb_control()}} to certify the final gap with the
+deterministic Bernstein branch-and-bound bound instead of the heuristic
+oracle, when the problem qualifies (see \code{\link[=certifiable]{certifiable()}}). Default \code{NULL}
+keeps the heuristic behaviour. This is what makes the returned
+\code{e_variable}'s \code{gap_certified} \code{TRUE}; it only ever \emph{raises} the gap, so
+the rescaled e-variable gets more conservative, not less.}
+
 \item{fw_variant}{Weight-update variant: \code{"line-search"} (default),
 \code{"pairwise"}, \code{"vanilla"}, \code{"fully-corrective"}, or \code{"li-barron"} (the
 exact-objective greedy step).}
@@ -101,7 +109,9 @@ provenance -- results, the certificate, and the fit record are not mixed.
 \item \code{projection}: the fitted RIPr \verb{P*} as a \link{marginal} (its mixing measure is a
 \link{finite_mixing} over the atoms), after pruning.
 \item \code{e_variable}: the \code{\link[=e_variable]{e_variable()}} wrapping \code{projection} with the numerator
-\code{Q} and \code{certificate$gap_used}. Call \code{\link[=e_value]{e_value()}} on it to score data.
+\code{Q} and \code{certificate$gap_used}. Call \code{\link[=e_value]{e_value()}} on it to score data. Its
+\code{gap_certified} carries \code{certificate$gap_certified}, so the guarantee level
+survives being passed around on its own.
 \item \code{certificate}: the \code{\link[=certify]{certify()}} result for \code{projection}, computed on a fresh
 sample independent of the fit (see \code{certify_draws}). Everything derived
 from the certification sample lives here and nowhere else, including the

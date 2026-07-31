@@ -49,5 +49,8 @@ closures over parameter vectors: \code{value(theta)}, \code{grad_theta(theta)}, 
 over a generally non-convex objective, so the returned value is a \emph{lower}
 bound on the true face maximum, not the maximum itself. Callers that need an
 upper bound on \verb{sup G} -- certification, above all -- must account for that
-separately; nothing here guarantees it.
+separately; nothing here guarantees it. \code{\link[=oracle_bound]{oracle_bound()}} is the upper-bound
+counterpart, and returns a proven bound rather than a search result; it
+exists only for the (face, engine, family) combinations \code{\link[=certifiable]{certifiable()}}
+accepts, which is why this contract cannot simply be strengthened.
 }

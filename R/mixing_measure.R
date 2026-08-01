@@ -7,15 +7,18 @@
 distribution <- new_class("distribution", abstract = TRUE)
 
 
-#' A mixing measure over a family's parameter space
+#' Mixing measure over a family's parameter space
 #'
-#' A law \eqn{W}{W} over the parameter set of a [sampling_family], e.g. a point
-#' mass ([point_mixing()]) or a discrete convex combination ([finite_mixing()]).
-#' Paired with a family via [mixture()] it induces a law \eqn{P_W}{P_W} over
+#' A law \eqn{W}{W} over the parameter set of a [sampling_family]: a point mass
+#' ([point_mixing()]) or a finite weighted set of atoms ([finite_mixing()]).
+#' Paired with a family via [mixture()] it induces the law \eqn{P_W}{P_W} over
 #' outcomes.
 #'
 #' The mixing-measure/mixture distinction follows the mixture-model literature:
 #' \eqn{W}{W} is the `mixing_measure`, \eqn{P_W}{P_W} is the [mixture].
+#' @references
+#' Lindsay, B. G. (1995). *Mixture Models: Theory, Geometry and Applications*.
+#' NSF-CBMS Regional Conference Series in Probability and Statistics, Volume 5.
 #' @export
 mixing_measure <- new_class(
   "mixing_measure",

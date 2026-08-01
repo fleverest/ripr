@@ -2,17 +2,21 @@
 % Please edit documentation in R/mixing_measure.R
 \name{mixing_measure}
 \alias{mixing_measure}
-\title{A mixing measure over a family's parameter space}
+\title{Mixing measure over a family's parameter space}
 \usage{
 mixing_measure()
 }
 \description{
-A law \eqn{W}{W} over the parameter set of a \link{sampling_family}, e.g. a point
-mass (\code{\link[=point_mixing]{point_mixing()}}) or a discrete convex combination (\code{\link[=finite_mixing]{finite_mixing()}}).
-Paired with a family via \code{\link[=mixture]{mixture()}} it induces a law \eqn{P_W}{P_W} over
+A law \eqn{W}{W} over the parameter set of a \link{sampling_family}: a point mass
+(\code{\link[=point_mixing]{point_mixing()}}) or a finite weighted set of atoms (\code{\link[=finite_mixing]{finite_mixing()}}).
+Paired with a family via \code{\link[=mixture]{mixture()}} it induces the law \eqn{P_W}{P_W} over
 outcomes.
 }
 \details{
 The mixing-measure/mixture distinction follows the mixture-model literature:
 \eqn{W}{W} is the \code{mixing_measure}, \eqn{P_W}{P_W} is the \link{mixture}.
+}
+\references{
+Lindsay, B. G. (1995). \emph{Mixture Models: Theory, Geometry and Applications}.
+NSF-CBMS Regional Conference Series in Probability and Statistics, Volume 5.
 }

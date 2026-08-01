@@ -6,7 +6,12 @@
 \alias{ripr-package}
 \title{ripr: Reverse Information Projection onto Finite Unions of Convex Sets}
 \description{
-Approximates the growth-rate optimal e-variable for a composite null hypothesis, as used in safe anytime-valid inference, by computing the reverse information projection (RIPr) of a fixed alternative onto a null given by a finite union of convex subsets of the parameter space. The subsets may overlap and their union is not convex. The projection is approximated by a Frank-Wolfe and EM hybrid over mixing measures supported on the individual convex sets. The optimiser returns a mixing measure and its induced mixture that approximates the RIPr, and makes no claim about validity. Nevertheless, an e-variable can be built by deriving a certified upper bound on the worst-case null expectation. The observation model, null geometry, and quadrature rules are pluggable, with expectations under the alternative taken by exact enumeration, deterministic quadrature, or Monte Carlo through a common interface.
+Approximates the growth-rate optimal e-variable for a composite null hypothesis, in the sense of Grünwald, de Heide and Koolen (2024) \doi{10.1093/jrsssb/qkae011}, by computing the reverse information projection (RIPr) of a fixed alternative onto a null given by a finite union of convex subsets of the parameter space. The subsets may overlap and their union may not be convex, so the projection is found by a Frank-Wolfe and EM hybrid over mixing measures supported on the individual convex sets. The optimiser returns a mixing measure and its induced mixture that approximates the RIPr, and makes no claim about validity. Nevertheless, an e-variable can be built by deriving a certified upper bound on the worst-case null expectation. The observation model, null geometry, and quadrature rules are pluggable, with expectations under the alternative taken by exact enumeration, deterministic quadrature, or Monte Carlo through a common interface.
+}
+\references{
+Grünwald, P., de Heide, R. and Koolen, W. (2024). Safe testing.
+\emph{Journal of the Royal Statistical Society Series B: Statistical Methodology}
+\strong{86}(5), 1091-1128. \doi{10.1093/jrsssb/qkae011}
 }
 \seealso{
 Useful links:

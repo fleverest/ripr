@@ -1,3 +1,6 @@
+#' @include mixing_measure.R family.R
+NULL
+
 #' Distribution over a family's sample space (abstract)
 #'
 #' The sample-space branch of [distribution]: a law over outcomes, and the type

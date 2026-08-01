@@ -4,9 +4,17 @@
 \name{ripr-package}
 \alias{ripr}
 \alias{ripr-package}
-\title{ripr: Reverse Information Projection via Frank-Wolfe and EM}
+\title{ripr: Reverse Information Projection onto Finite Unions of Convex Sets}
 \description{
-Computes reverse information projections (RIPr) of an alternative distribution onto a union-structured null hypothesis, and the associated duality-gap certificate for the rescaled e-variable. The projection is found by Frank-Wolfe and EM algorithms over a mixture of atoms on the null faces, with an exact finite-support engine for multinomial models and a Monte Carlo engine (common random numbers) for continuous models. Problem components -- sampling family, null geometry, and alternative -- are S7 classes so new sample spaces and null geometries drop in without touching the algorithms.
+Approximates the growth-rate optimal e-variable for a composite null hypothesis, as used in safe anytime-valid inference, by computing the reverse information projection (RIPr) of a fixed alternative onto a null given by a finite union of convex subsets of the parameter space. The subsets may overlap and their union is not convex. The projection is approximated by a Frank-Wolfe and EM hybrid over mixing measures supported on the individual convex sets. The optimiser returns a mixing measure and its induced mixture that approximates the RIPr, and makes no claim about validity. Nevertheless, an e-variable can be built by deriving a certified upper bound on the worst-case null expectation. The observation model, null geometry, and quadrature rules are pluggable, with expectations under the alternative taken by exact enumeration, deterministic quadrature, or Monte Carlo through a common interface.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/fleverest/ripr}
+  \item Report bugs at \url{https://github.com/fleverest/ripr/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: Floyd Everest \email{me@floydeverest.com}

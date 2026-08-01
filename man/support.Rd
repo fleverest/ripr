@@ -2,18 +2,18 @@
 % Please edit documentation in R/family.R
 \name{support}
 \alias{support}
-\title{Enumerated support for finite families}
+\title{Enumerated support of a finite family}
 \usage{
 support(family)
 }
 \arguments{
-\item{family}{A \code{family}.}
+\item{family}{A \link{sampling_family}.}
 }
 \value{
-\verb{(M, d)} matrix of outcomes.
+\verb{(M, K)} matrix of outcomes.
 }
 \description{
-Contract: an \verb{(M, d)} matrix listing every outcome with positive probability
-under some parameter. Families with infinite sample spaces must signal an
-informative error.
+Every outcome with positive probability under some parameter. Families with
+infinite sample spaces error: exact integration over the sample space is
+undefined for them, not merely slow.
 }

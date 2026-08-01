@@ -4,21 +4,21 @@
 \alias{log_density_batch}
 \title{Batched log density over parameter columns}
 \usage{
-log_density_batch(family, theta_mat, x = NULL)
+log_density_batch(family, theta_mat, x)
 }
 \arguments{
-\item{family}{A \code{family}.}
+\item{family}{A \link{sampling_family}.}
 
-\item{theta_mat}{\verb{(d, C)} matrix of parameter columns.}
+\item{theta_mat}{\verb{(d, C)} matrix of parameter columns, where \code{d} is the
+dimension of the parameter and \code{C} the number of columns. The same \code{x} is
+used for every column.}
 
-\item{x}{Outcomes, or \code{NULL} for the enumerated support.}
+\item{x}{\verb{(M, K)} matrix of outcomes.}
 }
 \value{
 \verb{(M, C)} matrix of log densities.
 }
 \description{
-Contract: \code{theta_mat} is \verb{(d, C)} -- one parameter vector per column.
-Returns an \verb{(M, C)} (or \verb{(N, C)} for explicit \code{x}) matrix with one
-log-density column per parameter.
+Recompiles on every call, so in a loop over many \code{theta} at fixed \code{x},
+use \code{\link[=compile_loglik]{compile_loglik()}} once and call its result instead.
 }
-\keyword{internal}

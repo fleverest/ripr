@@ -1,253 +1,238 @@
 #' Sampling family: the observation model
 #'
-#' A `family` owns the sampling model p_theta(x) and nothing else: no knowledge
-#' of null hypotheses, alternatives, or optimisation. Concrete families provide
-#' log-densities (vectorised over outcomes and over parameter columns), the
-#' score, simulation, and -- for finite sample spaces -- full support
-#' enumeration.
-#' @export
-family <- new_class("family", abstract = TRUE)
-
-#' Log density log p_theta(x)
+#' A `sampling_family` owns the model \eqn{p_\theta(x)}{p_theta(x)} and nothing
+#' else; no knowledge of null hypotheses, alternatives, or any optimisation.
+#' Families supply a compiled log-likelihood, the score, a sampler, and support
+#' enumeration (for finite families).
 #'
-#' Contract: `theta` is a parameter vector of length [param_dim()]. With
-#' `x = NULL` (the hot path used by engines) the density is evaluated over the
-#' family's enumerated support and returned as a length-M numeric vector. With
-#' an explicit `x` (an `(N, d)` matrix of outcomes) a length-N vector is
-#' returned.
-#' @param family A `family`.
-#' @param theta Parameter vector.
-#' @param x Outcomes, or `NULL` for the enumerated support.
-#' @return Numeric vector of log densities.
 #' @export
-log_density <- new_generic(
-  "log_density",
-  "family",
-  function(family, theta, x = NULL) {
-    S7::S7_dispatch()
-  }
-)
+sampling_family <- new_class("sampling_family", abstract = TRUE)
 
-#' Batched log density over parameter columns
-#'
-#' Contract: `theta_mat` is `(d, C)` -- one parameter vector per column.
-#' Returns an `(M, C)` (or `(N, C)` for explicit `x`) matrix with one
-#' log-density column per parameter.
-#' @param family A `family`.
-#' @param theta_mat `(d, C)` matrix of parameter columns.
-#' @param x Outcomes, or `NULL` for the enumerated support.
-#' @return `(M, C)` matrix of log densities.
-#' @keywords internal
-log_density_batch <- new_generic(
-  "log_density_batch",
-  "family",
-  function(family, theta_mat, x = NULL) {
-    S7::S7_dispatch()
-  }
-)
-
-#' Score function `d log p_theta(x) / d theta`
-#'
-#' Contract: returns an `(M, d)` matrix over the family's support (`x = NULL`)
-#' or an `(N, d)` matrix for explicit outcomes. Used by the Frank-Wolfe and EM
-#' face oracles for chain-ruled gradients.
-#' @param family A `family`.
-#' @param theta Parameter vector.
-#' @param x Outcomes, or `NULL` for the enumerated support.
-#' @return `(M, d)` matrix of per-outcome score contributions.
-#' @export
-score <- new_generic("score", "family", function(family, theta, x = NULL) {
-  S7::S7_dispatch()
-})
 
 #' Dimension of the parameter vector
-#' @param family A `family`.
+#' @param family A [sampling_family].
 #' @return Integer parameter dimension.
 #' @export
 param_dim <- new_generic("param_dim", "family", function(family) {
   S7::S7_dispatch()
 })
 
-#' Score used inside the EM M-step gradient
+
+#' Compile the log-likelihood function for a fixed set of outcomes
 #'
-#' Contract: the gradient of the responsibility-weighted log-likelihood
-#' `sum_x w(x) log p_theta(x)` with respect to `theta`, as an `(M, d)` matrix of
-#' per-outcome contributions. Defaults to [score()]; the multinomial family
-#' adds back the `+n` constant because it does not vanish under weighted sums
-#' whose total weight varies.
-#' @param family A `family`.
-#' @param theta Parameter vector.
-#' @return `(M, d)` matrix of per-outcome M-step score contributions.
-#' @keywords internal
-em_score <- new_generic("em_score", "family", function(family, theta) {
+#' The single density method a family must implement; [log_density_batch()] and
+#' [log_density()] are thin wrappers over it. Returns a function of `theta_mat`
+#' alone.
+#'
+#' Compiling lets a family precompute whatever depends on `x` alone, which pays
+#' off because the outcomes stay fixed for a whole fit while `theta` moves
+#' thousands of times. Closing over `x` rather than taking a cache argument also
+#' means precomputed constants cannot be paired with the wrong outcomes.
+#'
+#' @param family A [sampling_family].
+#' @param x `(M, K)` matrix of outcomes, where `M` is the number of outcomes and
+#'   `K` the dimension of the sample space.
+#' @return A function of `theta_mat`, a `(d, C)` matrix of parameter columns,
+#'   returning the `(M, C)` matrix of log densities at `x`.
+#' @export
+compile_loglik <- new_generic("compile_loglik", "family", function(family, x) {
   S7::S7_dispatch()
 })
 
-method(em_score, family) <- function(family, theta) {
-  score(family, theta)
+#' Batched log density over parameter columns
+#'
+#' Recompiles on every call, so in a loop over many `theta` at fixed `x`,
+#' use [compile_loglik()] once and call its result instead.
+#'
+#' @param family A [sampling_family].
+#' @param theta_mat `(d, C)` matrix of parameter columns, where `d` is the
+#'   dimension of the parameter and `C` the number of columns. The same `x` is
+#'   used for every column.
+#' @param x `(M, K)` matrix of outcomes.
+#' @return `(M, C)` matrix of log densities.
+#' @export
+log_density_batch <- function(family, theta_mat, x) {
+  compile_loglik(family, x)(theta_mat)
 }
 
-#' Draw observations from p_theta
+
+#' Log density `log p_theta(x)`
 #'
-#' Contract: returns an `(n_obs, d)`-like numeric matrix of draws.
-#' @param family A `family`.
+#' @param family A [sampling_family].
+#' @param theta Parameter vector of length [param_dim()].
+#' @param x `(M, K)` matrix of outcomes, or a length-`K` vector for one outcome.
+#' @return Length-`M` numeric vector.
+#' @export
+log_density <- function(family, theta, x) {
+  as.vector(log_density_batch(family, matrix(theta, ncol = 1L), x))
+}
+
+
+#' Score `d log p_theta(x) / d theta`
+#'
+#' Per-outcome contributions in the family's own parameter coordinates, with no
+#' constraint projection applied. Applying the Jacobian of a parametrisation
+#' belongs to whatever owns that parametrisation.
+#'
+#' @param family A [sampling_family].
+#' @param theta Parameter vector.
+#' @param x `(M, K)` matrix of outcomes.
+#' @return `(M, d)` matrix.
+#' @export
+score <- new_generic("score", "family", function(family, theta, x) {
+  S7::S7_dispatch()
+})
+
+
+#' Draw observations from `p_theta`
+#'
+#' Named `draw` rather than `simulate` to avoid masking [stats::simulate()].
+#' @param family A [sampling_family].
 #' @param theta Parameter vector.
 #' @param n_obs Number of draws.
-#' @return `(n_obs, d)` numeric matrix of draws.
+#' @return `(n_obs, k)` numeric matrix.
 #' @export
-simulate <- new_generic(
-  "simulate",
+draw <- new_generic("draw", "family", function(family, theta, n_obs) {
+  S7::S7_dispatch()
+})
+
+#' Enumerated support of a finite family
+#'
+#' Every outcome with positive probability under some parameter. Families with
+#' infinite sample spaces error: exact integration over the sample space is
+#' undefined for them, not merely slow.
+#' @param family A [sampling_family].
+#' @return `(M, K)` matrix of outcomes.
+#' @export
+support <- new_generic("support", "family", function(family) S7::S7_dispatch())
+
+
+method(support, sampling_family) <- function(family) {
+  stop(
+    "`",
+    S7_class(family)@name,
+    "` has no enumerable support. Use a Monte ",
+    "Carlo or quadrature engine instead of an exact one.",
+    call. = FALSE
+  )
+}
+
+
+#' Does this family have a finite, enumerable sample space?
+#' @param family A [sampling_family].
+#' @return `TRUE` or `FALSE`.
+#' @export
+is_finite_support <- new_generic(
+  "is_finite_support",
   "family",
-  function(family, theta, n_obs) {
+  function(family) {
     S7::S7_dispatch()
   }
 )
 
-#' Enumerated support for finite families
-#'
-#' Contract: an `(M, d)` matrix listing every outcome with positive probability
-#' under some parameter. Families with infinite sample spaces must signal an
-#' informative error.
-#' @param family A `family`.
-#' @return `(M, d)` matrix of outcomes.
-#' @export
-support <- new_generic("support", "family", function(family) S7::S7_dispatch())
+method(is_finite_support, sampling_family) <- function(family) FALSE
 
-#' Is `p_theta(x)` a Bernstein basis function of `theta`?
-#'
-#' The capability behind the deterministic certified bound (see
-#' [oracle_bound()]). Contract: return `NULL` when the family's density is not a
-#' simplicial Bernstein basis function of its parameter, and otherwise
-#' `list(n = , K = , tally = )` where `n` is the Bernstein degree, `K` the
-#' number of barycentric coordinates (so `theta` ranges over the `(K-1)`-simplex
-#' and `param_dim()` is `K`), and `tally` the `(M, K)` matrix of exponent
-#' multi-indices **in the same row order as the family's [support()]** -- and
-#' hence as `engine@outcomes` for an [exact_engine()] over that family.
-#'
-#' The capability belongs to the family, not the engine: being exact is
-#' necessary but not sufficient. It is the *multinomial* pmf that happens to be
-#' the degree-`n` Bernstein basis function at count vector `x`, so an exact
-#' engine over some other finite-support family does not qualify. Families
-#' without a method inherit the `NULL` default and degrade to the heuristic
-#' oracle rather than being silently certified.
-#' @param family A `family`.
-#' @return `NULL`, or `list(n = , K = , tally = )`.
-#' @keywords internal
-bernstein_form <- new_generic("bernstein_form", "family", function(family) {
-  S7::S7_dispatch()
-})
 
-method(bernstein_form, family) <- function(family) {
-  NULL
-}
+# --- Multinomial --------------------------------------------------------------
 
-#' Number of Bernstein coefficients implied by a [bernstein_form()]
-#' @param bf A [bernstein_form()] result, or `NULL`.
-#' @return Integer count, or `NA_integer_` for `NULL`.
+#' Log multinomial coefficient `log(n! / prod x_j!)` per count vector
+#' @param x `(M, K)` matrix of count vectors.
+#' @param n Total trials.
 #' @keywords internal
 #' @noRd
-n_coefficients <- function(bf) {
-  if (is.null(bf)) {
-    return(NA_integer_)
-  }
-  as.numeric(choose(bf$n + bf$K - 1L, bf$K - 1L))
+log_multinom_coef <- function(x, n) {
+  lgamma(n + 1) - rowSums(lgamma(as.matrix(x) + 1))
 }
+
+
+#' Enumerate every count vector with `K` categories summing to `n`
+#'
+#' Stars and bars: each count vector is a choice of `K - 1` bar positions among
+#' `n + K - 1` slots, so enumeration costs `O(M * K)`.
+#'
+#' @param n Total trials.
+#' @param k Number of categories.
+#' @return `(M, K)` integer matrix, `M = choose(n + K - 1, K - 1)`.
+#' @keywords internal
+#' @noRd
+enumerate_counts <- function(n, k) {
+  if (k == 1L) {
+    return(matrix(as.integer(n), nrow = 1L))
+  }
+  bars <- utils::combn(n + k - 1L, k - 1L)
+  t(diff(rbind(0L, bars, n + k)) - 1L)
+}
+
 
 #' Multinomial sampling family
 #'
-#' The n-trial, K-category multinomial. The support enumeration and log
-#' multinomial coefficients are built once at construction; the support-path
-#' methods serve every expectation as a base R weighted sum in log space.
+#' The `n`-trial, `K`-category multinomial. The support enumeration and its log
+#' multinomial coefficients are built once at construction and stored as plain
+#' data rather than closures, so a serialised family carries no environment.
 #'
-#' @param n_trials Integer. Total number of draws per observation.
+#' @param n_trials Integer. Trials per observation.
 #' @param k Integer. Number of categories.
 #' @return A `multinomial_family`.
 #' @export
 multinomial_family <- new_class(
   "multinomial_family",
-  parent = family,
+  parent = sampling_family,
   properties = list(
     n_trials = class_numeric,
     k = class_numeric,
-    likelihood = class_list
+    outcomes = class_any,
+    log_coef = class_numeric
   ),
   constructor = function(n_trials, k) {
-    likelihood <- make_multinomial_likelihood(n_trials, k)
+    n_trials <- as.integer(n_trials)
+    k <- as.integer(k)
+    stopifnot(
+      "`n_trials` must be a single non-negative integer" = length(n_trials) ==
+        1L &&
+        !is.na(n_trials) &&
+        n_trials >= 0L,
+      "`k` must be a single integer >= 1" = length(k) == 1L &&
+        !is.na(k) &&
+        k >= 1L
+    )
+    outcomes <- enumerate_counts(n_trials, k)
     new_object(
       S7_object(),
-      n_trials = as.numeric(n_trials),
-      k = as.numeric(k),
-      likelihood = likelihood
+      n_trials = n_trials,
+      k = k,
+      outcomes = outcomes,
+      log_coef = log_multinom_coef(outcomes, n_trials)
     )
   }
 )
 
-method(log_density, multinomial_family) <- function(family, theta, x = NULL) {
-  if (is.null(x)) {
-    return(family@likelihood$log_pmf(theta))
+
+method(param_dim, multinomial_family) <- function(family) as.integer(family@k)
+
+
+method(support, multinomial_family) <- function(family) family@outcomes
+
+
+method(is_finite_support, multinomial_family) <- function(family) TRUE
+
+
+method(compile_loglik, multinomial_family) <- function(family, x) {
+  x <- as_outcome_matrix(x)
+  log_coef <- log_multinom_coef(x, family@n_trials)
+
+  function(theta_mat) {
+    # matmul_0_ninf, not %*%: a zero category probability gives log(0) = -Inf,
+    # and a zero count against it must contribute 0 rather than NaN.
+    matmul_0_ninf(x, log(as.matrix(theta_mat))) + log_coef
   }
-  as.vector(mnom_logpmf(
-    as_outcome_matrix(x),
-    matrix(log(theta), ncol = 1L),
-    family@n_trials
-  ))
 }
 
-method(log_density_batch, multinomial_family) <- function(
-  family,
-  theta_mat,
-  x = NULL
-) {
-  if (is.null(x)) {
-    return(family@likelihood$log_pmf_batch(theta_mat))
-  }
-  mnom_logpmf(as_outcome_matrix(x), log(theta_mat), family@n_trials)
+
+method(score, multinomial_family) <- function(family, theta, x) {
+  nan_to_zero(div_by_col(as_outcome_matrix(x), theta))
 }
 
-method(score, multinomial_family) <- function(family, theta, x = NULL) {
-  if (is.null(x)) {
-    return(family@likelihood$score(theta))
-  }
-  sweep(as_outcome_matrix(x), 2L, theta, "/") - family@n_trials
-}
 
-method(param_dim, multinomial_family) <- function(family) {
-  as.integer(family@k)
-}
-
-method(em_score, multinomial_family) <- function(family, theta) {
-  family@likelihood$score(theta) + family@likelihood$n
-}
-
-method(simulate, multinomial_family) <- function(family, theta, n_obs) {
-  t(rmultinom(n_obs, size = family@n_trials, prob = theta))
-}
-
-method(support, multinomial_family) <- function(family) {
-  family@likelihood$support
-}
-
-method(bernstein_form, multinomial_family) <- function(family) {
-  # P_theta(x) = choose(n; x) prod theta_j^{x_j} is exactly the degree-n
-  # simplicial Bernstein basis function indexed by the count vector x.
-  list(
-    n = as.integer(family@n_trials),
-    K = as.integer(family@k),
-    tally = family@likelihood$support
-  )
-}
-
-#' Normalise a sampling-model argument into a `family`
-#'
-#' Accepts a `family` (returned unchanged) and errors otherwise. Kept as the
-#' single normalisation seam so problem constructors need not special-case
-#' their `family` argument.
-#' @param x A `family`.
-#' @return A `family`.
-#' @keywords internal
-as_family <- function(x) {
-  if (S7_inherits(x, family)) {
-    return(x)
-  }
-  stop("cannot interpret this object as a sampling family: expected a `family`")
+method(draw, multinomial_family) <- function(family, theta, n_obs) {
+  t(stats::rmultinom(n_obs, size = family@n_trials, prob = theta))
 }

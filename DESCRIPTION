@@ -1,44 +1,36 @@
 Package: ripr
-Title: Reverse Information Projection via Frank-Wolfe and EM
+Title: Reverse Information Projection onto Finite Unions of Convex Sets
 Version: 0.0.0.9000
 Authors@R:
     person("Floyd", "Everest", , "me@floydeverest.com", role = c("aut", "cre"))
-Description: Computes reverse information projections (RIPr) of an alternative
-    distribution onto a union-structured null hypothesis, and the associated
-    duality-gap certificate for the rescaled e-variable. The projection is found
-    by Frank-Wolfe and EM algorithms over a mixture of atoms on the null faces,
-    with an exact finite-support engine for multinomial models and a Monte Carlo
-    engine (common random numbers) for continuous models. Problem components --
-    sampling family, null geometry, and alternative -- are S7 classes so new
-    sample spaces and null geometries drop in without touching the algorithms.
+Description: Approximates the growth-rate optimal e-variable for a composite
+    null hypothesis, as used in safe anytime-valid inference, by computing the
+    reverse information projection (RIPr) of a fixed alternative onto a null
+    given by a finite union of convex subsets of the parameter space. The
+    subsets may overlap and their union is not convex. The projection is
+    approximated by a Frank-Wolfe and EM hybrid over mixing measures supported
+    on the individual convex sets.
+    The optimiser returns a mixing measure and its induced mixture that
+    approximates the RIPr, and makes no claim about validity. Nevertheless,
+    an e-variable can be built by deriving a certified upper bound on the
+    worst-case null expectation. The observation model, null geometry, and
+    quadrature rules are pluggable, with expectations under the alternative
+    taken by exact enumeration, deterministic quadrature, or Monte Carlo through
+    a common interface.
 License: GPL (>= 3)
-Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
+URL: https://github.com/fleverest/ripr
+BugReports: https://github.com/fleverest/ripr/issues
+Depends:
+    R (>= 4.1)
 Imports:
+    matrixStats,
     S7,
     stats,
     utils
 Suggests:
     testthat (>= 3.0.0)
+Encoding: UTF-8
+Language: en-GB
+Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
-Collate:
-    'numerics.R'
-    'bernstein.R'
-    'multinomial.R'
-    'family.R'
-    'distribution.R'
-    'mixing.R'
-    'marginal.R'
-    'e_variable.R'
-    'faces.R'
-    'engine.R'
-    'oracle_bound.R'
-    'state.R'
-    'steps.R'
-    'certificate.R'
-    'problem.R'
-    'scheduler.R'
-    'gaussian.R'
-    'ripr-package.R'
-    'zzz.R'

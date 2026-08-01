@@ -2,24 +2,20 @@
 % Please edit documentation in R/family.R
 \name{log_density}
 \alias{log_density}
-\title{Log density log p_theta(x)}
+\title{Log density \verb{log p_theta(x)}}
 \usage{
-log_density(family, theta, x = NULL)
+log_density(family, theta, x)
 }
 \arguments{
-\item{family}{A \code{family}.}
+\item{family}{A \link{sampling_family}.}
 
-\item{theta}{Parameter vector.}
+\item{theta}{Parameter vector of length \code{\link[=param_dim]{param_dim()}}.}
 
-\item{x}{Outcomes, or \code{NULL} for the enumerated support.}
+\item{x}{\verb{(M, K)} matrix of outcomes, or a length-\code{K} vector for one outcome.}
 }
 \value{
-Numeric vector of log densities.
+Length-\code{M} numeric vector.
 }
 \description{
-Contract: \code{theta} is a parameter vector of length \code{\link[=param_dim]{param_dim()}}. With
-\code{x = NULL} (the hot path used by engines) the density is evaluated over the
-family's enumerated support and returned as a length-M numeric vector. With
-an explicit \code{x} (an \verb{(N, d)} matrix of outcomes) a length-N vector is
-returned.
+Log density \verb{log p_theta(x)}
 }

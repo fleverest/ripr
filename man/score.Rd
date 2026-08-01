@@ -2,22 +2,22 @@
 % Please edit documentation in R/family.R
 \name{score}
 \alias{score}
-\title{Score function \verb{d log p_theta(x) / d theta}}
+\title{Score \verb{d log p_theta(x) / d theta}}
 \usage{
-score(family, theta, x = NULL)
+score(family, theta, x)
 }
 \arguments{
-\item{family}{A \code{family}.}
+\item{family}{A \link{sampling_family}.}
 
 \item{theta}{Parameter vector.}
 
-\item{x}{Outcomes, or \code{NULL} for the enumerated support.}
+\item{x}{\verb{(M, K)} matrix of outcomes.}
 }
 \value{
-\verb{(M, d)} matrix of per-outcome score contributions.
+\verb{(M, d)} matrix.
 }
 \description{
-Contract: returns an \verb{(M, d)} matrix over the family's support (\code{x = NULL})
-or an \verb{(N, d)} matrix for explicit outcomes. Used by the Frank-Wolfe and EM
-face oracles for chain-ruled gradients.
+Per-outcome contributions in the family's own parameter coordinates, with no
+constraint projection applied. Applying the Jacobian of a parametrisation
+belongs to whatever owns that parametrisation.
 }

@@ -7,7 +7,7 @@
 multinomial_family(n_trials, k)
 }
 \arguments{
-\item{n_trials}{Integer. Total number of draws per observation.}
+\item{n_trials}{Integer. Trials per observation.}
 
 \item{k}{Integer. Number of categories.}
 }
@@ -15,7 +15,7 @@ multinomial_family(n_trials, k)
 A \code{multinomial_family}.
 }
 \description{
-The n-trial, K-category multinomial. The support enumeration and log
-multinomial coefficients are built once at construction; the support-path
-methods serve every expectation as a base R weighted sum in log space.
+The \code{n}-trial, \code{K}-category multinomial. The support enumeration and its log
+multinomial coefficients are built once at construction and stored as plain
+data rather than closures, so a serialised family carries no environment.
 }

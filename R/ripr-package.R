@@ -8,7 +8,7 @@
 ## usethis namespace: start
 #' @import S7
 #' @importFrom matrixStats colLogSumExps logSumExp rowLogSumExps
-#' @importFrom stats rmultinom rnorm sd weights
+#' @importFrom stats optim rgamma rmultinom rnorm sd weights
 #' @importFrom utils combn
 ## usethis namespace: end
 NULL

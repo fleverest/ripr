@@ -335,9 +335,7 @@ gauss_hermite <- function(n) {
 #' @param max_nodes Refuse grids larger than this.
 #' @return An engine spec for [resolve_engine()].
 #' @references
-#' Golub, G. H. and Welsch, J. H. (1969). Calculation of Gauss quadrature rules.
-#' *Mathematics of Computation* **23**(106), 221-230.
-#' \doi{10.1090/S0025-5718-69-99647-1}
+#'   \insertRef{GolubWelsch1969}{ripr}
 #' @export
 gh_engine <- function(n_nodes, max_nodes = 1e6) {
   n_nodes <- as.integer(n_nodes)

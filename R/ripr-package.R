@@ -1,8 +1,5 @@
 #' @keywords internal
-#' @references
-#' Grünwald, P., de Heide, R. and Koolen, W. (2024). Safe testing.
-#' *Journal of the Royal Statistical Society Series B: Statistical Methodology*
-#' **86**(5), 1091-1128. \doi{10.1093/jrsssb/qkae011}
+#' @references \insertRef{GrunwaldDeHeideKoolen2024}{ripr}
 "_PACKAGE"
 
 ## usethis namespace: start
@@ -10,5 +7,6 @@
 #' @importFrom matrixStats colLogSumExps logSumExp rowLogSumExps
 #' @importFrom stats optim rgamma rmultinom rnorm sd weights
 #' @importFrom utils combn
+#' @importFrom Rdpack reprompt
 ## usethis namespace: end
 NULL

@@ -33,7 +33,5 @@ Unlike \code{\link[=mc_engine]{mc_engine()}} the error here is bias, not varianc
 reports \code{0} and says nothing about accuracy. Raise \code{n_nodes} and compare.
 }
 \references{
-Golub, G. H. and Welsch, J. H. (1969). Calculation of Gauss quadrature rules.
-\emph{Mathematics of Computation} \strong{23}(106), 221-230.
-\doi{10.1090/S0025-5718-69-99647-1}
+\insertRef{GolubWelsch1969}{ripr}
 }

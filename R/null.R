@@ -275,16 +275,11 @@ sigmoid <- function(s) 1 / (1 + exp(-s))
 #' @param pinv Optional precomputed `(V, d)` left pseudo-inverse.
 #' @return A `simplex_null`.
 #' @references
-#' Beck, A. and Teboulle, M. (2009). A fast iterative shrinkage-thresholding
-#' algorithm for linear inverse problems. *SIAM Journal on Imaging Sciences*
-#' **2**(1), 183-202. \doi{10.1137/080716542}
+#'   \insertRef{BeckTeboulle2009}{ripr}
 #'
-#' Duchi, J., Shalev-Shwartz, S., Singer, Y. and Chandra, T. (2008). Efficient
-#' projections onto the l1-ball for learning in high dimensions. *Proceedings of
-#' the 25th International Conference on Machine Learning*, 272-279.
+#'   \insertRef{DuchiShalevShwartz2008}{ripr}
 #'
-#' O'Donoghue, B. and Candes, E. (2015). Adaptive restart for accelerated
-#' gradient schemes. *Foundations of Computational Mathematics* **15**, 715-732.
+#'   \insertRef{ODonoghueCandes2015}{ripr}
 #' @export
 simplex_null <- new_class(
   "simplex_null",

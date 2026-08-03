@@ -17,8 +17,7 @@ distribution <- new_class("distribution", abstract = TRUE)
 #' The mixing-measure/mixture distinction follows the mixture-model literature:
 #' \eqn{W}{W} is the `mixing_measure`, \eqn{P_W}{P_W} is the [mixture].
 #' @references
-#' Lindsay, B. G. (1995). *Mixture Models: Theory, Geometry and Applications*.
-#' NSF-CBMS Regional Conference Series in Probability and Statistics, Volume 5.
+#'   \insertRef{Lindsay1995}{ripr}
 #' @export
 mixing_measure <- new_class(
   "mixing_measure",

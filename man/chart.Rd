@@ -29,18 +29,6 @@ Returns a list of closures mapping between a subnull and an unconstrained
 coordinate space, which is what lets BFGS run on a constrained set.
 }
 \details{
-\itemize{
-\item \code{n_par} -- dimension of the coordinate space.
-\item \code{to_theta(u)} -- coordinates to a parameter vector in the subnull.
-\item \code{to_theta_batch(u_mat)} -- \verb{(n_par, N)} coordinates to \verb{(d, N)} parameters.
-\item \code{from_theta(theta)} -- coordinates for a point in the subnull. A cheap
-inverse, not a metric projection; compose with \code{\link[=project]{project()}} first if \code{theta}
-may lie outside.
-\item \code{jacobian(u)} -- \verb{(d, n_par)} derivative of \code{to_theta} at \code{u}.
-\item \code{seed(n)} -- \verb{(n_par, n)} random coordinates for a multi-start search,
-drawn to suit the subnull's own geometry.
-}
-
 Charts generally cover only the relative interior, so a maximum attained at a
 vertex or at infinity is approached but never reached. That is why the search
 below returns a lower bound on the true supremum.

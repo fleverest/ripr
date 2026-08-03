@@ -24,6 +24,7 @@ Depends:
     R (>= 4.1)
 Imports:
     matrixStats,
+    Rdpack,
     S7,
     stats,
     utils
@@ -43,4 +44,7 @@ Collate:
     'null.R'
     'numerics.R'
     'ripr-package.R'
+    'steps.R'
+    'scheduler.R'
     'zzz.R'
+RdMacros: Rdpack

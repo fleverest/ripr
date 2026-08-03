@@ -17,6 +17,5 @@ The mixing-measure/mixture distinction follows the mixture-model literature:
 \eqn{W}{W} is the \code{mixing_measure}, \eqn{P_W}{P_W} is the \link{mixture}.
 }
 \references{
-Lindsay, B. G. (1995). \emph{Mixture Models: Theory, Geometry and Applications}.
-NSF-CBMS Regional Conference Series in Probability and Statistics, Volume 5.
+\insertRef{Lindsay1995}{ripr}
 }

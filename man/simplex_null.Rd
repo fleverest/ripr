@@ -25,3 +25,10 @@ Holding vertices rather than constraints is what makes a certified bound
 possible later: de Casteljau subdivision needs something to subdivide, and a
 halfspace has no vertices.
 }
+\references{
+\insertRef{BeckTeboulle2009}{ripr}
+
+\insertRef{DuchiShalevShwartz2008}{ripr}
+
+\insertRef{ODonoghueCandes2015}{ripr}
+}

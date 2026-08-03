@@ -5,6 +5,18 @@
 # matrixStats, the assertions on them are a contract with a dependency: if
 # matrixStats ever changes its -Inf or empty-input conventions, these say so.
 
+# --- Non-conformal catches ----------------------------------------------------
+
+test_that("add_by_col and div_by_col reject a length-M vector", {
+  # A row-wise offset is plain `mat + v`. Passing a length-M vector here is the
+  # row/column mix-up these helpers exist to make explicit, and recycling would
+  # silently produce nonsense whenever C divides M.
+  m <- matrix(rnorm(12), nrow = 6) # M = 6, C = 2, so C divides M
+  expect_error(add_by_col(m, rnorm(6)), "one entry per column")
+  expect_error(div_by_col(m, rnorm(6)), "one entry per column")
+  expect_silent(add_by_col(m, rnorm(2)))
+})
+
 # --- NaN handling -------------------------------------------------------------
 
 test_that("nan_to_zero short-circuits without altering clean input", {

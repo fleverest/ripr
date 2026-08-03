@@ -49,6 +49,9 @@ nan_to_neginf <- function(x) {
 #' @keywords internal
 #' @noRd
 add_by_col <- function(mat, w) {
+  stopifnot(
+    "`w` must have one entry per column of `mat`" = length(w) == ncol(mat)
+  )
   mat + rep(w, each = nrow(mat))
 }
 
@@ -62,6 +65,9 @@ add_by_col <- function(mat, w) {
 #' @keywords internal
 #' @noRd
 div_by_col <- function(mat, w) {
+  stopifnot(
+    "`w` must have one entry per column of `mat`" = length(w) == ncol(mat)
+  )
   mat / rep(w, each = nrow(mat))
 }
 

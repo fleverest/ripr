@@ -25,16 +25,6 @@ subnull <- new_class("subnull", abstract = TRUE)
 #' Returns a list of closures mapping between a subnull and an unconstrained
 #' coordinate space, which is what lets BFGS run on a constrained set.
 #'
-#' * `n_par` -- dimension of the coordinate space.
-#' * `to_theta(u)` -- coordinates to a parameter vector in the subnull.
-#' * `to_theta_batch(u_mat)` -- `(n_par, N)` coordinates to `(d, N)` parameters.
-#' * `from_theta(theta)` -- coordinates for a point in the subnull. A cheap
-#'   inverse, not a metric projection; compose with [project()] first if `theta`
-#'   may lie outside.
-#' * `jacobian(u)` -- `(d, n_par)` derivative of `to_theta` at `u`.
-#' * `seed(n)` -- `(n_par, n)` random coordinates for a multi-start search,
-#'   drawn to suit the subnull's own geometry.
-#'
 #' Charts generally cover only the relative interior, so a maximum attained at a
 #' vertex or at infinity is approached but never reached. That is why the search
 #' below returns a lower bound on the true supremum.
@@ -284,6 +274,17 @@ sigmoid <- function(s) 1 / (1 + exp(-s))
 #' @param vertices `(d, V)` numeric matrix, one vertex per column.
 #' @param pinv Optional precomputed `(V, d)` left pseudo-inverse.
 #' @return A `simplex_null`.
+#' @references
+#' Beck, A. and Teboulle, M. (2009). A fast iterative shrinkage-thresholding
+#' algorithm for linear inverse problems. *SIAM Journal on Imaging Sciences*
+#' **2**(1), 183-202. \doi{10.1137/080716542}
+#'
+#' Duchi, J., Shalev-Shwartz, S., Singer, Y. and Chandra, T. (2008). Efficient
+#' projections onto the l1-ball for learning in high dimensions. *Proceedings of
+#' the 25th International Conference on Machine Learning*, 272-279.
+#'
+#' O'Donoghue, B. and Candes, E. (2015). Adaptive restart for accelerated
+#' gradient schemes. *Foundations of Computational Mathematics* **15**, 715-732.
 #' @export
 simplex_null <- new_class(
   "simplex_null",
@@ -314,6 +315,7 @@ simplex_null <- new_class(
     )
   }
 )
+
 
 method(chart, simplex_null) <- function(subnull) {
   vertices <- subnull@vertices
@@ -348,9 +350,19 @@ method(chart, simplex_null) <- function(subnull) {
 
 
 method(project, simplex_null) <- function(subnull, theta) {
-  # Simplex-constrained least squares over the vertex weights, by FISTA with
-  # gradient restart (O'Donoghue and Candes, 2015). Handles redundant vertex
-  # sets, which the pseudo-inverse recovery cannot.
+  # Least squares over the vertex weights, constrained to the simplex:
+  #   min_alpha ||V alpha - theta||^2  subject to  alpha in the simplex.
+  #
+  # Solved by FISTA (Beck and Teboulle, 2009): a projected gradient step,
+  # accelerated by extrapolating along the previous step with the weight
+  # (t_k - 1)/t_{k+1}. "Shrinkage-thresholding" refers to the proximal operator,
+  # which here is the simplex projection. Acceleration makes the iterates
+  # oscillate when the momentum term overshoots, so the momentum is reset
+  # whenever the step points uphill (O'Donoghue and Candes, 2015).
+  #
+  # Chosen over the pseudo-inverse recovery in the chart because it handles
+  # redundant vertex sets, and over a QP solver because the problem is tiny and
+  # this needs no dependency.
   vertices <- subnull@vertices
   n_v <- ncol(vertices)
   lip <- max(svd(vertices)$d)^2

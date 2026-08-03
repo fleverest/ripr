@@ -132,6 +132,16 @@ is_finite_support <- new_generic(
 
 method(is_finite_support, sampling_family) <- function(family) FALSE
 
+#' A reference point for the parameter space.
+#'
+#' Used as a fallback for initialising the atoms for a RIPr optimisation run,
+#' where the alternative does not take the form of a mixture.
+#' @keywords internal
+#' @noRd
+reference_parameter <- new_generic("reference_parameter", "family", \(family) {
+  S7::S7_dispatch()
+})
+
 
 # --- Multinomial --------------------------------------------------------------
 
@@ -235,4 +245,9 @@ method(score, multinomial_family) <- function(family, theta, x) {
 
 method(draw, multinomial_family) <- function(family, theta, n_obs) {
   t(stats::rmultinom(n_obs, size = family@n_trials, prob = theta))
+}
+
+
+method(reference_parameter, multinomial_family) <- function(family) {
+  rep(1 / family@k, family@k)
 }

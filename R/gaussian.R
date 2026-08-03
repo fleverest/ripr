@@ -79,7 +79,9 @@ gaussian_family <- new_class(
   }
 )
 
+
 method(param_dim, gaussian_family) <- function(family) as.integer(family@n_dim)
+
 
 method(compile_loglik, gaussian_family) <- function(family, x) {
   x <- as_outcome_matrix(x)
@@ -101,9 +103,11 @@ method(compile_loglik, gaussian_family) <- function(family, x) {
   }
 }
 
+
 method(score, gaussian_family) <- function(family, theta, x) {
   t(family@sigma_inv %*% (t(as_outcome_matrix(x)) - theta))
 }
+
 
 method(draw, gaussian_family) <- function(family, theta, n_obs) {
   d <- as.integer(family@n_dim)
@@ -137,7 +141,9 @@ gaussian_mixing <- new_class(
   }
 )
 
+
 method(n_atoms, gaussian_mixing) <- function(x) NA_integer_
+
 
 method(induced_log_density, list(gaussian_mixing, gaussian_family)) <- function(
   mixing,
@@ -151,6 +157,7 @@ method(induced_log_density, list(gaussian_mixing, gaussian_family)) <- function(
   )
 }
 
+
 method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
   mixing,
   family,
@@ -160,6 +167,16 @@ method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
   chol_l <- t(chol(family@sigma + mixing@prior_cov))
   z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
   t(chol_l %*% z + mixing@prior_mean)
+}
+
+
+# --- Mode and reference parameter for a Gaussian mixing measures --------------
+
+method(mode_parameter, gaussian_mixing) <- function(x) x@prior_mean
+
+
+method(reference_parameter, gaussian_family) <- function(family) {
+  rep(0, family@n_dim)
 }
 
 
@@ -174,6 +191,7 @@ method(
 ) {
   list(mean = mixing@theta_star, cov = family@sigma)
 }
+
 
 method(
   induced_gaussian_moments,

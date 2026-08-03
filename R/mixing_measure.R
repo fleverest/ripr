@@ -149,3 +149,19 @@ method(prune, finite_mixing) <- function(x, threshold = 1e-8) {
     weights = w / sum(w)
   )
 }
+
+
+#' Modal parameter of a mixing measure
+#'
+#' The point the measure places the highest mass or density. Used to seed the
+#' starting point for the RIPr optimiser.
+#' @export
+mode_parameter <- new_generic("mode_parameter", "x", \(x) S7::S7_dispatch())
+
+
+method(mode_parameter, point_mixing) <- function(x) x@theta_star
+
+
+method(mode_parameter, finite_mixing) <- function(x) {
+  x@components[, which.max(x@weights)]
+}

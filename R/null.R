@@ -343,7 +343,10 @@ method(chart, simplex_null) <- function(subnull) {
     seed = function(n) {
       g <- matrix(stats::rgamma(n * n_v, shape = 1), nrow = n_v)
       alpha <- div_by_col(g, colSums(g))
-      vapply(seq_len(n), \(i) softmax0_inv(alpha[, i]), numeric(n_v - 1L))
+      matrix(
+        vapply(seq_len(n), \(i) softmax0_inv(alpha[, i]), numeric(n_v - 1L)),
+        nrow = n_v - 1L
+      )
     }
   )
 }
@@ -485,7 +488,7 @@ method(chart, halfspace_null) <- function(subnull) {
     # hyperplane and biased toward the boundary, where the optimum usually sits.
     seed = function(n) {
       rbind(
-        matrix(stats::rnorm(n * (d - 1L)), nrow = d - 1L),
+        matrix(stats::rnorm(n * (d - 1L)), nrow = d - 1L, ncol = n),
         stats::rnorm(n, mean = -1, sd = 2)
       )
     }

@@ -5,7 +5,7 @@
 ## usethis namespace: start
 #' @import S7
 #' @importFrom matrixStats colLogSumExps logSumExp rowLogSumExps
-#' @importFrom stats optim rgamma rmultinom rnorm sd weights
+#' @importFrom stats optimise optim rgamma rmultinom rnorm sd weights
 #' @importFrom utils combn
 #' @importFrom Rdpack reprompt
 ## usethis namespace: end

@@ -44,7 +44,8 @@ Collate:
     'null.R'
     'numerics.R'
     'ripr-package.R'
-    'steps.R'
     'scheduler.R'
+    'state.R'
+    'steps.R'
     'zzz.R'
 RdMacros: Rdpack

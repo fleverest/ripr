@@ -22,8 +22,7 @@ NULL
 #' @param control From [ripr_control()].
 #' @param trace Data frame, one row per recorded event.
 #' @param snapshots List of recorded mixtures.
-#' @param iter Completed outer iterations.
-#' @param converged Did the fit stop because the estimated gap met `gap_tol`?
+#' @param iters Named integer counts of steps taken, one name per verb.
 #' @return A `ripr_state`.
 #' @export
 ripr_state <- new_class(
@@ -37,8 +36,7 @@ ripr_state <- new_class(
     control = class_list,
     trace = class_any,
     snapshots = class_list,
-    iter = class_numeric,
-    converged = class_logical
+    iters = class_integer
   ),
   validator = function(self) {
     if (length(self@atoms) != length(self@weights)) {
@@ -54,6 +52,9 @@ ripr_state <- new_class(
     total <- sum(unlist(self@weights))
     if (sum(sizes) > 0L && abs(total - 1) > 1e-8) {
       return("weights must sum to 1 across all subnulls")
+    }
+    if (is.null(names(self@iters))) {
+      return("`iters` must be a named integer vector, one name per verb")
     }
     NULL
   }
@@ -119,7 +120,7 @@ unflatten_weights <- function(state, w) split_by_sizes(w, block_sizes(state))
 
 #' Where an atom appended to `subnull_index` lands in the flat ordering
 #'
-#' [add_atom()] appends within a subnull's own block, so the new column sits at
+#' `add_atom` appends within a subnull's own block, so the new column sits at
 #' the end of that block rather than at the end of the flat vector. The step
 #' layer inserts the candidate at this index from the outset, which is what
 #' keeps it from having to re-index anything afterwards.
@@ -140,7 +141,7 @@ set_weights <- function(state, w) {
 #' Append an atom to a subnull and set every weight at once
 #'
 #' `weights` is the full post-step flat vector of length `C + 1`, with the new
-#' atom's entry at [insert_index()]. Atoms and weights are jointly constrained
+#' atom's entry at `insert_index`. Atoms and weights are jointly constrained
 #' -- the lengths must match -- and S7 validates after every `@<-`, so the
 #' assignment has to be a single call.
 #' @keywords internal
@@ -203,9 +204,11 @@ kl_divergence <- function(state, log_p = NULL, ld = NULL) {
 #' @noRd
 empty_trace <- function() {
   data.frame(
-    iter = integer(0),
+    fw = integer(0),
+    lb = integer(0),
+    em = integer(0),
+    weight = integer(0),
     phase = character(0),
-    inner = integer(0),
     kl = numeric(0),
     gap = numeric(0),
     oracle_value = numeric(0),
@@ -218,29 +221,31 @@ empty_trace <- function() {
   )
 }
 
+bump <- function(state, which, by = 1L) {
+  state@iters[[which]] <- state@iters[[which]] + as.integer(by)
+  state
+}
+
 #' Append one row to the trace, and a snapshot if the control asks for it
 #' @keywords internal
 #' @noRd
 record <- function(
   state,
   phase,
-  inner,
-  kl = NA_real_,
+  kl,
   gap = NA_real_,
   oracle_value = NA_real_,
   subnull = NA_integer_,
   step_size = NA_real_,
-  direction = NA_character_,
-  ld = NULL
+  direction = NA_character_
 ) {
-  if (is.na(kl)) {
-    kl <- kl_divergence(state, ld = ld)
-  }
   w <- flat_weights(state)
   row <- data.frame(
-    iter = as.integer(state@iter),
+    fw = state@iters[["fw"]],
+    lb = state@iters[["lb"]],
+    em = state@iters[["em"]],
+    weight = state@iters[["weight"]],
     phase = phase,
-    inner = as.integer(inner),
     kl = kl,
     gap = gap,
     oracle_value = oracle_value,
@@ -253,23 +258,39 @@ record <- function(
   )
   state@trace <- rbind(state@trace, row)
 
-  wanted <- switch(
-    state@control$snapshot,
-    none = FALSE,
-    outer = phase %in% c("init", "outer"),
-    all = TRUE
-  )
-  if (wanted) {
-    state@snapshots <- c(
-      state@snapshots,
-      list(list(
-        iter = state@iter,
-        phase = phase,
-        inner = inner,
-        atoms = state@atoms,
-        weights = state@weights
-      ))
-    )
-  }
   state
+}
+
+#' Record the whole mixture alongside the trace
+#'
+#' A trace row is a handful of scalars; a snapshot copies every atom and weight,
+#' so the two differ in cost by orders of magnitude and in frequency within a
+#' single verb call. The verb decides when, via `wants_snapshot` -- `record`
+#' cannot, since it does not know whether it sits partway through a `times` loop
+#' or at the end of one.
+#' @keywords internal
+#' @noRd
+snapshot_state <- function(state, phase) {
+  state@snapshots <- c(
+    state@snapshots,
+    list(list(
+      iters = state@iters,
+      phase = phase,
+      atoms = state@atoms,
+      weights = state@weights
+    ))
+  )
+  state
+}
+
+
+#' Should this iteration of a verb take a snapshot?
+#'
+#' `"step"` counts calls, so it fires only on the last iteration; `"all"` counts
+#' iterations, so it fires on every one.
+#' @param last Is this the final iteration of the current call?
+#' @keywords internal
+#' @noRd
+wants_snapshot <- function(state, last) {
+  switch(state@control$snapshot, none = FALSE, step = last, all = TRUE)
 }

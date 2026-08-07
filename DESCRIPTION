@@ -25,6 +25,7 @@ Depends:
 Imports:
     matrixStats,
     Rdpack,
+    rlang,
     S7,
     stats,
     utils
@@ -36,16 +37,17 @@ Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
 Collate:
+    'ripr-package.R'
+    'control.R'
     'family.R'
     'mixing_measure.R'
     'mixture.R'
     'quadrature.R'
-    'gaussian.R'
     'null.R'
-    'numerics.R'
-    'ripr-package.R'
-    'scheduler.R'
     'state.R'
+    'numerics.R'
     'steps.R'
+    'fit.R'
+    'gaussian.R'
     'zzz.R'
 RdMacros: Rdpack

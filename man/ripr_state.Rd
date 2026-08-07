@@ -13,8 +13,7 @@ ripr_state(
   control = list(),
   trace = NULL,
   snapshots = list(),
-  iter = integer(0),
-  converged = logical(0)
+  iters = integer(0)
 )
 }
 \arguments{
@@ -34,9 +33,7 @@ ripr_state(
 
 \item{snapshots}{List of recorded mixtures.}
 
-\item{iter}{Completed outer iterations.}
-
-\item{converged}{Did the fit stop because the estimated gap met \code{gap_tol}?}
+\item{iters}{Named integer counts of steps taken, one name per verb.}
 }
 \value{
 A \code{ripr_state}.

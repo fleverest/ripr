@@ -38,6 +38,27 @@ nan_to_neginf <- function(x) {
 }
 
 
+#' Insert a column into an `(M, C)` matrix at position `at`
+#'
+#' `at` may be `ncol(mat) + 1`, which appends.
+#' @param mat `(M, C)` numeric matrix.
+#' @param col Length-`M` numeric vector.
+#' @param at Column position the inserted column should occupy afterwards.
+#' @return `(M, C + 1)` numeric matrix.
+#' @keywords internal
+#' @noRd
+insert_col <- function(mat, col, at) {
+  before <- seq_len(at - 1L)
+  after <- seq_len(ncol(mat) - at + 1L) + at - 1L
+  cbind(
+    mat[, before, drop = FALSE],
+    col,
+    mat[, after, drop = FALSE],
+    deparse.level = 0
+  )
+}
+
+
 #' Offset each column of an `(M, C)` matrix by the matching entry of `w`
 #'
 #' Adds the scalar `w[j]` to every entry of column `j`. The column-wise

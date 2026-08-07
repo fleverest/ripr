@@ -453,9 +453,10 @@ test_that("plan_step puts the candidate where it is told", {
 
 # --- Support identification ---------------------------------------------------
 
-test_that("removing an atom is a rank-one downdate of the mixture", {
+test_that("removing an atom adjusts the mixture in place", {
   # `identify_support` tests every candidate atom, so rebuilding the mixture
-  # each time would make a pass O(MC^2). `log_p_without` does it in O(M) as
+  # each time would make a pass O(MC^2). `log_p_without` adjusts the existing
+  # one instead, in O(M):
   #
   #   log P + log(1 - w_j p_j / P) - log(1 - w_j)  =  log((P - w_j p_j)/(1 - w_j))
   #

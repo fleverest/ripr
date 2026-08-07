@@ -26,18 +26,6 @@ nan_to_zero <- function(x) {
 }
 
 
-#' Replace NaN entries with -Inf (log of zero)
-#' @keywords internal
-#' @noRd
-nan_to_neginf <- function(x) {
-  if (!anyNA(x)) {
-    return(x)
-  }
-  x[is.nan(x)] <- -Inf
-  x
-}
-
-
 #' Insert a column into an `(M, C)` matrix at position `at`
 #'
 #' `at` may be `ncol(mat) + 1`, which appends.
@@ -173,12 +161,4 @@ matmul_0_ninf <- function(a, b) {
 #' @noRd
 as_outcome_matrix <- function(x) {
   if (is.null(dim(x))) matrix(x, nrow = 1L) else as.matrix(x)
-}
-
-
-#' Is this a probability vector on the simplex?
-#' @keywords internal
-#' @noRd
-is_prob_vector <- function(p, tol = 1e-9) {
-  is.numeric(p) && !anyNA(p) && all(p >= 0) && abs(sum(p) - 1) <= tol
 }

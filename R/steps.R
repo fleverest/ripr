@@ -662,69 +662,6 @@ solve_weights <- function(ld_all, w, engine, tol, max_iter) {
 }
 
 
-# --- Updating state -----------------------------------------------------------
-
-#' Mix the new atom into the current iterate
-#'
-#' The stateful half: assemble the candidate into the flat arithmetic, hand off
-#' to `apply_step`, write the result back and record it. Every rule here
-#' changes only *how fast* the iterate moves, never what it converges to.
-#'
-#' The candidate is inserted at the index `add_atom` would place it, so the
-#' weights come back in the state's own flat ordering and need no permutation.
-#' @keywords internal
-#' @noRd
-step_update <- function(
-  state,
-  theta_new,
-  subnull_index,
-  gap,
-  oracle_value,
-  log_p,
-  ld,
-  directions = "forward",
-  size = "line-search",
-  gamma_fixed = NULL
-) {
-  engine <- state@engine
-
-  new_idx <- insert_index(state, subnull_index)
-  ld_new <- as.vector(ld(matrix(theta_new, ncol = 1L)))
-  ld_all <- insert_col(ld(flat_atoms(state)), ld_new, new_idx)
-  w <- append(flat_weights(state), 0, after = new_idx - 1L)
-
-  res <- apply_step(
-    ld_all,
-    w,
-    new_idx,
-    log_p,
-    engine,
-    directions = directions,
-    size = size,
-    gamma_fixed = gamma_fixed
-  )
-
-  state <- if (res$uses_candidate) {
-    add_atom(state, theta_new, subnull_index, res$weights)
-  } else {
-    set_weights(state, res$weights[-new_idx])
-  }
-
-  state <- record(
-    state,
-    phase = "step",
-    kl = res$kl,
-    gap = gap,
-    oracle_value = oracle_value,
-    subnull = if (res$uses_candidate) subnull_index else NA_integer_,
-    step_size = res$gamma,
-    direction = res$direction
-  )
-
-  state
-}
-
-
 # --- EM -----------------------------------------------------------------------
 
 #' One EM sweep: weights, then atoms: weights, then atoms
@@ -872,7 +809,9 @@ commit_step <- function(state, theta, subnull, planned) {
 
 #' Log density with atom `c_i` removed and the rest renormalised
 #'
-#' A rank-one downdate, `O(M)` rather than the `O(MC)` of rebuilding.
+#' Adjusts the existing mixture rather than rebuilding it from components, so
+#' `O(M)` instead of `O(MC)`. `identify_support()` tests every candidate, which
+#' would otherwise make a pass `O(MC^2)`.
 #' @keywords internal
 #' @noRd
 log_p_without <- function(log_p, ld_c, w_c) {

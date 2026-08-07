@@ -154,6 +154,8 @@ method(prune, finite_mixing) <- function(x, threshold = 1e-8) {
 #'
 #' The point the measure places the highest mass or density. Used to seed the
 #' starting point for the RIPr optimiser.
+#' @param x A [mixing_measure].
+#' @return Numeric vector of length [param_dim()].
 #' @export
 mode_parameter <- new_generic("mode_parameter", "x", \(x) S7::S7_dispatch())
 

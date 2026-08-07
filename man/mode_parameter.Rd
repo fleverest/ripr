@@ -6,6 +6,12 @@
 \usage{
 mode_parameter(x)
 }
+\arguments{
+\item{x}{A \link{mixing_measure}.}
+}
+\value{
+Numeric vector of length \code{\link[=param_dim]{param_dim()}}.
+}
 \description{
 The point the measure places the highest mass or density. Used to seed the
 starting point for the RIPr optimiser.

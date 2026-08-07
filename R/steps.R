@@ -713,14 +713,12 @@ step_update <- function(
   state <- record(
     state,
     phase = "step",
-    inner = 0L,
     kl = res$kl,
     gap = gap,
     oracle_value = oracle_value,
     subnull = if (res$uses_candidate) subnull_index else NA_integer_,
     step_size = res$gamma,
-    direction = res$direction,
-    ld = ld
+    direction = res$direction
   )
 
   state

@@ -650,6 +650,214 @@ solve_weights <- function(ld_all, w, engine, tol, max_iter) {
 }
 
 
+# --- Updating state -----------------------------------------------------------
+
+#' Mix the new atom into the current iterate
+#'
+#' The stateful half: assemble the candidate into the flat arithmetic, hand off
+#' to `apply_step`, write the result back and record it. Every rule here
+#' changes only *how fast* the iterate moves, never what it converges to.
+#'
+#' The candidate is inserted at the index `add_atom` would place it, so the
+#' weights come back in the state's own flat ordering and need no permutation.
+#' @keywords internal
+#' @noRd
+step_update <- function(
+  state,
+  theta_new,
+  subnull_index,
+  gap,
+  oracle_value,
+  log_p,
+  ld,
+  directions = "forward",
+  size = "line-search",
+  gamma_fixed = NULL
+) {
+  engine <- state@engine
+
+  new_idx <- insert_index(state, subnull_index)
+  ld_new <- as.vector(ld(matrix(theta_new, ncol = 1L)))
+  ld_all <- insert_col(ld(flat_atoms(state)), ld_new, new_idx)
+  w <- append(flat_weights(state), 0, after = new_idx - 1L)
+
+  res <- apply_step(
+    ld_all,
+    w,
+    new_idx,
+    log_p,
+    engine,
+    directions = directions,
+    size = size,
+    gamma_fixed = gamma_fixed
+  )
+
+  state <- if (res$uses_candidate) {
+    add_atom(state, theta_new, subnull_index, res$weights)
+  } else {
+    set_weights(state, res$weights[-new_idx])
+  }
+
+  state <- record(
+    state,
+    phase = "step",
+    inner = 0L,
+    kl = res$kl,
+    gap = gap,
+    oracle_value = oracle_value,
+    subnull = if (res$uses_candidate) subnull_index else NA_integer_,
+    step_size = res$gamma,
+    direction = res$direction,
+    ld = ld
+  )
+
+  state
+}
+
+
+# --- EM -----------------------------------------------------------------------
+
+#' One EM sweep: weights, then atoms: weights, then atoms
+#'
+#' Weights first, because the atom M-step conditions on the responsibilities and
+#' those are sharper once the weights have been updated.
+#'
+#' Always both halves. Moving only the weights is the corrective step, reached
+#' through `solve_weights` with its own convergence test rather than by
+#' running this a fixed number of times.
+#' @keywords internal
+#' @noRd
+em_sweep <- function(state, ld) {
+  wt <- exp(state@engine@log_w) * em_responsibilities(state, ld)
+  em_atom_step(em_weight_step(state, wt), ld, wt)
+}
+
+
+#' Responsibility of each atom for each node
+#'
+#' `r_ic = w_c p_c(x_i) / P(x_i)`, so rows sum to 1.
+#' @keywords internal
+#' @noRd
+em_responsibilities <- function(state, ld) {
+  log_comp <- add_by_col(ld(flat_atoms(state)), log(flat_weights(state)))
+  exp(log_comp - row_logsumexp(log_comp))
+}
+
+
+#' The M-step for the weights
+#'
+#' \eqn{w_c \leftarrow E_Q[r_c]}{w_c <- E_Q[r_c]}, which is the column sums of
+#' the weighted responsibilities. Equal to the multiplicative update
+#' `weight_sweep` performs, reached from the other direction:
+#' \eqn{E_Q[r_c] = w_c G(\theta_c)}{E_Q[r_c] = w_c G(theta_c)}.
+#'
+#' @param wt `(M, C)` responsibilities scaled by the quadrature weights.
+#' @keywords internal
+#' @noRd
+em_weight_step <- function(state, wt) {
+  new_w <- colSums(wt)
+  # Sums to 1 already, since the rows of `wt` sum to the quadrature weights.
+  set_weights(state, new_w / sum(new_w))
+}
+
+
+#' The M-step for the atoms
+#'
+#' Each atom maximises its own responsibility-weighted log-likelihood over its
+#' own subnull, so an atom cannot migrate between subnulls however the
+#' responsibilities fall.
+#'
+#' Local only: seeded at the current atom with no random starts. Exploration is
+#' the oracle's job, and a global search here would let atoms teleport between
+#' sweeps.
+#'
+#' @inheritParams em_weight_step
+#' @keywords internal
+#' @noRd
+em_atom_step <- function(state, ld, wt) {
+  engine <- state@engine
+  family <- engine@family
+  atoms_flat <- flat_atoms(state)
+  if (ncol(atoms_flat) == 0L) {
+    return(state)
+  }
+  idx <- flat_subnull(state)
+
+  moved <- vapply(
+    seq_len(ncol(atoms_flat)),
+    function(c_i) {
+      w_c <- wt[, c_i]
+      obj <- objective(
+        value = function(theta) {
+          sum(w_c * as.vector(ld(matrix(theta, ncol = 1L))))
+        },
+        grad = function(theta) {
+          as.vector(crossprod(score(family, theta, engine@nodes), w_c))
+        },
+        value_batch = function(theta_mat) {
+          as.vector(crossprod(ld(theta_mat), w_c))
+        }
+      )
+      maximise_over(
+        state@null@subnulls[[idx[c_i]]],
+        obj,
+        seeds = atoms_flat[, c_i, drop = FALSE],
+        n_seeds = 0L,
+        n_restarts = 1L
+      )$theta
+    },
+    numeric(nrow(atoms_flat))
+  )
+  state@atoms <- unflatten_atoms(state, matrix(moved, nrow = nrow(atoms_flat)))
+  state
+}
+
+
+# --- Step verbs ---------------------------------------------------------------
+
+#' Search every subnull and keep the best candidate
+#'
+#' Returns the subnull index, its maximiser, and the attained value. `seeds` is
+#' the current atoms: the identity `sum_c w_c G(theta_c) = 1` forces
+#' `max_c G(theta_c) >= 1`, so including them stops the search reporting a
+#' maximum below one.
+#' @keywords internal
+#' @noRd
+search_null <- function(state, obj) {
+  ctl <- state@control
+  found <- lapply(
+    state@null@subnulls,
+    \(s) {
+      maximise_over(
+        s,
+        obj,
+        seeds = flat_atoms(state),
+        n_seeds = ctl$n_seeds,
+        n_restarts = ctl$n_restarts
+      )
+    }
+  )
+  best <- which.max(vapply(found, \(f) f$value, numeric(1)))
+  c(found[[best]], list(subnull = best))
+}
+
+
+#' Write a planned step back to the state
+#'
+#' The candidate becomes an atom only if the step gave it weight; `"away"` never
+#' does, and neither does a search that settled on `gamma = 0`. Incumbent atoms
+#' driven towards zero stay, since only an oracle can grow the support back.
+#' @keywords internal
+#' @noRd
+commit_step <- function(state, theta, subnull, planned) {
+  if (planned$uses_candidate) {
+    add_atom(state, theta, subnull, planned$weights)
+  } else {
+    set_weights(state, planned$weights[-planned$new_idx])
+  }
+}
+
+
 # --- Support identification ---------------------------------------------------
 
 #' Log density with atom `c_i` removed and the rest renormalised

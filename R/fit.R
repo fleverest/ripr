@@ -234,7 +234,7 @@ fw_step <- function(
       size = size,
       # Only Frank--Wolfe steps advance the schedule; EM sweeps between two of
       # them must not.
-      gamma_fixed = schedule_gamma(state@iters[["fw"]]),
+      gamma_fixed = schedule_gamma(length(flat_weights(state))),
       at = insert_index(state, found$subnull)
     )(found$theta)
 
@@ -291,7 +291,7 @@ lb_step <- function(
       ld,
       directions = directions,
       size = size,
-      gamma_fixed = schedule_gamma(state@iters[["lb"]]),
+      gamma_fixed = schedule_gamma(length(flat_weights(state))),
       correct = correct
     )
     found <- search_null(state, obj)
@@ -301,7 +301,7 @@ lb_step <- function(
       ld,
       directions = directions,
       size = size,
-      gamma_fixed = schedule_gamma(state@iters[["lb"]]),
+      gamma_fixed = schedule_gamma(length(flat_weights(state))),
       correct = correct,
       at = insert_index(state, found$subnull)
     )(found$theta)

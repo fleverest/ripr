@@ -513,13 +513,24 @@ step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
 
 #' The open-loop step size, for `size = "fixed"`
 #'
-#' The alternative to `line_search`. The only rule here that can increase KL,
-#' kept to reproduce open-loop results in the literature rather than as a good
-#' default.
+#' The alternative to `line_search()`: a step size fixed in advance rather than
+#' chosen by minimising KL along the path. Kept to reproduce the open-loop
+#' results in the literature rather than because it is a good default -- it
+#' consults nothing, so it can and does increase KL.
 #'
-#' `k` must count only steps that took a Frank--Wolfe direction. EM sweeps
-#' between two steps must not advance the schedule, or it is no longer the
-#' sequence the published rates are proved for.
+#' `k` is the number of components the mixture already carries, not the number
+#' of steps taken. Frank--Wolfe indexes from 0 and so opens with
+#' \eqn{\gamma = 1}{gamma = 1}, replacing the iterate wholesale with the atom
+#' the oracle just found. That is deliberate there and reasonable when the
+#' support is empty and the first atom must become the whole mixture. It is
+#' problematic when there is a reasonable initial support, e.g. defined via
+#' [ripr_init()] placing a considered atom per subnull, while the linear
+#' oracle returns the worst-case \eqn{\theta}{theta}, which puts near-zero mass
+#' where \eqn{Q}{Q} has some.
+#'
+#' Counting components rather than steps handles both cases without having to
+#' remember how the fit began, since a step that uses its candidate adds exactly
+#' one.
 #' @references
 #'   \insertRef{Jaggi2013}{ripr}
 #'
@@ -528,8 +539,9 @@ step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
 #' @noRd
 schedule_gamma <- function(k) {
   # Jaggi's 2/(k+2) from k = 0 and Li--Barron's 2/(k+1) from k = 1 are the same
-  # sequence; the lineages differ in the oracle, not the schedule.
-  2 / (k + 1)
+  # sequence; the lineages differ in the oracle, not the schedule. `k` counts
+  # from 0 here, so it is the former.
+  2 / (k + 2)
 }
 
 

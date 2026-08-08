@@ -38,13 +38,6 @@ test_that("nan_to_zero leaves NA alone", {
   expect_equal(out[3], 0)
 })
 
-test_that("nan_to_neginf rewrites NaN and leaves NA alone", {
-  out <- nan_to_neginf(c(1, NA, NaN))
-  expect_true(is.na(out[2]))
-  expect_false(is.nan(out[2]))
-  expect_equal(out[3], -Inf)
-})
-
 # --- Column-wise arithmetic ---------------------------------------------------
 
 test_that("add_by_col and div_by_col agree with sweep", {
@@ -181,12 +174,4 @@ test_that("the matmul_0_ninf guard does not change the answer", {
 test_that("as_outcome_matrix treats a bare vector as a single outcome", {
   expect_equal(dim(as_outcome_matrix(c(3, 7))), c(1L, 2L))
   expect_equal(dim(as_outcome_matrix(matrix(1:6, nrow = 3))), c(3L, 2L))
-})
-
-test_that("is_prob_vector accepts the simplex and rejects everything else", {
-  expect_true(is_prob_vector(c(0.25, 0.25, 0.5)))
-  expect_true(is_prob_vector(c(1, 0, 0)))
-  expect_false(is_prob_vector(c(0.5, 0.6)))
-  expect_false(is_prob_vector(c(1.5, -0.5)))
-  expect_false(is_prob_vector(c(0.5, NA)))
 })

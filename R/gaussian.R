@@ -83,6 +83,22 @@ gaussian_family <- new_class(
 method(param_dim, gaussian_family) <- function(family) as.integer(family@n_dim)
 
 
+#' The sample space is all of `R^d`, so the inherited checks -- numeric, right
+#' shape, no missing values -- are nearly the whole contract. All this adds is
+#' finiteness: an infinite outcome has zero density under every parameter, so a
+#' likelihood ratio there is `0 / 0`, and a `NaN` is a worse answer than a
+#' complaint.
+#' @keywords internal
+#' @noRd
+method(as_outcomes, gaussian_family) <- function(family, x) {
+  x <- check_outcome_shape(x, outcome_dim(family))
+  if (any(!is.finite(x))) {
+    stop("Gaussian outcomes must be finite.", call. = FALSE)
+  }
+  x
+}
+
+
 method(compile_loglik, gaussian_family) <- function(family, x) {
   x <- as_outcome_matrix(x)
   # log p(x | theta) expands as

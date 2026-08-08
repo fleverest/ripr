@@ -117,6 +117,81 @@ method(support, sampling_family) <- function(family) {
   )
 }
 
+#' Dimension of one element of the sample space
+#'
+#' Distinct from [param_dim()] in principle, though equal for every family here.
+#' @param family A [sampling_family].
+#' @return Integer.
+#' @export
+outcome_dim <- new_generic("outcome_dim", "family", function(family) {
+  S7::S7_dispatch()
+})
+
+
+method(outcome_dim, sampling_family) <- function(family) param_dim(family)
+
+
+#' Coerce and check elements of the sample space
+#'
+#' Accepts one element as a length-`d` vector or `n` of them as an `(n, d)`
+#' matrix, and returns the `(n, d)` form. Anything else is an error: a random
+#' variable is only defined on its own sample space, and silently reshaping the
+#' wrong thing would give a number rather than a complaint.
+#' @param family A [sampling_family].
+#' @param x A length-`d` vector or `(n, d)` matrix.
+#' @return `(n, d)` numeric matrix.
+#' @export
+as_outcomes <- new_generic("as_outcomes", "family", function(family, x) {
+  S7::S7_dispatch()
+})
+
+#' Shape checks common to every family
+#'
+#' A plain function rather than a method, so the per-family methods can call it
+#' without dispatching to a parent. `S7::super()` would do the same thing, but
+#' its behaviour varies between S7 versions, and when dispatch fails S7 reports
+#' it by describing the offending object -- a path that can itself fail, hiding
+#' the real error behind a formatting one.
+#' @keywords internal
+#' @noRd
+check_outcome_shape <- function(x, d) {
+  if (!is.numeric(x)) {
+    stop("outcomes must be numeric.", call. = FALSE)
+  }
+  if (!is.matrix(x)) {
+    if (length(x) != d) {
+      stop(
+        "one outcome must be a length-",
+        d,
+        " vector; got length ",
+        length(x),
+        ".",
+        call. = FALSE
+      )
+    }
+    x <- matrix(x, nrow = 1L)
+  }
+  if (ncol(x) != d) {
+    stop(
+      "outcomes must have ",
+      d,
+      " columns; got ",
+      ncol(x),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (anyNA(x)) {
+    stop("outcomes must not be missing.", call. = FALSE)
+  }
+  x
+}
+
+
+method(as_outcomes, sampling_family) <- function(family, x) {
+  check_outcome_shape(x, outcome_dim(family))
+}
+
 
 #' Does this family have a finite, enumerable sample space?
 #' @param family A [sampling_family].
@@ -141,113 +216,3 @@ method(is_finite_support, sampling_family) <- function(family) FALSE
 reference_parameter <- new_generic("reference_parameter", "family", \(family) {
   S7::S7_dispatch()
 })
-
-
-# --- Multinomial --------------------------------------------------------------
-
-#' Log multinomial coefficient `log(n! / prod x_j!)` per count vector
-#' @param x `(M, K)` matrix of count vectors.
-#' @param n Total trials.
-#' @keywords internal
-#' @noRd
-log_multinom_coef <- function(x, n) {
-  lgamma(n + 1) - rowSums(lgamma(as.matrix(x) + 1))
-}
-
-
-#' Enumerate every count vector with `K` categories summing to `n`
-#'
-#' Stars and bars: each count vector is a choice of `K - 1` bar positions among
-#' `n + K - 1` slots, so enumeration costs `O(M * K)`.
-#'
-#' @param n Total trials.
-#' @param k Number of categories.
-#' @return `(M, K)` integer matrix, `M = choose(n + K - 1, K - 1)`.
-#' @keywords internal
-#' @noRd
-enumerate_counts <- function(n, k) {
-  if (k == 1L) {
-    return(matrix(as.integer(n), nrow = 1L))
-  }
-  bars <- utils::combn(n + k - 1L, k - 1L)
-  t(diff(rbind(0L, bars, n + k)) - 1L)
-}
-
-
-#' Multinomial sampling family
-#'
-#' The `n`-trial, `K`-category multinomial. The support enumeration and its log
-#' multinomial coefficients are built once at construction and stored as plain
-#' data rather than closures, so a serialised family carries no environment.
-#'
-#' @param n_trials Integer. Trials per observation.
-#' @param k Integer. Number of categories.
-#' @return A `multinomial_family`.
-#' @export
-multinomial_family <- new_class(
-  "multinomial_family",
-  parent = sampling_family,
-  properties = list(
-    n_trials = class_numeric,
-    k = class_numeric,
-    outcomes = class_any,
-    log_coef = class_numeric
-  ),
-  constructor = function(n_trials, k) {
-    n_trials <- as.integer(n_trials)
-    k <- as.integer(k)
-    stopifnot(
-      "`n_trials` must be a single non-negative integer" = length(n_trials) ==
-        1L &&
-        !is.na(n_trials) &&
-        n_trials >= 0L,
-      "`k` must be a single integer >= 1" = length(k) == 1L &&
-        !is.na(k) &&
-        k >= 1L
-    )
-    outcomes <- enumerate_counts(n_trials, k)
-    new_object(
-      S7_object(),
-      n_trials = n_trials,
-      k = k,
-      outcomes = outcomes,
-      log_coef = log_multinom_coef(outcomes, n_trials)
-    )
-  }
-)
-
-
-method(param_dim, multinomial_family) <- function(family) as.integer(family@k)
-
-
-method(support, multinomial_family) <- function(family) family@outcomes
-
-
-method(is_finite_support, multinomial_family) <- function(family) TRUE
-
-
-method(compile_loglik, multinomial_family) <- function(family, x) {
-  x <- as_outcome_matrix(x)
-  log_coef <- log_multinom_coef(x, family@n_trials)
-
-  function(theta_mat) {
-    # matmul_0_ninf, not %*%: a zero category probability gives log(0) = -Inf,
-    # and a zero count against it must contribute 0 rather than NaN.
-    matmul_0_ninf(x, log(as.matrix(theta_mat))) + log_coef
-  }
-}
-
-
-method(score, multinomial_family) <- function(family, theta, x) {
-  nan_to_zero(div_by_col(as_outcome_matrix(x), theta))
-}
-
-
-method(draw, multinomial_family) <- function(family, theta, n_obs) {
-  t(stats::rmultinom(n_obs, size = family@n_trials, prob = theta))
-}
-
-
-method(reference_parameter, multinomial_family) <- function(family) {
-  rep(1 / family@k, family@k)
-}

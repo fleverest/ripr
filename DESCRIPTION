@@ -49,5 +49,7 @@ Collate:
     'steps.R'
     'fit.R'
     'gaussian.R'
+    'multinomial.R'
+    'random_variable.R'
     'zzz.R'
 RdMacros: Rdpack

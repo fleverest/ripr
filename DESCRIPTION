@@ -37,19 +37,21 @@ Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
 Collate:
-    'ripr-package.R'
-    'control.R'
+    'numerics.R'
+    'bernstein.R'
     'family.R'
+    'null.R'
     'mixing_measure.R'
     'mixture.R'
+    'random_variable.R'
+    'certify.R'
+    'ripr-package.R'
+    'control.R'
     'quadrature.R'
-    'null.R'
     'state.R'
-    'numerics.R'
     'steps.R'
     'fit.R'
     'gaussian.R'
     'multinomial.R'
-    'random_variable.R'
     'zzz.R'
 RdMacros: Rdpack

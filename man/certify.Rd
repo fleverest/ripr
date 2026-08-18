@@ -22,8 +22,9 @@ algorithms.}
 \value{
 A list with \code{sup_ub}, \code{sup_lb}, the \code{random_variable} and \code{null} it
 holds for, the \code{method} names that produced it (one per distinct subnull
-geometry), and per-subnull \code{bounds}, \code{incumbents}, \code{nodes} and
-\code{exhausted}.
+geometry), and per-subnull \code{bounds}, \code{incumbents}, \code{nodes}, \code{converged}
+and \code{budget_hit}. \code{budget_hit} flags when a search stopped at \code{max_nodes}
+with the gap still open, so its bound is valid but likely loose.
 }
 \description{
 A \strong{proven} upper bound on

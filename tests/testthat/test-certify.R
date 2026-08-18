@@ -105,7 +105,7 @@ test_that("sup_ub brackets sup_lb", {
 
 test_that("dividing by the bound gives an e-variable", {
   # The reason the function exists. `X / sup_ub` must have null expectation at
-  # most 1 everywhere on H_0, checked at points drawn from the facets.
+  # most 1 everywhere on H_0.
   set.seed(104)
   null <- plurality_null(n = 8L, k = 4L)
   family <- null@family
@@ -133,6 +133,23 @@ test_that("dividing by the bound gives an e-variable", {
     theta <- s@vertices %*% div_by_col(weights, colSums(weights))
     expect_lte(max(expectations(theta)), 1)
   }
+
+  tight <- c(
+    vapply(
+      null@subnulls,
+      function(s) max(expectations(s@vertices)),
+      numeric(1L)
+    ),
+    expectations(matrix(
+      sup_lb(x, null, n_seeds = 200L, n_restarts = 20L)$theta,
+      ncol = 1L
+    ))
+  )
+  expect_lte(max(tight), 1)
+  expect_gt(max(tight), 1 - 1e-3)
+  expect_gt(res$sup_lb / res$sup_ub, 1 - 1e-6)
+  expect_lt(max(tight), 1)
+  expect_lt(res$sup_lb / res$sup_ub, 1)
 })
 
 test_that("a constant variable certifies to its own value", {
@@ -195,6 +212,29 @@ test_that("a variable maximised in a facet interior does need subdivision", {
   )
 })
 
+# --- The pmf is the Bernstein basis -------------------------------------------
+
+test_that("the certified bound is a bound on the expectation itself", {
+  # The same correspondence one level up, stated in the terms the caller cares
+  # about: `sup_ub` bounds E_theta[X] computed from the family, not merely the
+  # polynomial the engine happened to be handed.
+  set.seed(108)
+  null <- plurality_null(n = 6L, k = 3L)
+  family <- null@family
+  outcomes <- support(family)
+  values <- stats::runif(nrow(outcomes), 0, 10)
+  res <- certify(tabulated_rv(family, values), null, tol = 1e-9)
+
+  for (s in null@subnulls) {
+    weights <- matrix(stats::rgamma(3L * 300L, shape = 1), nrow = 3L)
+    theta <- s@vertices %*% div_by_col(weights, colSums(weights))
+    expectations <- as.vector(
+      crossprod(exp(log_density_batch(family, theta, outcomes)), values)
+    )
+    expect_lte(max(expectations), res$sup_ub)
+  }
+})
+
 # --- Return shape -------------------------------------------------------------
 
 test_that("certify() reports one entry per subnull", {
@@ -207,9 +247,11 @@ test_that("certify() reports one entry per subnull", {
   expect_length(res$bounds, n_sub)
   expect_length(res$incumbents, n_sub)
   expect_length(res$nodes, n_sub)
-  expect_length(res$exhausted, n_sub)
+  expect_length(res$converged, n_sub)
+  expect_length(res$budget_hit, n_sub)
   expect_type(res$nodes, "integer")
-  expect_type(res$exhausted, "logical")
+  expect_type(res$converged, "logical")
+  expect_type(res$budget_hit, "logical")
   expect_identical(res$method, "bernstein")
   expect_equal(res$sup_ub, max(res$bounds))
   expect_equal(res$sup_lb, max(res$incumbents))
@@ -222,6 +264,28 @@ test_that("certify() carries back the variable and null it holds for", {
   res <- certify(x, null)
   expect_identical(res$random_variable, x)
   expect_identical(res$null, null)
+})
+
+test_that("converged and budget_hit distinguish the two ways of stopping", {
+  set.seed(111)
+  null <- plurality_null(n = 8L, k = 3L)
+  values <- stats::runif(nrow(support(null@family)), 0, 10)
+  x <- tabulated_rv(null@family, values)
+
+  tight <- certify(x, null, tol = 1e-12, max_nodes = 5000L)
+  expect_true(all(tight$converged))
+  expect_false(any(tight$budget_hit))
+
+  starved <- certify(x, null, tol = 1e-12, max_nodes = 2L)
+  expect_true(any(starved$budget_hit))
+  # Mutually exclusive per subnull: a search stops one way or the other.
+  expect_false(any(starved$converged & starved$budget_hit))
+  # Every subnull that ran out of budget used all of it.
+  expect_true(all(starved$nodes[starved$budget_hit] == 2L))
+
+  # The starved bound is still valid, just looser -- which is the whole reason
+  # the distinction is worth reporting rather than erroring on.
+  expect_gte(starved$sup_ub, tight$sup_ub)
 })
 
 # --- Refusals -----------------------------------------------------------------

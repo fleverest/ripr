@@ -601,27 +601,108 @@ test_that("reparametrise_to() agrees with subdivide() on a single replacement", 
   expect_equal(reparametrise_to(coef, lat, V), kid$coef)
 })
 
-test_that("reparametrise_to() refuses a target outside the simplex", {
-  lat <- bernstein_lattice(3L, 3L)
-  V <- diag(3L)
-  V[, 1L] <- c(1.5, -0.5, 0)
-  expect_error(reparametrise_to(rep(1, lat$n_coef), lat, V), "outside")
-})
-
-test_that("reparametrise_to() requires vertices matched to the positions they replace", {
-  # Stronger than "single-vertex replacement": the columns are consumed in
-  # order against the standard simplex, so a permuted vertex set makes an
-  # intermediate simplex degenerate. The plurality facet {theta_1 <= theta_2}
-  # spanned by (e_2, e_3, tie) is the same set as (tie, e_2, e_3) and only the
-  # latter is accepted.
-  lat <- bernstein_lattice(3L, 3L)
-  coef <- rep(1, lat$n_coef)
+test_that("reparametrise_to() does not depend on the order of the vertices", {
+  # A facet is a set. The plurality facet {theta_1 <= theta_2} spanned by
+  # (tie, e_2, e_3) is the same simplex as (e_2, e_3, tie), and both must
+  # describe the same polynomial. This needs no special handling: the polar
+  # form is symmetric (PBP 11.2), so permuting the columns just permutes the
+  # coefficients correspondingly.
+  set.seed(28)
+  lat <- bernstein_lattice(4L, 3L)
+  coef <- stats::rnorm(lat$n_coef)
   tie <- c(0.5, 0.5, 0)
   matched <- cbind(tie, c(0, 1, 0), c(0, 0, 1))
   permuted <- cbind(c(0, 1, 0), c(0, 0, 1), tie)
 
-  expect_silent(reparametrise_to(coef, lat, matched))
-  expect_error(reparametrise_to(coef, lat, permuted))
+  for (V in list(matched, permuted)) {
+    out <- reparametrise_to(coef, lat, V)
+    for (rep in 1:4) {
+      mu <- rand_lambda(3L)
+      expect_equal(
+        bern_eval(out, lat, mu),
+        bern_eval(coef, lat, as.vector(V %*% mu))
+      )
+    }
+  }
+
+  # The two are the same coefficients up to the relabelling of the vertices.
+  expect_setequal(
+    round(reparametrise_to(coef, lat, matched), 10),
+    round(reparametrise_to(coef, lat, permuted), 10)
+  )
+})
+
+test_that("reparametrise_to() reaches sub-simplices with no vertex in common", {
+  # The case PBP Figure 11.4 rules out for repeated subdivision: the medial
+  # triangle, every vertex interior to an edge of the original. No ordering of
+  # single-vertex replacements reaches it, so this is the test that separates
+  # the blossom construction (PBP 11.2) from the one it replaced.
+  set.seed(29)
+  lat <- bernstein_lattice(4L, 3L)
+  coef <- stats::rnorm(lat$n_coef)
+  medial <- cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
+
+  out <- reparametrise_to(coef, lat, medial)
+  for (rep in 1:8) {
+    mu <- rand_lambda(3L)
+    expect_equal(
+      bern_eval(out, lat, mu),
+      bern_eval(coef, lat, as.vector(medial %*% mu))
+    )
+  }
+
+  # Exactly, not approximately: every step is a convex combination, so there is
+  # no drift to absorb. A tolerance here would hide the difference between this
+  # construction and the extrapolating one.
+  expect_lt(
+    max(abs(vapply(
+      seq_len(50L),
+      function(i) {
+        mu <- rand_lambda(3L)
+        bern_eval(out, lat, mu) - bern_eval(coef, lat, as.vector(medial %*% mu))
+      },
+      numeric(1L)
+    ))),
+    1e-13
+  )
+})
+
+test_that("reparametrise_to() preserves the enclosure on an interior sub-simplex", {
+  # Load-bearing for `certify()`: the bound is min/max of the coefficients, so
+  # reparametrisation is only sound if the new coefficients still bracket the
+  # polynomial over the new simplex.
+  set.seed(30)
+  for (K in 2:4) {
+    lat <- bernstein_lattice(4L, as.integer(K))
+    coef <- stats::rnorm(lat$n_coef)
+    V <- vapply(
+      seq_len(K),
+      function(i) {
+        z <- stats::rgamma(K, shape = 2)
+        z / sum(z)
+      },
+      numeric(K)
+    )
+    out <- reparametrise_to(coef, lat, V)
+    for (rep in 1:40) {
+      mu <- rand_lambda(K)
+      value <- bern_eval(coef, lat, as.vector(V %*% mu))
+      expect_lte(value, max(out) + 1e-12)
+      expect_gte(value, min(out) - 1e-12)
+    }
+  }
+})
+
+test_that("reparametrise_to() refuses vertices outside the simplex or degenerate", {
+  # Outside means `dc_step()` extrapolates rather than interpolating, which is
+  # what costs the stability and the enclosure both.
+  lat <- bernstein_lattice(3L, 3L)
+  coef <- rep(1, lat$n_coef)
+  outside <- cbind(c(1.5, -0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  degenerate <- cbind(c(0.5, 0.5, 0), c(0.5, 0.5, 0), c(0, 0, 1))
+
+  expect_error(reparametrise_to(coef, lat, outside), "standard simplex")
+  expect_error(reparametrise_to(coef, lat, degenerate), "non-degenerate")
 })
 
 # --- Branch and bound ---------------------------------------------------------

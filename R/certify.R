@@ -185,8 +185,9 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 #'   (for bounding multinomial expectation in simplices).
 #' @return A list with `sup_ub`, `sup_lb`, the `random_variable` and `null` it
 #'   holds for, the `method` names that produced it (one per distinct subnull
-#'   geometry), and per-subnull `bounds`, `incumbents`, `nodes` and
-#'   `exhausted`.
+#'   geometry), and per-subnull `bounds`, `incumbents`, `nodes`, `converged`
+#'   and `budget_hit`. `budget_hit` flags when a search stopped at `max_nodes`
+#'   with the gap still open, so its bound is valid but likely loose.
 #' @seealso [sup_lb()]
 #' @references
 #' \insertAllCited{}
@@ -263,7 +264,12 @@ certify <- function(
   bounds <- vapply(per_subnull, function(r) r$bound, numeric(1L))
   incumbents <- vapply(per_subnull, function(r) r$incumbent, numeric(1L))
   nodes <- vapply(per_subnull, function(r) r$iterations, integer(1L))
-  exhausted <- vapply(per_subnull, function(r) isTRUE(r$exhausted), logical(1L))
+  converged <- vapply(per_subnull, function(r) isTRUE(r$converged), logical(1L))
+  budget_hit <- vapply(
+    per_subnull,
+    function(r) isTRUE(r$budget_hit),
+    logical(1L)
+  )
 
   list(
     sup_ub = max(bounds),
@@ -274,6 +280,7 @@ certify <- function(
     bounds = bounds,
     incumbents = incumbents,
     nodes = nodes,
-    exhausted = exhausted
+    converged = converged,
+    budget_hit = budget_hit
   )
 }

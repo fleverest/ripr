@@ -355,30 +355,47 @@ boxes_best <- function(boxes, lat) {
 #' @keywords internal
 #' @noRd
 reparametrise_to <- function(coef, lat, vertices) {
+  # PBP 11.2: the polar form `b[x_1 ... x_n]` is the unique symmetric multiaffine
+  # map with `b[x ... x] = b(x)`, and its values at the vertex arguments
+  #
+  #   b_alpha = b[v_1 ... v_1 v_2 ... v_2 ... v_K ... v_K]   (v_j taken alpha_j times)
+  #
+  # *are* the Bezier coefficients over `conv(v_1, ..., v_K)`. The recursion
+  # consuming one argument per step is PBP 11.2 (1), which is `dc_step()`; when
+  # every argument is the same point it collapses to de Casteljau's algorithm,
+  # which is why the single-moved-vertex case agrees with plain subdivision.
   V <- as.matrix(vertices)
-  cur <- as.numeric(coef)
   stopifnot(
     nrow(V) == lat$K,
     ncol(V) == lat$K,
     all(is.finite(V)),
-    length(cur) == lat$n_coef
+    length(coef) == lat$n_coef,
+    "vertices must lie in the standard simplex" = all(V >= -1e-12) &&
+      max(abs(colSums(V) - 1)) < 1e-9,
+    "vertices must span a non-degenerate simplex" = abs(det(V)) > 1e-12
   )
 
-  W <- diag(lat$K)
-  for (i in seq_len(lat$K)) {
-    if (isTRUE(all.equal(W[, i], V[, i]))) {
-      next
+  # `compositions()` loops the first coordinate ascending and recurses on the
+  # rest, which is this recursion, so the sub-results concatenate directly into
+  # coefficient order.
+  fill <- function(cur, j, remaining) {
+    if (j == lat$K) {
+      for (deg in rev(seq_len(remaining))) {
+        cur <- dc_step(cur, deg, V[, j], lat)
+      }
+      return(cur)
     }
-    lambda <- solve(W, V[, i])
-    stopifnot(
-      "target vertex lies outside the current sub-simplex" = all(
-        lambda >= -1e-12
-      )
-    )
-    cur <- dc_child(dc_pyramid(cur, lat, lambda), lat, i)
-    W[, i] <- V[, i]
+    parts <- vector("list", remaining + 1L)
+    for (a in 0:remaining) {
+      if (a > 0L) {
+        cur <- dc_step(cur, remaining - a + 1L, V[, j], lat)
+      }
+      parts[[a + 1L]] <- fill(cur, j + 1L, remaining - a)
+    }
+    unlist(parts, use.names = FALSE)
   }
-  cur
+
+  fill(as.numeric(coef), 1L, lat$n)
 }
 
 # ---- branch and bound ------------------------------------------------------
@@ -434,7 +451,8 @@ certify_sup <- function(
   rejected <- list()
   trace <- numeric(max_iter)
   it <- 0L
-  exhausted <- FALSE
+  converged <- FALSE
+  budget_hit <- FALSE
 
   repeat {
     bounds <- vapply(active, box_bound, numeric(1L))
@@ -444,10 +462,15 @@ certify_sup <- function(
     bound <- max(incumbent + slack, u) + eta
 
     if (!length(active)) {
-      exhausted <- TRUE
+      converged <- TRUE
       break
     }
-    if (bound - eta - incumbent <= tol || it >= max_iter) {
+    if (bound - eta - incumbent <= tol) {
+      converged <- TRUE
+      break
+    }
+    if (it >= max_iter) {
+      budget_hit <- TRUE
       break
     }
 
@@ -487,7 +510,8 @@ certify_sup <- function(
     active = active,
     rejected = rejected,
     iterations = it,
-    exhausted = exhausted,
+    converged = converged,
+    budget_hit = budget_hit,
     trace = trace[seq_len(it)]
   )
 }

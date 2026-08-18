@@ -337,15 +337,20 @@ boxes_best <- function(boxes, lat) {
 
 #' Reparametrise a Bernstein form onto an arbitrary sub-simplex
 #'
-#' Leroy (2012) section 2.3, PBP 11.3: replace the vertices one at a time, each
-#' replacement being one `dc_pyramid()` plus one `dc_child()`. A vertex the
-#' target shares with the current simplex is skipped, so a subnull differing
-#' from the standard simplex in a single vertex costs only one call.
+#' PBP 11.2: the polar form `b[x_1 ... x_n]` is the unique symmetric multiaffine
+#' map with `b[x ... x] = b(x)`, and its values at the vertex arguments
 #'
-#' `lambda` must be the target vertex in barycentric coordinates of the
-#' *current* simplex, hence the `solve()`. The non-negativity check is not
-#' cosmetic: it is what makes every step a convex combination and so
-#' unconditionally stable (PBP 10.4)..
+#'   `b_alpha = b[v_1 ... v_1 v_2 ... v_2 ... v_K ... v_K]`, `v_j` taken
+#'   `alpha_j` times,
+#'
+#' *are* the Bezier coefficients over `conv(v_1, ..., v_K)`. The recursion
+#' consuming one argument per step is PBP 11.2 (1), which is `dc_step()`; when
+#' every argument is the same point it collapses to de Casteljau's algorithm,
+#' so a single moved vertex agrees exactly with plain subdivision.
+#'
+#' Cost is `choose(n + K, K)` `dc_step()` calls. This is called once per sunull
+#' at the start before `certify_sup()`, never inside the branch-and-bound loop,
+#' which subdivides with `bisect()` instead of full reparametrisation.
 #'
 #' @param coef Length-`n_coef` coefficient vector in `lat$tally` row order.
 #' @param lat A `bernstein_lattice()`.
@@ -355,15 +360,6 @@ boxes_best <- function(boxes, lat) {
 #' @keywords internal
 #' @noRd
 reparametrise_to <- function(coef, lat, vertices) {
-  # PBP 11.2: the polar form `b[x_1 ... x_n]` is the unique symmetric multiaffine
-  # map with `b[x ... x] = b(x)`, and its values at the vertex arguments
-  #
-  #   b_alpha = b[v_1 ... v_1 v_2 ... v_2 ... v_K ... v_K]   (v_j taken alpha_j times)
-  #
-  # *are* the Bezier coefficients over `conv(v_1, ..., v_K)`. The recursion
-  # consuming one argument per step is PBP 11.2 (1), which is `dc_step()`; when
-  # every argument is the same point it collapses to de Casteljau's algorithm,
-  # which is why the single-moved-vertex case agrees with plain subdivision.
   V <- as.matrix(vertices)
   stopifnot(
     nrow(V) == lat$K,
@@ -420,7 +416,9 @@ reparametrise_to <- function(coef, lat, vertices) {
 #'   can put the computed maximum coefficient marginally *below* the true one,
 #'   which is the unsafe direction for a validity claim.
 #' @return `list(bound, incumbent, theta, active, rejected, iterations,
-#'   exhausted, trace)`.
+#'   converged, budget_hit, trace)`. `converged` and `budget_hit` are mutually
+#'   exclusive and exactly one is `TRUE`: the search either pruned or closed the
+#'   gap, or it ran out of `max_iter`. Only the second qualifies the bound.
 #' @keywords internal
 #' @noRd
 certify_sup <- function(

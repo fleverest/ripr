@@ -13,14 +13,17 @@ certify(x, null, tol = 1e-06, max_nodes = 20000L, max_coefficients = 1024^2)
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
-\item{max_nodes}{Cap on subdivisions per subnull for branch-and-bound.}
+\item{max_nodes}{Cap on subdivisions per subnull for branch-and-bound
+algorithms.}
 
-\item{max_coefficients}{Refuse above this many Bernstein coefficients.}
+\item{max_coefficients}{Refuse above this many Bernstein coefficients
+(for bounding multinomial expectation in simplices).}
 }
 \value{
-A list with \code{sup_bound}, the \code{random_variable} and \code{null} it holds
-for, the \code{method} that produced it, and per-subnull \code{bounds}, \code{incumbents},
-\code{nodes} and whether each search \code{exhausted} its budget.
+A list with \code{sup_ub}, \code{sup_lb}, the \code{random_variable} and \code{null} it
+holds for, the \code{method} names that produced it (one per distinct subnull
+geometry), and per-subnull \code{bounds}, \code{incumbents}, \code{nodes} and
+\code{exhausted}.
 }
 \description{
 A \strong{proven} upper bound on
@@ -29,12 +32,13 @@ available.
 }
 \details{
 This exists to prove that a particular random variable is an e-variable for
-\code{H0}: For any non-negative \code{X} and any scalar \code{b} at least this supremum,
-\code{X / B} has expectation at most 1 under \code{H0}. So \code{certify(X, H0)} returning
+\code{H0}: for any non-negative \code{X} and any scalar \code{b} at least this supremum,
+\code{X / b} has expectation at most 1 under \code{H0}. So \code{certify(X, H0)} returning
 \code{1} or less says \code{X} is already an e-variable for \code{H0}, and otherwise
 \code{X / bound} is one.
 
-The method refuses to certify where a family with no known bounding method.
+Certification is refused for any (family, subnull) combination with no known
+bounding method.
 
 Currently only multinomial families with simplex subnulls are supported. The
 upper bound is found via a branch-and-bound algorithm that recursively

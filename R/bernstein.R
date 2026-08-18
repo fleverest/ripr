@@ -12,75 +12,148 @@ NULL
 # multi-start search, which only ever gives a lower one. See Leroy (2012),
 # Reliable Computing 17(1), 11-21.
 #
-# Ported from the previous package with review rather than rewritten. The
-# enumeration is self-checking: a wrong lattice would mis-index every
-# coefficient and return a plausible but invalid bound, so `bernstein_lattice()`
-# verifies the multi-index matrix it is given instead of trusting it.
-#
-# Deliberately base R -- a numerical inner loop over preallocated vectors --
-# and it knows nothing about nulls, engines or families. That seam is certify.R.
+# `dc_step()` runs one step of the de Casteljau algorithm
+# (Prautzsch-Boehm-Paluszny 10.4, from the Bernstein recursion in 10.1);
+# `dc_pyramid()` iterates it; `dc_child()` reads a subsimplex expansion off the
+# pyramid (Leroy Algorithm 2.13, step 4). Subdivision and reparametrisation are
+# both callers -- see PBP 11.3, which treats them together.
+
+# --- Size guard for Bernstein -------------------------------------------------
+
+#' For a multinomial random variable `X`, `E_theta[X]` takes the form of a
+#' polynomial in `theta` of degree `n_trials`. Its Bernstein form has one
+#' coefficient per point of the multinomial sample space.
+#' @keywords internal
+#' @noRd
+bernstein_size <- function(n_trials, k) choose(n_trials + k - 1, k - 1)
+
+
+#' The largest batch (`n_trials`) that would fit within a budget
+#'
+#' Reported in the refusal, since the batch size is one thing a caller can
+#' actually change.
+#' @keywords internal
+#' @noRd
+largest_batch <- function(k, max_coefficients) {
+  # Binary search over n_trials over the support size
+  if (bernstein_size(1L, k) > max_coefficients) {
+    return(0L)
+  }
+  hi <- 1L
+  while (bernstein_size(2L * hi, k) <= max_coefficients) {
+    hi <- 2L * hi
+  }
+  lo <- hi
+  hi <- 2L * hi
+  while (lo < hi) {
+    mid <- (lo + hi + 1L) %/% 2L
+    if (bernstein_size(mid, k) <= max_coefficients) {
+      lo <- mid
+    } else {
+      hi <- mid - 1L
+    }
+  }
+  lo
+}
+
+
+#' Refuse a certification too large to attempt
+#'
+#' Checked before anything is built, since the lattice is where the memory and
+#' most of the setup time go. Exact arithmetic on `choose()`, so the guard itself
+#' costs nothing.
+#'
+#' This is a resource limit rather than a correctness one: raising it costs time
+#' and memory and nothing else. The other guards, e.g. checking that the family
+#' permits a bound on the expectation at all, are a correctness concern and can
+#' not be overridden.
+#' @keywords internal
+#' @noRd
+check_bernstein_size <- function(n_trials, k, max_coefficients) {
+  size <- bernstein_size(n_trials, k)
+  if (size <= max_coefficients) {
+    return(invisible(size))
+  }
+  stop(
+    "certifying would need ",
+    format(size, big.mark = ",", scientific = FALSE),
+    " Bernstein coefficients for n_trials = ",
+    n_trials,
+    " with k = ",
+    k,
+    ", above `max_coefficients` (",
+    format(max_coefficients, big.mark = ",", scientific = FALSE),
+    ").\n",
+    "The count is choose(n_trials + k - 1, k - 1), so it is the batch size ",
+    "that drives it: ",
+    largest_batch(k, max_coefficients),
+    " would fit.\n",
+    "Raise `max_coefficients` to attempt it anyway.",
+    call. = FALSE
+  )
+}
+
 
 # ---- lattice ---------------------------------------------------------------
 
 #' Enumerate the degree-`n` tally lattice on `K` categories
 #'
-#' Precomputes the index structure the subdivision needs: the multi-index
-#' matrix, the positions of the `K` vertex coefficients, the edge list, and --
-#' for each edge -- the lattice lines parallel to it.
+#' Precomputes every index the de Casteljau routines need: the multi-index
+#' matrix, the `K` vertex positions (PBP 10.2: `b(a_j) = b_{n e_j}`), the edge
+#' list, the degree ladder used by `dc_step()`, and the read-off map used by
+#' `dc_child()`.
 #'
-#' The row order of `tally` is the coefficient order for every box built against
-#' this lattice, and it is *not* assumed: `vertex` is found by key `match()` and
-#' `rows` by `split()`, so any valid enumeration of the degree-`n` lattice
-#' works. Callers integrating against an engine must pass that engine's own
-#' outcome matrix, so the coefficients they build from `engine@log_q_mass` are
-#' indexed consistently.
-#'
+#' The row order of `tally` is the coefficient order from `compositions()`, so
+#' be careful of the order of the coefficients upstream when implementing with
+#' a new family.
 #' @param n Degree (multinomial batch size). At least 1.
 #' @param K Number of categories. At least 2.
-#' @param tally Optional `(M, K)` count matrix giving the enumeration to use.
-#'   `NULL` (default) uses the internal `compositions()` enumeration.
 #' @return List with `n`, `K`, `tally`, `n_coef`, `pw` (base-`(n+1)` place
 #'   values), `vertex` (positions of the `K` vertex coefficients), `edges` (the
-#'   `2 x choose(K, 2)` edge list) and `rows`.
+#'   `2 x choose(K, 2)` edge list) `up` and `readoff`.
 #' @keywords internal
 #' @noRd
-bernstein_lattice <- function(n, K, tally = NULL) {
+bernstein_lattice <- function(n, K) {
   n <- as.integer(n)
   K <- as.integer(K)
   stopifnot(length(n) == 1L, length(K) == 1L, n >= 1L, K >= 2L)
 
-  if (is.null(tally)) {
-    tally <- compositions(n, K)
-  } else {
-    tally <- as.matrix(tally)
-    storage.mode(tally) <- "integer"
-    dimnames(tally) <- NULL
-    # A wrong enumeration would mis-index every coefficient and yield a
-    # plausible but invalid bound, so this is checked rather than assumed.
-    # Non-negativity is part of the check because it is what makes the
-    # base-(n+1) key injective.
-    stopifnot(
-      ncol(tally) == K,
-      nrow(tally) == choose(n + K - 1L, K - 1L),
-      all(is.finite(tally)),
-      all(tally >= 0L),
-      all(rowSums(tally) == n),
-      !anyDuplicated(as.vector(tally %*% (n + 1)^(seq_len(K) - 1L)))
-    )
-  }
-
-  # Tally n * e_j has base-(n+1) key n * (n+1)^(j-1).
+  tally <- compositions(n, K)
   pw <- (n + 1)^(seq_len(K) - 1L)
+  # Tally n * e_j has base-(n+1) key n * (n+1)^(j-1).
   vertex <- match(n * pw, as.vector(tally %*% pw))
 
   edges <- utils::combn(K, 2L)
-  rows <- apply(
-    edges,
-    2L,
-    function(e) build_rows(tally, e[1L], e[2L], n),
-    simplify = FALSE
-  )
-  names(rows) <- paste(edges[1L, ], edges[2L, ], sep = "-")
+  # `up[[m + 1]][beta, i]` is the position of `beta + e_i` among the degree-`m`
+  # multi-indices, so one de Casteljau step is a gather and a matrix product.
+  key <- lapply(0:n, function(m) as.vector(compositions(m, K) %*% pw))
+  up <- vector("list", n + 1L)
+  for (m in seq_len(n)) {
+    idx <- matrix(0L, nrow = length(key[[m]]), ncol = K)
+    for (i in seq_len(K)) {
+      idx[, i] <- match(key[[m]] + pw[i], key[[m + 1L]])
+    }
+    up[[m + 1L]] <- idx
+  }
+
+  # Leroy Algorithm 2.13 step 4: `b_alpha(V^[i]) = b^(alpha_i)_{alpha-hat-i}`.
+  # Level `l` of the pyramid holds degree `n - l`, and zeroing slot `i` leaves
+  # degree `n - alpha_i`, so the level to read is `alpha_i`. Grouped by level so
+  # the read-off is a handful of vectorised gathers.
+  readoff <- lapply(seq_len(K), function(i) {
+    lev <- tally[, i]
+    hat <- tally
+    hat[, i] <- 0L
+    hkey <- as.vector(hat %*% pw)
+    lapply(sort(unique(lev)), function(l) {
+      rows <- which(lev == l)
+      list(
+        level = l + 1L,
+        rows = rows,
+        pos = match(hkey[rows], key[[n - l + 1L]])
+      )
+    })
+  })
 
   list(
     n = n,
@@ -90,7 +163,8 @@ bernstein_lattice <- function(n, K, tally = NULL) {
     pw = pw,
     vertex = vertex,
     edges = edges,
-    rows = rows
+    up = up,
+    readoff = readoff
   )
 }
 
@@ -119,86 +193,103 @@ compositions <- function(n, k) {
   out
 }
 
-#' Positions of the lattice lines parallel to edge `(p, q)`
-#'
-#' Each line is returned as a position vector ordered by increasing power of
-#' vertex `q`. Bisecting `(p, q)` uses barycentric weights supported on
-#' `{p, q}`, so the other slots are spectators and the subdivision decouples
-#' into one 1-D de Casteljau pass per line.
-#'
-#' @param tally `(M, K)` multi-index matrix.
-#' @param p,q Edge endpoints (category indices).
-#' @param n Degree.
-#' @return List of integer position vectors.
-#' @keywords internal
-#' @noRd
-build_rows <- function(tally, p, q, n) {
-  spec <- tally[, -c(p, q), drop = FALSE]
-  key <- if (ncol(spec) == 0L) {
-    rep.int(0, nrow(tally))
-  } else {
-    as.vector(spec %*% (n + 1)^(seq_len(ncol(spec)) - 1L))
-  }
-  lapply(
-    unname(split(seq_len(nrow(tally)), key)),
-    function(i) i[order(tally[i, q])]
-  )
-}
 
 # ---- primitives ------------------------------------------------------------
 
-#' de Casteljau midpoint split of a 1-D Bernstein array
+#' One de Casteljau step at barycentric weights `lambda`: degree `m` -> `m - 1`
 #'
-#' Exact: every entry of the output is a convex combination of the input, so
-#' this is unconditionally stable.
-#'
-#' @param b Numeric vector of degree-`length(b) - 1` Bernstein coefficients.
-#' @return `list(left = , right = )`, each of the same length as `b`.
+#' PBP 10.4: `b_i <- [b_{i+e_0} + ... + b_{i+e_d}] u`, which follows from the
+#' Bernstein recursion `B^n_i = u_0 B^{n-1}_{i-e_0} + ... + u_d B^{n-1}_{i-e_d}`
+#' in 10.1. Every entry is an affine combination of its parents, and a convex
+#' one when `lambda >= 0`.
 #' @keywords internal
 #' @noRd
-split_1d <- function(b) {
-  m <- length(b) - 1L
-  if (m <= 0L) {
-    return(list(left = b, right = b))
-  }
-  left <- right <- numeric(m + 1L)
-  left[1L] <- b[1L]
-  right[m + 1L] <- b[m + 1L]
-  cur <- b
-  for (r in seq_len(m)) {
-    cur <- 0.5 * (cur[-length(cur)] + cur[-1L])
-    left[r + 1L] <- cur[1L]
-    right[m + 1L - r] <- cur[length(cur)]
-  }
-  list(left = left, right = right)
+dc_step <- function(cur, m, lambda, lat) {
+  idx <- lat$up[[m + 1L]]
+  as.vector(matrix(cur[idx], nrow = nrow(idx)) %*% lambda)
 }
 
-#' Bisect a box's edge `(p, q)`, returning both children exactly
+
+#' The full de Casteljau pyramid
+#'
+#' PBP 10.4: `n` steps reduce the degree-`n` array to the single value at
+#' `lambda`. Level `l` holds the degree-`n - l` intermediates `b^(l)`; the book
+#' calls the collection a tetrahedral array. All the levels are kept, because
+#' the subsimplex expansions are read off them.
+#' @keywords internal
+#' @noRd
+dc_pyramid <- function(coef, lat, lambda) {
+  levels <- vector("list", lat$n + 1L)
+  levels[[1L]] <- coef
+  for (l in seq_len(lat$n)) {
+    levels[[l + 1L]] <- dc_step(levels[[l]], lat$n - l + 1L, lambda, lat)
+  }
+  levels
+}
+
+
+#' Read the expansion over `V^[i]` off a pyramid
+#'
+#' Leroy Algorithm 2.13, step 4. `V^[i]` is the simplex with vertex `i` replaced
+#' by the point `lambda` was taken at, and its coefficients are
+#' `b_alpha(V^[i]) = b^(alpha_i)_{alpha-hat_i}` -- one entry of one pyramid
+#' level per output coefficient, no arithmetic.
+#' @keywords internal
+#' @noRd
+dc_child <- function(pyr, lat, i) {
+  out <- numeric(lat$n_coef)
+  for (g in lat$readoff[[i]]) {
+    out[g$rows] <- pyr[[g$level]][g$pos]
+  }
+  out
+}
+
+
+#' Split a box at the point with barycentric weights `lambda`
+#'
+#' PBP 11.3. Returns one child per non-degenerate `V^[i]`: `lambda_i = 0` puts
+#' the new point in the face opposite vertex `i`, so `V^[i]` would be flat.
+#' *All* the children come from one pyramid -- the value `b^(n)_0` sits in every
+#' one of them, and its dependency cone is the whole pyramid, so computing one
+#' child costs exactly what computing them all costs.
 #'
 #' A box is `list(V, coef)`: `V` is `K x K` with columns giving the
 #' sub-simplex's vertices in barycentric coordinates of the original simplex
 #' (which, for the probability simplex, are the parameter vectors themselves),
 #' and `coef` are its Bernstein coefficients in `lat`'s row order.
+#' @keywords internal
+#' @noRd
+subdivide <- function(box, lat, lambda) {
+  pyr <- dc_pyramid(box$coef, lat, lambda)
+  point <- box$V %*% lambda
+  lapply(which(lambda != 0), function(i) {
+    V <- box$V
+    V[, i] <- point
+    list(V = V, coef = dc_child(pyr, lat, i))
+  })
+}
+
+
+#' Bisect a box's edge `(p, q)`, returning both children exactly
+#'
+#' Leroy Example 2.15: binary splitting at the midpoint of an edge. Only
+#' `lambda_p` and `lambda_q` are non-zero, so exactly two children are
+#' non-degenerate. Midpoints rather than arbitrary edge points because that is
+#' what bounds the shrinking factor, and hence the subdivision count (Leroy
+#' Lemma 2.16, Theorem 3.6).
 #'
 #' @param box A box.
 #' @param p,q Edge endpoints.
 #' @param lat A `bernstein_lattice()`.
-#' @return List of the two child boxes: the one keeping vertex `p`, then the one
-#'   keeping vertex `q`.
+#' @return The two child boxes, `V^[p]` then `V^[q]` -- that is, the one with
+#'   vertex `p` *replaced* first. Note this is the opposite labelling to
+#'   "keeps vertex `p`".
 #' @keywords internal
 #' @noRd
 bisect <- function(box, p, q, lat) {
-  cl <- cr <- box$coef
-  for (line in lat$rows[[paste(p, q, sep = "-")]]) {
-    lr <- split_1d(box$coef[line])
-    cl[line] <- lr$left
-    cr[line] <- lr$right
-  }
-  w <- 0.5 * (box$V[, p] + box$V[, q])
-  v_left <- v_right <- box$V
-  v_left[, q] <- w # child keeping vertex p
-  v_right[, p] <- w # child keeping vertex q
-  list(list(V = v_left, coef = cl), list(V = v_right, coef = cr))
+  lambda <- numeric(lat$K)
+  lambda[c(p, q)] <- 0.5
+  subdivide(box, lat, lambda)
 }
 
 #' The edge of a box with the greatest Euclidean length
@@ -215,16 +306,17 @@ longest_edge <- function(V, edges) {
   edges[, which.max(d2)]
 }
 
-# The convex hull property: G <= max coefficient over the box.
+# PBP 10.2 (convex hull property) with 10.3 Remark 2 (functional surface, so
+# coefficients are Bezier *ordinates*): i.e. G <= max coefficient over the box.
 box_bound <- function(box) max(box$coef)
 
-# Bernstein forms interpolate at the vertices, so the vertex coefficients are
-# exact values of G -- hence a valid *lower* bound on the supremum.
-box_values <- function(box, lat) box$coef[lat$vertex]
+# PBP 10.2: `b(a_0) = b_{n0...0}, ..., b(a_d) = b_{0...0n}`. The vertex
+# coefficients are exact values of G, hence a valid *lower* bound.
+vertex_values <- function(box, lat) box$coef[lat$vertex]
 
 # The best vertex of a box: its value and the parameter vector attaining it.
 box_best <- function(box, lat) {
-  v <- box_values(box, lat)
+  v <- vertex_values(box, lat)
   j <- which.max(v)
   list(value = v[[j]], theta = box$V[, j])
 }
@@ -243,53 +335,17 @@ boxes_best <- function(boxes, lat) {
 
 # ---- general reparametrisation ---------------------------------------------
 
-#' Index structure for the intermediate degrees `0, ..., n`
-#'
-#' `up[[m + 1]]` is an `(n_coef(m - 1), K)` integer matrix whose `(beta, i)`
-#' entry is the position of `beta + e_i` among the degree-`m` multi-indices, so
-#' one de Casteljau step is a single matrix-vector product. Built once per
-#' lattice and reused across every face.
-#'
-#' @param n Degree.
-#' @param K Number of categories.
-#' @return `list(key = , up = )`, both indexed by degree + 1.
-#' @keywords internal
-#' @noRd
-degree_ladder <- function(n, K) {
-  pw <- (n + 1)^(seq_len(K) - 1L)
-  key <- vector("list", n + 1L)
-  for (m in 0:n) {
-    key[[m + 1L]] <- as.vector(compositions(m, K) %*% pw)
-  }
-  up <- vector("list", n + 1L)
-  for (m in seq_len(n)) {
-    idx <- matrix(0L, nrow = length(key[[m]]), ncol = K)
-    for (i in seq_len(K)) {
-      idx[, i] <- match(key[[m]] + pw[i], key[[m + 1L]])
-    }
-    up[[m + 1L]] <- idx
-  }
-  list(key = key, up = up)
-}
-
-# One de Casteljau step at barycentric weights `lambda`: degree m -> degree m-1.
-dc_step <- function(cur, m, lambda, ladder) {
-  idx <- ladder$up[[m + 1L]]
-  as.vector(matrix(cur[idx], nrow = nrow(idx)) %*% lambda)
-}
-
 #' Reparametrise a Bernstein form onto an arbitrary sub-simplex
 #'
-#' Leroy (2012) section 2.3: `K` successive runs of de Casteljau (his Algorithm
-#' 2.13) at the target vertices, with general barycentric weights. The
-#' coefficient at multi-index `a` is the blossom of `G` evaluated at the new
-#' vertices with multiplicities `a`, so the result is the *exact* Bernstein form
-#' of the same polynomial over the new simplex.
+#' Leroy (2012) section 2.3, PBP 11.3: replace the vertices one at a time, each
+#' replacement being one `dc_pyramid()` plus one `dc_child()`. A vertex the
+#' target shares with the current simplex is skipped, so a subnull differing
+#' from the standard simplex in a single vertex costs only one call.
 #'
-#' The row-decomposition shortcut `bisect()` uses does not apply here, because a
-#' general vertex has no zero barycentric component: this is a full pyramid at
-#' `O(K * n * choose(n + K - 1, K - 1))`. It is paid once per face at setup, not
-#' once per bisection.
+#' `lambda` must be the target vertex in barycentric coordinates of the
+#' *current* simplex, hence the `solve()`. The non-negativity check is not
+#' cosmetic: it is what makes every step a convex combination and so
+#' unconditionally stable (PBP 10.4)..
 #'
 #' @param coef Length-`n_coef` coefficient vector in `lat$tally` row order.
 #' @param lat A `bernstein_lattice()`.
@@ -299,56 +355,30 @@ dc_step <- function(cur, m, lambda, ladder) {
 #' @keywords internal
 #' @noRd
 reparametrise_to <- function(coef, lat, vertices) {
-  K <- lat$K
-  n <- lat$n
-  L <- as.matrix(vertices)
-  coef <- as.numeric(coef)
+  V <- as.matrix(vertices)
+  cur <- as.numeric(coef)
   stopifnot(
-    nrow(L) == K,
-    ncol(L) == K,
-    all(is.finite(L)),
-    length(coef) == lat$n_coef
+    nrow(V) == lat$K,
+    ncol(V) == lat$K,
+    all(is.finite(V)),
+    length(cur) == lat$n_coef
   )
 
-  ladder <- degree_ladder(n, K)
-  # `walk()` emits leaves in ascending lexicographic order of the multi-index,
-  # which is exactly `compositions()`' order; `perm` carries that canonical
-  # order to and from the (arbitrary) row order of `lat$tally`.
-  perm <- match(ladder$key[[n + 1L]], as.vector(lat$tally %*% lat$pw))
-  stopifnot(!anyNA(perm))
-
-  res <- numeric(lat$n_coef)
-  pos <- 0L
-
-  # Replace the argument slots of the blossom one direction at a time: after
-  # `a_j` steps in direction `j` the array holds b[v^alpha, w_1^a_1, ..., w_j^a_j].
-  walk <- function(arr, m, j) {
-    if (j == K) {
-      cur <- arr
-      mm <- m
-      while (mm > 0L) {
-        cur <- dc_step(cur, mm, L[, K], ladder)
-        mm <- mm - 1L
-      }
-      pos <<- pos + 1L
-      res[pos] <<- cur
-      return(invisible(NULL))
+  W <- diag(lat$K)
+  for (i in seq_len(lat$K)) {
+    if (isTRUE(all.equal(W[, i], V[, i]))) {
+      next
     }
-    cur <- arr
-    mm <- m
-    walk(cur, mm, j + 1L)
-    while (mm > 0L) {
-      cur <- dc_step(cur, mm, L[, j], ladder)
-      mm <- mm - 1L
-      walk(cur, mm, j + 1L)
-    }
-    invisible(NULL)
+    lambda <- solve(W, V[, i])
+    stopifnot(
+      "target vertex lies outside the current sub-simplex" = all(
+        lambda >= -1e-12
+      )
+    )
+    cur <- dc_child(dc_pyramid(cur, lat, lambda), lat, i)
+    W[, i] <- V[, i]
   }
-  walk(coef[perm], n, 1L)
-
-  out <- numeric(lat$n_coef)
-  out[perm] <- res
-  out
+  cur
 }
 
 # ---- branch and bound ------------------------------------------------------

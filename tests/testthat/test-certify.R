@@ -288,6 +288,116 @@ test_that("converged and budget_hit distinguish the two ways of stopping", {
   expect_gte(starved$sup_ub, tight$sup_ub)
 })
 
+# --- Recording ----------------------------------------------------------------
+
+test_that("certify_trace() records every node, and they tile at every step", {
+  set.seed(112)
+  null <- plurality_null(n = 8L, k = 3L)
+  x <- tabulated_rv(
+    null@family,
+    stats::runif(nrow(support(null@family)), 0, 10)
+  )
+  nodes <- certify_trace(x, null, tol = 1e-9)
+
+  expect_s3_class(nodes, "data.frame")
+  iterations <- attr(nodes, "certificate")$iterations
+  for (i in seq_along(null@subnulls)) {
+    rows <- nodes[nodes$subnull == i, ]
+    it <- iterations[[i]]
+    # `it` splits create two children each, on top of the seed.
+    expect_identical(nrow(rows), 1L + 2L * it)
+    expect_identical(sum(rows$fate == "split"), it)
+    expect_identical(sum(rows$fate != "split"), it + 1L)
+
+    seed_volume <- abs(det(null@subnulls[[i]]@vertices))
+    for (t in unique(c(0L, seq_len(it)))) {
+      drawn <- rows[
+        rows$born <= t & !(rows$fate == "split" & rows$retired <= t),
+      ]
+      expect_equal(sum(drawn$volume), seed_volume)
+    }
+  }
+})
+
+test_that("certify_trace() records the tree and the order it was built in", {
+  set.seed(113)
+  null <- plurality_null(n = 8L, k = 3L)
+  x <- tabulated_rv(
+    null@family,
+    stats::runif(nrow(support(null@family)), 0, 10)
+  )
+  nodes <- certify_trace(x, null, tol = 1e-9)
+
+  iterations <- attr(nodes, "certificate")$iterations
+  for (i in unique(nodes$subnull)) {
+    rows <- nodes[nodes$subnull == i, ]
+    it <- iterations[[i]]
+
+    # Every id issued appears exactly once, so no node goes unrecorded.
+    expect_identical(anyDuplicated(rows$id), 0L)
+    expect_identical(sort(rows$id), seq_len(1L + 2L * it))
+
+    # One seed, and it is the only node without a parent.
+    expect_identical(sum(is.na(rows$parent)), 1L)
+    expect_identical(rows$depth[is.na(rows$parent)], 0L)
+    expect_identical(rows$born[is.na(rows$parent)], 0L)
+
+    # A node leaves the active set no earlier than it entered, and only a node
+    # still live at the end has no retirement.
+    expect_true(all(is.na(rows$retired) == (rows$fate == "active")))
+    done <- !is.na(rows$retired)
+    expect_true(all(rows$retired[done] >= rows$born[done]))
+    expect_true(all(rows$born <= it))
+
+    # A child is one level below its parent and born when the parent retired.
+    parents <- rows[match(rows$parent, rows$id), ]
+    has_parent <- !is.na(rows$parent)
+    expect_equal(rows$depth[has_parent], parents$depth[has_parent] + 1L)
+    expect_equal(rows$born[has_parent], parents$retired[has_parent])
+    expect_true(all(parents$fate[has_parent] == "split"))
+  }
+})
+
+test_that("certify_trace() agrees with certify() and drops the coefficients", {
+  # Same computation, different report. And the record must be cheap: holding
+  # `coef` would make it the size of the run rather than the size of the tree.
+  set.seed(114)
+  null <- plurality_null(n = 8L, k = 3L)
+  x <- tabulated_rv(
+    null@family,
+    stats::runif(nrow(support(null@family)), 0, 10)
+  )
+
+  nodes <- certify_trace(x, null, tol = 1e-9)
+  direct <- certify(x, null, tol = 1e-9)
+  expect_equal(attr(nodes, "certificate")$sup_ub, direct$sup_ub)
+  expect_equal(attr(nodes, "certificate")$sup_lb, direct$sup_lb)
+
+  expect_false("coef" %in% names(nodes))
+  expect_true(all(vapply(nodes$vertices, is.matrix, logical(1L))))
+
+  bounds <- attr(nodes, "certificate")$bounds
+  for (i in unique(nodes$subnull)) {
+    rows <- nodes[nodes$subnull == i, ]
+    expect_lte(max(rows$upper[rows$fate != "split"]), bounds[[i]] + 1e-9)
+
+    parents <- rows[match(rows$parent, rows$id), ]
+    has_parent <- !is.na(rows$parent)
+    expect_true(all(
+      rows$upper[has_parent] <= parents$upper[has_parent] + 1e-12
+    ))
+  }
+})
+
+test_that("certify() does not record unless asked", {
+  null <- plurality_null(n = 6L, k = 3L)
+  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  expect_null(certify(x, null)$record)
+  expect_null(certify(x, null)$traces)
+  expect_type(certify(x, null)$iterations, "integer")
+  expect_type(certify(x, null, .record = TRUE)$iterations, "integer")
+})
+
 # --- Registry dispatch --------------------------------------------------------
 
 test_that("certify() sends each subnull to the bound_fn that claimed it", {

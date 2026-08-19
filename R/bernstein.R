@@ -406,9 +406,15 @@ reparametrise_to <- function(coef, lat, vertices) {
 #' necessary.
 #' @keywords internal
 #' @noRd
-node <- function(box, depth = 0L) {
+node <- function(box, id, parent = NA_integer_, depth = 0L, born = 0L) {
   box$ub <- box_bound(box)
+  box$id <- id
+  box$parent <- parent
   box$depth <- depth
+  # Iteration the node was created at, and the one it was pruned at. Together
+  # with `parent` these make the run replayable.
+  box$born <- born
+  box$died <- NA_integer_
   box
 }
 
@@ -537,7 +543,8 @@ certify_sup <- function(
   }
   max_iter <- as.integer(max_iter)
 
-  active <- lapply(seeds, node)
+  active <- lapply(seq_along(seeds), function(i) node(seeds[[i]], id = i))
+  next_id <- length(seeds) + 1L
   best <- boxes_best(active, lat)
   eta <- rounding_slack(seeds, lat, round_slack)
   rejected <- list()
@@ -566,11 +573,17 @@ certify_sup <- function(
     j <- which.max(node_ubs(active))
     parent <- active[[j]]
     e <- longest_edge(parent$V, lat$edges)
-    kids <- lapply(
-      bisect(parent, e[1L], e[2L], lat),
-      node,
-      depth = parent$depth + 1L
-    )
+    kids <- bisect(parent, e[1L], e[2L], lat)
+    kids <- lapply(seq_along(kids), function(i) {
+      node(
+        kids[[i]],
+        id = next_id + i - 1L,
+        parent = parent$id,
+        depth = parent$depth + 1L,
+        born = it
+      )
+    })
+    next_id <- next_id + length(kids)
     active <- c(active[-j], kids)
     kid_best <- boxes_best(kids, lat)
     if (kid_best$value > best$value) {
@@ -578,7 +591,13 @@ certify_sup <- function(
     }
 
     pruned <- prune_active(active, best$value, slack, eta, keep_argmax)
-    rejected <- c(rejected, pruned$drop)
+    rejected <- c(
+      rejected,
+      lapply(pruned$drop, function(b) {
+        b$died <- it # Record the iteration a node was pruned.
+        b
+      })
+    )
     active <- pruned$keep
     trace[it] <- certified_bound(best$value, slack, pruned$kept_ub, eta)
   }

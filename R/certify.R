@@ -12,8 +12,8 @@ NULL
 #' Bounding methods available to [certify()]
 #'
 #' Each entry names a family of expectations and a subnull geometry it can
-#' enclose, and the `bound_fn` that does it. A combination missing from this
-#' table simply has no implementation yet.
+#' enclose, and the `bound_fn` that does it. A combination missing from this table
+#' simply has no implementation yet.
 #'
 #' The Bernstein enclosure bound for multinomial random variables may be
 #' extendable to other families for which the expectation takes the form of a
@@ -29,11 +29,14 @@ NULL
 #' `subnulls`, in the same order, each a list with the fields
 #' `check_bound_result()` requires.
 #'
-#' A `bound_fn` receives a *group* of subnulls that work for a given
-#' `(x, family)`, so that enumerating the sample space, evaluating `x` on it,
-#' building the lattice (for multinomial), happens just once for all matching
-#' subnulls.
+#' Named `bound_fn` rather than `engine` because `ripr_engine` already means a
+#' quadrature rule for expectations under the alternative ([gh_engine()],
+#' [mc_engine()]). That is a different object doing a different job, and the two
+#' meet in the same conversations often enough for one word to serve both.
 #'
+#' A `bound_fn` receives a *group* of subnulls that work for a given `(x, family)`,
+#' so that enumerating the sample space, evaluating `x` on it, building the
+#' lattice (for multinomial), happens just once for all matching subnulls.
 #' `certify()` groups the subnulls by resolved method, so a `bound_fn` only
 #' ever sees geometries it facilitates, and a null with subnulls of different
 #' geometries is split across bounding methods rather than refused.
@@ -284,6 +287,92 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 }
 
 
+#' Flatten a run's branch-and-bound nodes into a table
+#'
+#' `active` and `rejected` are the *leaves* of the tree, and they tile the seed
+#' exactly: a run of `it` iterations makes `it` splits and so leaves `it + 1`
+#' of them. Internal nodes are not retained -- a split replaces its parent --
+#' so the tree is recoverable through `parent`, not by holding every node.
+#'
+#' Coefficients are dropped. They are the bulk of a node (10,626 doubles each at
+#' `K = 5, n = 20`, against a handful for everything else here) and nothing
+#' downstream of a finished run evaluates them.
+#' @keywords internal
+#' @noRd
+node_table <- function(result, subnull) {
+  leaves <- c(result$active, result$rejected)
+  if (!length(leaves)) {
+    return(NULL)
+  }
+  field <- function(name, template) {
+    vapply(leaves, function(b) b[[name]] %||% template, template)
+  }
+  data.frame(
+    subnull = as.integer(subnull),
+    id = field("id", NA_integer_),
+    parent = field("parent", NA_integer_),
+    depth = field("depth", NA_integer_),
+    born = field("born", NA_integer_),
+    died = field("died", NA_integer_),
+    pruned = c(
+      rep(FALSE, length(result$active)),
+      rep(TRUE, length(result$rejected))
+    ),
+    upper = field("ub", NA_real_),
+    volume = vapply(leaves, function(b) abs(det(b$V)), numeric(1L)),
+    vertices = I(lapply(leaves, function(b) b$V)),
+    row.names = NULL
+  )
+}
+
+
+#' Record how a certification ran, for inspection and plotting
+#'
+#' Same computation as [certify()], reporting the branch-and-bound tree instead
+#' of the certificate. One row per leaf of the search, per subnull.
+#'
+#' The leaves tile their subnull exactly, so at `K = 3` the `vertices` column
+#' draws the partition of the facet directly, in barycentric coordinates.
+#' `born` and `died` give the iteration each node appeared and was pruned at,
+#' so the same data replays as an animation rather than only a final state.
+#' `depth` against `born` shows the shape of the tree: a max-bound queue rule
+#' can produce a chain rather than anything balanced, which is visible here and
+#' nowhere else.
+#'
+#' Only bounding methods that use branch and bound populate this. A method that
+#' bounds in closed form contributes no rows.
+#' @inheritParams certify
+#' @return A data frame with `subnull`, `id`, `parent`, `depth`, `born`, `died`,
+#'   `pruned`, `upper`, `volume` and a `vertices` list column, plus the
+#'   certificate itself in the `"certificate"` attribute and the per-iteration
+#'   bound in `"trace"`.
+#' @seealso [certify()]
+#' @export
+certify_trace <- function(
+  x,
+  null,
+  tol = 1e-6,
+  max_nodes = 20000L,
+  max_coefficients = 1024^2
+) {
+  result <- certify(
+    x,
+    null,
+    tol = tol,
+    max_nodes = max_nodes,
+    max_coefficients = max_coefficients,
+    .record = TRUE
+  )
+  nodes <- result$record
+  traces <- result$traces
+  result$record <- NULL
+  result$traces <- NULL
+  attr(nodes, "trace") <- traces
+  attr(nodes, "certificate") <- result
+  nodes
+}
+
+
 # --- Certifying ---------------------------------------------------------------
 
 #' Certify an upper bound on the largest null expectation
@@ -315,11 +404,14 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 #'   algorithms.
 #' @param max_coefficients Refuse above this many Bernstein coefficients
 #'   (for bounding multinomial expectation in simplices).
+#' @param .record Also return branch-and-bound nodes. Use [certify_trace()]
+#'   rather than this directly.
 #' @return A list with `sup_ub`, `sup_lb`, the `random_variable` and `null` it
 #'   holds for, the `method` names that produced it (one per distinct subnull
-#'   geometry), and per-subnull `bounds`, `incumbents`, `nodes`, `converged`
-#'   and `budget_hit`. `budget_hit` flags when a search stopped at `max_nodes`
-#'   with the gap still open, so its bound is valid but likely loose.
+#'   geometry), and per-subnull `bounds`, `incumbents`, `iterations`,
+#'   `converged` and `budget_hit`. `budget_hit` flags when a search stopped at
+#'   `max_nodes` with the gap still open, so its bound is valid but likely
+#'   loose.
 #' @seealso [sup_lb()]
 #' @references
 #' \insertAllCited{}
@@ -329,7 +421,8 @@ certify <- function(
   null,
   tol = 1e-6,
   max_nodes = 20000L,
-  max_coefficients = 1024^2
+  max_coefficients = 1024^2,
+  .record = FALSE
 ) {
   if (!S7_inherits(x, random_variable)) {
     stop("`x` must be a `random_variable`.", call. = FALSE)
@@ -389,10 +482,10 @@ certify <- function(
 
   bounds <- vapply(per_subnull, function(r) r$bound, numeric(1L))
   incumbents <- vapply(per_subnull, function(r) r$incumbent, numeric(1L))
-  nodes <- vapply(per_subnull, function(r) r$iterations, integer(1L))
+  iterations <- vapply(per_subnull, function(r) r$iterations, integer(1L))
   converged <- vapply(per_subnull, function(r) r$converged, logical(1L))
   budget_hit <- vapply(per_subnull, function(r) r$budget_hit, logical(1L))
-  list(
+  out <- list(
     sup_ub = max(bounds),
     sup_lb = max(incumbents),
     random_variable = x,
@@ -400,8 +493,23 @@ certify <- function(
     method = method_names,
     bounds = bounds,
     incumbents = incumbents,
-    nodes = nodes,
+    iterations = iterations,
     converged = converged,
     budget_hit = budget_hit
   )
+  if (.record) {
+    # Built here rather than in the bounding method so that every branch-and-
+    # bound method gets it for free, and one that bounds in closed form simply
+    # contributes nothing.
+    tables <- lapply(
+      seq_along(per_subnull),
+      function(i) node_table(per_subnull[[i]], i)
+    )
+    # Named `record`, not `nodes`: `nodes` is already the per-subnull iteration
+    # count in this list, and quietly replacing it with a data frame loses the
+    # count without any error.
+    out$record <- do.call(rbind, Filter(Negate(is.null), tables))
+    out$traces <- lapply(per_subnull, function(r) r$trace)
+  }
+  out
 }

@@ -568,6 +568,7 @@ certify_sup <- function(
   best <- boxes_best(active, lat)
   eta <- rounding_slack(seeds, lat, round_slack)
   rejected <- list()
+  incumbent_trace <- numeric(max_iter)
   retired_nodes <- list()
   trace <- numeric(max_iter)
   it <- 0L
@@ -626,6 +627,7 @@ certify_sup <- function(
     )
     active <- pruned$keep
     trace[it] <- certified_bound(best$value, slack, pruned$kept_ub, eta)
+    incumbent_trace[it] <- best$value
   }
 
   list(
@@ -641,6 +643,7 @@ certify_sup <- function(
     ),
     converged = identical(reason, "converged"),
     budget_hit = identical(reason, "budget_hit"),
-    trace = trace[seq_len(it)]
+    trace = trace[seq_len(it)],
+    incumbent_trace = incumbent_trace[seq_len(it)]
   )
 }

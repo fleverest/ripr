@@ -358,9 +358,12 @@ certify_trace <- function(
   )
   nodes <- result$record
   traces <- result$traces
+  incumbent_traces <- result$incumbent_traces
   result$record <- NULL
   result$traces <- NULL
+  result$incumbent_traces <- NULL
   attr(nodes, "trace") <- traces
+  attr(nodes, "incumbent_trace") <- incumbent_traces
   attr(nodes, "certificate") <- result
   nodes
 }
@@ -489,18 +492,15 @@ certify <- function(
     budget_hit = budget_hit
   )
   if (.record) {
-    # Built here rather than in the bounding method so that every branch-and-
-    # bound method gets it for free, and one that bounds in closed form simply
-    # contributes nothing.
+    # Records the tables of the node histories for each subnull. Used by
+    # `certify_trace`.
     tables <- lapply(
       seq_along(per_subnull),
       function(i) node_table(per_subnull[[i]], i)
     )
-    # Named `record`, not `nodes`: `nodes` is already the per-subnull iteration
-    # count in this list, and quietly replacing it with a data frame loses the
-    # count without any error.
     out$record <- do.call(rbind, Filter(Negate(is.null), tables))
     out$traces <- lapply(per_subnull, function(r) r$trace)
+    out$incumbent_traces <- lapply(per_subnull, function(r) r$incumbent_trace)
   }
   out
 }

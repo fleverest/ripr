@@ -3,14 +3,14 @@ NULL
 
 # Bernstein enclosure over a simplex, and branch and bound on top of it.
 #
-# For a multinomial random variable `X`, `E_theta[X]` is a polynomial in
-# `theta` of degree `n_trials`, and over a simplex the multinomial basis
-# *is* the degree-`n` Bernstein basis. So the coefficients are the realised
-# values of `X` over the lattice support, the convex hull property bounds the
-# polynomial by their range for free, and de Casteljau subdivision tightens it
-# quadratically (Leroy, 2012) in the sub-simplex diameter. That is  what makes
-# a *proven* upper bound available at all, as against the oracle's multi-start
-# gradient ascent search, which only ever gives a lower bound.
+# `E_theta[X]` is a polynomial in `theta` of degree `n_trials`, and over a
+# simplex the multinomial basis *is* the degree-`n` Bernstein basis. So the
+# coefficients are the realised values of `X` at the lattice, the convex hull
+# property bounds the polynomial by their range for free, and de Casteljau
+# subdivision tightens it quadratically in the sub-simplex diameter. That is
+# what makes a *proven* upper bound available at all, as against the oracle's
+# multi-start search, which only ever gives a lower one. See Leroy (2012),
+# Reliable Computing 17(1), 11-21.
 #
 # `dc_step()` runs one step of the de Casteljau algorithm
 # (Prautzsch-Boehm-Paluszny 10.4, from the Bernstein recursion in 10.1);
@@ -396,6 +396,108 @@ reparametrise_to <- function(coef, lat, vertices) {
 
 # ---- branch and bound ------------------------------------------------------
 
+#' A node of the branch-and-bound tree
+#'
+#' A box plus its cached upper bound. The bound is `max(coef)`, so caching costs
+#' nothing and is exact; the loop otherwise re-derives it for every active node
+#' on every iteration, which is 2.6 evaluations per node at `K = 4, n = 12` and
+#' 4.4 at `K = 5, n = 20`. In the future, when generalising beyond just
+#' Bernstein bounds (e.g. Lipschitz for gaussian?), caching will probably be
+#' necessary.
+#' @keywords internal
+#' @noRd
+node <- function(box, depth = 0L) {
+  box$ub <- box_bound(box)
+  box$depth <- depth
+  box
+}
+
+node_ubs <- function(nodes) vapply(nodes, function(b) b$ub, numeric(1L))
+
+
+#' Floating-point margin covering the whole run
+#'
+#' DC is just convex combinations so it is numerically stable (PBP 10.4), but
+#' round-to-nearest can place the computed maximum marginally *below* the true
+#' one, which is the unsafe direction for a validity claim.
+#'
+#' Computed once from the seeds, and valid for every node the run can reach:
+#' children's coefficients are convex combinations of their parent's, so the
+#' seed maximum bounds `|coef|` over every box that will ever be created.
+#' @keywords internal
+#' @noRd
+rounding_slack <- function(seeds, lat, round_slack) {
+  if (!round_slack) {
+    return(0)
+  }
+  lat$n *
+    .Machine$double.eps *
+    max(vapply(seeds, function(b) max(abs(b$coef)), numeric(1L)))
+}
+
+
+#' The bound the run is currently entitled to claim
+#'
+#' Not simply the maximum over active nodes. Pruned nodes were discarded on the
+#' evidence that they sit below `incumbent + slack`, and that is all that is
+#' known about them, so they are accounted for by carrying that term here. A
+#' bound taken over active nodes alone is correct only for a run that never
+#' prunes, and wrong silently otherwise.
+#' @keywords internal
+#' @noRd
+certified_bound <- function(incumbent, slack, active_ub, eta) {
+  max(incumbent + slack, active_ub) + eta
+}
+
+
+#' Why the search should stop, or `NULL` to continue
+#'
+#' Three ways out, kept apart because they mean different things to the caller:
+#' the active set empties (everything pruned, the bound is as tight as this
+#' method gets), the gap closes to `tol`, or the iteration cap bites. Only the
+#' last qualifies the result.
+#' @keywords internal
+#' @noRd
+stop_reason <- function(n_active, gap, tol, it, max_iter) {
+  if (n_active == 0L) {
+    return("converged")
+  }
+  if (gap <= tol) {
+    return("converged")
+  }
+  if (it >= max_iter) {
+    return("budget_hit")
+  }
+  NULL
+}
+
+
+#' Discard nodes that cannot beat the incumbent
+#'
+#' Leroy's Lemma 3.2 cut-off test, and what makes the method tractable: without
+#' it the queue grows without limit.
+#'
+#' `keep_argmax` retains ties generously, because dropping a node that attains
+#' the maximum would break the enclosure claim, whereas keeping a spare one only
+#' costs work. It is incompatible with a positive `slack`, which deliberately
+#' discards such nodes.
+#' @keywords internal
+#' @noRd
+prune_active <- function(active, incumbent, slack, eta, keep_argmax) {
+  ubs <- node_ubs(active)
+  keep <- if (keep_argmax) {
+    ubs >= incumbent - eta - 8 * .Machine$double.eps * max(1, abs(incumbent))
+  } else {
+    ubs > incumbent + slack
+  }
+  list(
+    keep = active[keep],
+    drop = active[!keep],
+    kept_ub = if (any(keep)) max(ubs[keep]) else -Inf
+  )
+}
+
+
 #' Certified upper bound on `sup G` over the union of the seed sub-simplices
 #'
 #' Validity does not depend on convergence: `bound` is a valid upper bound at
@@ -434,82 +536,62 @@ certify_sup <- function(
     stop("`slack` must be 0 when keep_argmax = TRUE")
   }
   max_iter <- as.integer(max_iter)
-  active <- seeds
+
+  active <- lapply(seeds, node)
   best <- boxes_best(active, lat)
-  incumbent <- best$value
-  # Children's coefficients are convex combinations of their parent's, so the
-  # seed maximum bounds |coef| over every box the run will ever create.
-  eta <- if (round_slack) {
-    lat$n *
-      .Machine$double.eps *
-      max(vapply(seeds, function(b) max(abs(b$coef)), numeric(1L)))
-  } else {
-    0
-  }
+  eta <- rounding_slack(seeds, lat, round_slack)
   rejected <- list()
   trace <- numeric(max_iter)
   it <- 0L
-  converged <- FALSE
-  budget_hit <- FALSE
+  reason <- NULL
 
   repeat {
-    bounds <- vapply(active, box_bound, numeric(1L))
-    u <- if (length(bounds)) max(bounds) else -Inf
-    # Pruned boxes were all bounded by `incumbent + slack`, so the maximum over
-    # the whole domain is bounded by the larger of that and the active maximum.
-    bound <- max(incumbent + slack, u) + eta
+    active_ub <- if (length(active)) max(node_ubs(active)) else -Inf
+    bound <- certified_bound(best$value, slack, active_ub, eta)
 
-    if (!length(active)) {
-      converged <- TRUE
-      break
-    }
-    if (bound - eta - incumbent <= tol) {
-      converged <- TRUE
-      break
-    }
-    if (it >= max_iter) {
-      budget_hit <- TRUE
+    reason <- stop_reason(
+      length(active),
+      bound - eta - best$value,
+      tol,
+      it,
+      max_iter
+    )
+    if (!is.null(reason)) {
       break
     }
 
     it <- it + 1L
-    j <- which.max(bounds)
-    e <- longest_edge(active[[j]]$V, lat$edges)
-    kids <- bisect(active[[j]], e[1L], e[2L], lat)
+
+    # Split the most promising node, then let its children compete.
+    j <- which.max(node_ubs(active))
+    parent <- active[[j]]
+    e <- longest_edge(parent$V, lat$edges)
+    kids <- lapply(
+      bisect(parent, e[1L], e[2L], lat),
+      node,
+      depth = parent$depth + 1L
+    )
     active <- c(active[-j], kids)
     kid_best <- boxes_best(kids, lat)
     if (kid_best$value > best$value) {
       best <- kid_best
     }
-    incumbent <- best$value
 
-    bounds <- vapply(active, box_bound, numeric(1L))
-    keep <- if (keep_argmax) {
-      # Retain ties, generously: dropping a box that attains the maximum would
-      # break the enclosure claim, whereas keeping a spare one only costs work.
-      bounds >=
-        incumbent - eta - 8 * .Machine$double.eps * max(1, abs(incumbent))
-    } else {
-      bounds > incumbent + slack
-    }
-    rejected <- c(rejected, active[!keep])
-    active <- active[keep]
-    trace[it] <- max(
-      incumbent + slack,
-      if (any(keep)) max(bounds[keep]) else -Inf
-    ) +
-      eta
+    pruned <- prune_active(active, best$value, slack, eta, keep_argmax)
+    rejected <- c(rejected, pruned$drop)
+    active <- pruned$keep
+    trace[it] <- certified_bound(best$value, slack, pruned$kept_ub, eta)
   }
 
   list(
     bound = bound,
-    incumbent = incumbent,
+    incumbent = best$value,
     theta = best$theta,
     active = active,
     rejected = rejected,
     iterations = it,
-    converged = converged,
-    budget_hit = budget_hit,
+    converged = identical(reason, "converged"),
+    budget_hit = identical(reason, "budget_hit"),
     trace = trace[seq_len(it)]
   )
 }

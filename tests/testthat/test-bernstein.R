@@ -881,3 +881,54 @@ test_that("several seeds are certified as their union", {
   expect_lte(joint$bound, max(separate) + 1e-9)
   expect_gte(joint$bound, joint$incumbent)
 })
+
+test_that("a run that prunes all nodes converges rather than running out", {
+  # The other stopping path. Every other test converges by reaching tolerance.
+  # Without this the empty-active-set branch never executes under test, and a
+  # run that pruned its way to an answer would be reported as budget-limited,
+  # which says the bound is loose when it is as tight as the method gets.
+  set.seed(47)
+  lat <- bernstein_lattice(6L, 3L)
+  seeds <- list(list(V = diag(3L), coef = stats::rnorm(lat$n_coef, sd = 2)))
+  res <- certify_sup(seeds, lat, tol = 0, max_iter = 500L, slack = 0.5)
+
+  expect_length(res$active, 0L)
+  expect_true(res$converged)
+  expect_false(res$budget_hit)
+  expect_lt(res$iterations, 500L)
+})
+
+test_that("pruning discards nodes that only tie the incumbent", {
+  # `>` not `>=`: a node bounded by exactly the incumbent cannot improve on it.
+  # Keeping it is conservative: same bound, more work, so no test that reads
+  # the bound can tell the difference. `keep_argmax` deliberately inverts this,
+  # which is the case that must not be broken while fixing the other.
+  lat <- bernstein_lattice(2L, 3L)
+  flat <- function(u) {
+    node(list(V = diag(3L), coef = rep(u, lat$n_coef)), id = 1L)
+  }
+  nodes <- list(flat(1), flat(5), flat(9))
+
+  expect_length(prune_active(nodes, 5, 0, 0, keep_argmax = FALSE)$keep, 1L)
+  expect_length(prune_active(nodes, 5, 0, 0, keep_argmax = TRUE)$keep, 2L)
+})
+
+# --- Regression ---------------------------------------------------------------
+
+test_that("certify_sup() returns the bound it has always returned", {
+  # A pinned value on a fixed input. Everything else here tests properties,
+  # which a systematically shifted bound would still satisfy.
+  set.seed(55)
+  lat <- bernstein_lattice(10L, 3L)
+  coef <- abs(stats::rnorm(lat$n_coef, sd = 2))^2
+  res <- certify_sup(
+    list(list(V = diag(3L), coef = coef)),
+    lat,
+    tol = 1e-9,
+    max_iter = 1000L
+  )
+  expect_equal(res$bound, 6.4082048901, tolerance = 1e-9)
+  expect_equal(res$incumbent, 6.4082048895, tolerance = 1e-9)
+  expect_identical(res$iterations, 83L)
+  expect_lt(res$bound - res$incumbent, 1e-9)
+})

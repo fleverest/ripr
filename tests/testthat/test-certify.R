@@ -217,7 +217,7 @@ test_that("a variable maximised in a facet interior does need subdivision", {
 test_that("the certified bound is a bound on the expectation itself", {
   # The same correspondence one level up, stated in the terms the caller cares
   # about: `sup_ub` bounds E_theta[X] computed from the family, not merely the
-  # polynomial the engine happened to be handed.
+  # polynomial the bounding method happened to be handed.
   set.seed(108)
   null <- plurality_null(n = 6L, k = 3L)
   family <- null@family
@@ -286,6 +286,123 @@ test_that("converged and budget_hit distinguish the two ways of stopping", {
   # The starved bound is still valid, just looser -- which is the whole reason
   # the distinction is worth reporting rather than erroring on.
   expect_gte(starved$sup_ub, tight$sup_ub)
+})
+
+# --- Registry dispatch --------------------------------------------------------
+
+test_that("certify() sends each subnull to the bound_fn that claimed it", {
+  # The reason the registry exists. With one entry the grouping is trivially
+  # the identity, so this stubs a second entry to check that results are not
+  # merely produced but land in the right slots.
+  seen <- list()
+  fake_bound_fn <- function(x, family, subnulls, control) {
+    seen[[length(seen) + 1L]] <<- vapply(subnulls, class_name, character(1L))
+    lapply(seq_along(subnulls), function(i) {
+      list(
+        bound = 99,
+        incumbent = 99,
+        theta = NULL,
+        iterations = 0L,
+        converged = TRUE,
+        budget_hit = FALSE
+      )
+    })
+  }
+  # Override certify_methods for this test to add our fake one
+  local_mocked_bindings(
+    certify_methods = function() {
+      list(
+        list(
+          name = "bernstein",
+          family = multinomial_family,
+          subnull = simplex_null,
+          bound_fn = bernstein_bound,
+          description = "real"
+        ),
+        list(
+          name = "fake",
+          family = multinomial_family,
+          subnull = halfspace_null,
+          bound_fn = fake_bound_fn,
+          description = "stub"
+        )
+      )
+    }
+  )
+
+  family <- multinomial_family(n_trials = 4L, k = 3L)
+  facet <- diag(3L)
+  facet[, 1L] <- c(0.5, 0.5, 0)
+  null <- null_model(
+    family,
+    list(
+      halfspace_null(normal = c(1, -1), offset = 0),
+      simplex_null(vertices = facet),
+      halfspace_null(normal = c(0, 1, -1), offset = 0)
+    )
+  )
+  x <- tabulated_rv(family, rep(1, nrow(support(family))))
+  res <- certify(x, null, tol = 1e-9)
+
+  # Subnulls 1 and 3 went to the stub, subnull 2 to the real bound_fn
+  expect_equal(res$bounds[c(1L, 3L)], c(99, 99))
+  expect_lt(res$bounds[[2L]], 99)
+  expect_setequal(res$method, c("bernstein", "fake"))
+  # The stub was called once, with both of its subnulls together.
+  expect_length(seen, 1L)
+  expect_identical(seen[[1L]], c("halfspace_null", "halfspace_null"))
+})
+
+test_that("certify() rejects a bound_fn that returns the wrong number of results", {
+  local_mocked_bindings(
+    certify_methods = function() {
+      list(list(
+        name = "short",
+        family = multinomial_family,
+        subnull = simplex_null,
+        bound_fn = function(x, family, subnulls, control) list(),
+        description = "stub"
+      ))
+    }
+  )
+  null <- plurality_null(n = 4L, k = 3L)
+  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  expect_error(certify(x, null), "returned 0 results for 2 subnulls")
+})
+
+test_that("check_bound_result() names the field and the bound_fn", {
+  ok <- list(
+    bound = 1,
+    incumbent = 1,
+    iterations = 0L,
+    converged = TRUE,
+    budget_hit = FALSE
+  )
+  expect_silent(check_bound_result(list(ok), "demo", 1L))
+
+  drop_field <- function(field) {
+    bad <- ok
+    bad[[field]] <- NULL
+    check_bound_result(list(bad), "demo", 1L)
+  }
+  for (field in c(
+    "bound",
+    "incumbent",
+    "iterations",
+    "converged",
+    "budget_hit"
+  )) {
+    expect_error(drop_field(field), field)
+    expect_error(drop_field(field), "demo")
+  }
+
+  # The state no search can reach, which `isTRUE(NULL)` used to manufacture.
+  neither <- ok
+  neither$converged <- FALSE
+  expect_error(
+    check_bound_result(list(neither), "demo", 1L),
+    "without recording why"
+  )
 })
 
 # --- Refusals -----------------------------------------------------------------
@@ -417,7 +534,6 @@ test_that("sup_lb() improves on a single seed given more of them", {
   expect_gte(mean(ratios), 1)
   expect_true(all(ratios > 0.999))
 })
-
 
 test_that("sup_lb() rejects a non-random_variable", {
   null <- plurality_null(n = 4L, k = 3L)

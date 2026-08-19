@@ -12,8 +12,8 @@ NULL
 #' Bounding methods available to [certify()]
 #'
 #' Each entry names a family of expectations and a subnull geometry it can
-#' enclose. A combination missing from this table simply has no implementation
-#' yet.
+#' enclose, and the `bound_fn` that does it. A combination missing from this
+#' table simply has no implementation yet.
 #'
 #' The Bernstein enclosure bound for multinomial random variables may be
 #' extendable to other families for which the expectation takes the form of a
@@ -22,8 +22,26 @@ NULL
 #' The multinomial is the easy case, since its basis *is* the Bernstein basis;
 #' the multivariate hypergeometric and multivariate Bernoulli look workable on
 #' the same lines and are not done.
-#' @return A list of methods, each with `name`, `family`, `subnull` and a
-#'   one-line `description`.
+#'
+#' # The `bound_fn` contract
+#'
+#' `bound_fn(x, family, subnulls, control)` returns one result per element of
+#' `subnulls`, in the same order, each a list with the fields
+#' `check_bound_result()` requires.
+#'
+#' A `bound_fn` receives a *group* of subnulls that work for a given
+#' `(x, family)`, so that enumerating the sample space, evaluating `x` on it,
+#' building the lattice (for multinomial), happens just once for all matching
+#' subnulls.
+#'
+#' `certify()` groups the subnulls by resolved method, so a `bound_fn` only
+#' ever sees geometries it facilitates, and a null with subnulls of different
+#' geometries is split across bounding methods rather than refused.
+#'
+#' Currently only multinomial is supported, but this architecture makes it
+#' easier to extend to other families and geometries later.
+#' @return A list of methods, each with `name`, `family`, `subnull`, `bound_fn`
+#'   and a one-line `description`.
 #' @keywords internal
 #' @noRd
 certify_methods <- function() {
@@ -32,11 +50,125 @@ certify_methods <- function() {
       name = "bernstein",
       family = multinomial_family,
       subnull = simplex_null,
+      bound_fn = bernstein_bound,
       description = paste(
         "Bernstein enclosure for multinomial expectations over simplices"
       )
     )
   )
+}
+
+
+#' Check that a bounding method returned what [certify()] needs
+#'
+#' This enforces a contract between `certify()` and the bounding methods.
+#' @keywords internal
+#' @noRd
+check_bound_result <- function(results, method_name, n_subnulls) {
+  if (!is.list(results) || length(results) != n_subnulls) {
+    stop(
+      "The `",
+      method_name,
+      "` bounding method returned ",
+      length(results),
+      " results for ",
+      n_subnulls,
+      " subnulls.",
+      call. = FALSE
+    )
+  }
+  numbers <- c("bound", "incumbent")
+  flags <- c("converged", "budget_hit")
+  for (r in results) {
+    for (field in numbers) {
+      if (!is.numeric(r[[field]]) || length(r[[field]]) != 1L) {
+        stop(
+          "The `",
+          method_name,
+          "` bounding method returned no scalar `",
+          field,
+          "`. This is a version mismatch rather than a numerical problem: ",
+          "`certify()` and the bounding method disagree about what a ",
+          "result looks like.",
+          call. = FALSE
+        )
+      }
+    }
+    for (field in flags) {
+      value <- r[[field]]
+      if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+        stop(
+          "The `",
+          method_name,
+          "` bounding method returned no `",
+          field,
+          "`. This is a version mismatch rather than a numerical problem: ",
+          "`certify()` and the bounding method disagree about what a ",
+          "result looks like.",
+          call. = FALSE
+        )
+      }
+    }
+    if (!isTRUE(r$converged) && !isTRUE(r$budget_hit)) {
+      stop(
+        "The `",
+        method_name,
+        "` bounding method reported a search that stopped ",
+        "without recording why.",
+        call. = FALSE
+      )
+    }
+    if (!is.integer(r$iterations) || length(r$iterations) != 1L) {
+      stop(
+        "The `",
+        method_name,
+        "` bounding method returned no integer `iterations`.",
+        call. = FALSE
+      )
+    }
+  }
+  invisible(results)
+}
+
+
+#' Bernstein enclosure over simplices, for multinomial expectations
+#'
+#' The pmf of a multinomial *is* the degree-`n` Bernstein basis, so `x`
+#' evaluated on the sample space is already a coefficient vector for
+#' \eqn{E_\theta[X]}{E_theta[X]} and no conversion from a power form is needed.
+#' Each subnull is reparametrised onto its own simplex and enclosed separately.
+#' @keywords internal
+#' @noRd
+bernstein_bound <- function(x, family, subnulls, control) {
+  check_bernstein_size(family@n_trials, family@k, control$max_coefficients)
+
+  outcomes <- support(family)
+  values <- x(outcomes)
+  if (any(!is.finite(values))) {
+    # If the random variable is not bounded, the expectation is not well-defined
+    # and therefore no bound is coherent. This could arise, for instance, in
+    # mixture likelihood ratios where the numerator and denominator are not
+    # absolutely continuous.
+    stop(
+      "Cannot certify: the variable is not finite everywhere on the sample ",
+      "space, so its null expectation is unbounded.",
+      call. = FALSE
+    )
+  }
+
+  lattice <- bernstein_lattice(family@n_trials, family@k)
+  lapply(subnulls, function(s) {
+    box <- list(
+      V = s@vertices,
+      coef = reparametrise_to(values, lattice, s@vertices)
+    )
+    certify_sup(
+      list(box),
+      lattice,
+      tol = control$tol,
+      max_iter = control$max_nodes
+    )
+  })
 }
 
 
@@ -217,10 +349,12 @@ certify <- function(
   # null has one subnull per candidate and they share a geometry, so the same
   # message would otherwise repeat K - 1 times.
   unavailable <- vapply(methods, is.null, logical(1L))
-
   if (any(unavailable)) {
-    unimpl_msgs <- null@subnulls[which(unavailable)] |>
-      lapply(function(s) unimplemented_message(family, s))
+    unimpl_msgs <- vapply(
+      null@subnulls[unavailable],
+      function(s) unimplemented_message(family, s),
+      character(1L)
+    )
     stop(
       "Cannot certify:\n",
       paste(unique(unimpl_msgs), collapse = "\n"),
@@ -229,48 +363,35 @@ certify <- function(
   }
   method_names <- unique(vapply(methods, function(m) m$name, character(1L)))
 
-  check_bernstein_size(family@n_trials, family@k, max_coefficients)
-
-  # TODO: generalise for continuous support...
-  # This doesn't matter yet since we have no bound for the Gaussian case. If one
-  # is implemented then we would need to restructure this stopping rule.
-  outcomes <- support(family)
-  values <- x(outcomes)
-  if (any(!is.finite(values))) {
-    # If the random variable is not bounded, the expectation is not well-defined
-    # and therefore no bound is coherent. This could arise, for instance, in
-    # mixture likelihood ratios where the numerator and denominator are not
-    # absolutely continuous.
-    stop(
-      "Cannot certify: the variable is not finite everywhere on the sample ",
-      "space, so its null expectation is unbounded.",
-      call. = FALSE
+  # Group the subnulls by resolved method, run each bound_fn once on its group,
+  # then put the results back in subnull order. With one entry in the registry
+  # this is a single group; the grouping is what stops that being an assumption.
+  control <- list(
+    tol = tol,
+    max_nodes = max_nodes,
+    max_coefficients = max_coefficients
+  )
+  per_subnull <- vector("list", length(null@subnulls))
+  for (name in method_names) {
+    which_subnulls <- which(
+      vapply(methods, function(m) m$name, character(1L)) == name
     )
+    method <- methods[[which_subnulls[[1L]]]]
+    results <- method$bound_fn(
+      x,
+      family,
+      null@subnulls[which_subnulls],
+      control
+    )
+    check_bound_result(results, name, length(which_subnulls))
+    per_subnull[which_subnulls] <- results
   }
-
-  # ---- Multinomial case is assumed here as we have only implemented that ----
-
-  # The Bernstein lattice (i.e. multinomial support)
-  lattice <- bernstein_lattice(family@n_trials, family@k)
-
-  per_subnull <- lapply(null@subnulls, function(s) {
-    box <- list(
-      V = s@vertices,
-      coef = reparametrise_to(values, lattice, s@vertices)
-    )
-    certify_sup(list(box), lattice, tol = tol, max_iter = max_nodes)
-  })
 
   bounds <- vapply(per_subnull, function(r) r$bound, numeric(1L))
   incumbents <- vapply(per_subnull, function(r) r$incumbent, numeric(1L))
   nodes <- vapply(per_subnull, function(r) r$iterations, integer(1L))
-  converged <- vapply(per_subnull, function(r) isTRUE(r$converged), logical(1L))
-  budget_hit <- vapply(
-    per_subnull,
-    function(r) isTRUE(r$budget_hit),
-    logical(1L)
-  )
-
+  converged <- vapply(per_subnull, function(r) r$converged, logical(1L))
+  budget_hit <- vapply(per_subnull, function(r) r$budget_hit, logical(1L))
   list(
     sup_ub = max(bounds),
     sup_lb = max(incumbents),

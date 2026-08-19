@@ -3,14 +3,14 @@ NULL
 
 # Bernstein enclosure over a simplex, and branch and bound on top of it.
 #
-# `E_theta[X]` is a polynomial in `theta` of degree `n_trials`, and over a
-# simplex the multinomial basis *is* the degree-`n` Bernstein basis. So the
-# coefficients are the realised values of `X` at the lattice, the convex hull
-# property bounds the polynomial by their range for free, and de Casteljau
-# subdivision tightens it quadratically in the sub-simplex diameter. That is
-# what makes a *proven* upper bound available at all, as against the oracle's
-# multi-start search, which only ever gives a lower one. See Leroy (2012),
-# Reliable Computing 17(1), 11-21.
+# For a multinomial random variable `X`, `E_theta[X]` is a polynomial in
+# `theta` of degree `n_trials`, and over a simplex the multinomial basis
+# *is* the degree-`n` Bernstein basis. So the coefficients are the realised
+# values of `X` over the lattice support, the convex hull property bounds the
+# polynomial by their range for free, and de Casteljau subdivision tightens it
+# quadratically (Leroy, 2012) in the sub-simplex diameter. That is  what makes
+# a *proven* upper bound available at all, as against the oracle's multi-start
+# gradient ascent search, which only ever gives a lower bound.
 #
 # `dc_step()` runs one step of the de Casteljau algorithm
 # (Prautzsch-Boehm-Paluszny 10.4, from the Bernstein recursion in 10.1);

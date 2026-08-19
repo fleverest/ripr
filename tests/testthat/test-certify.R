@@ -158,7 +158,7 @@ test_that("a constant variable certifies to its own value", {
   res <- certify(x, null, tol = 1e-9)
   expect_equal(res$sup_lb, 3.5)
   expect_lt(res$sup_ub - 3.5, 1e-12)
-  expect_true(all(res$nodes == 0L))
+  expect_true(all(res$iterations == 0L))
 })
 
 test_that("a variable maximised at a facet vertex needs no subdivision", {
@@ -172,7 +172,7 @@ test_that("a variable maximised at a facet vertex needs no subdivision", {
   values <- exp(as.vector(outcomes %*% (log(q) - log(rep(1 / 3, 3)))))
   res <- certify(tabulated_rv(family, values), null, tol = 1e-9)
 
-  expect_true(all(res$nodes == 0L))
+  expect_true(all(res$iterations == 0L))
   expect_equal(res$sup_ub, res$sup_lb, tolerance = 1e-9)
 
   expect_equal(res$sup_ub, (3 * max(q))^n, tolerance = 1e-9)
@@ -192,7 +192,7 @@ test_that("a variable maximised in a facet interior does need subdivision", {
   values <- stats::runif(nrow(outcomes), 0, 10)
   res <- certify(tabulated_rv(null@family, values), null, tol = 1e-9)
 
-  expect_true(all(res$nodes > 0L))
+  expect_true(all(res$iterations > 0L))
   # And the work bought something: the bound is below the seed node's, which is
   # the enclosure over the whole facet before any subdivision.
   expect_lt(
@@ -246,10 +246,10 @@ test_that("certify() reports one entry per subnull", {
   n_sub <- length(null@subnulls)
   expect_length(res$bounds, n_sub)
   expect_length(res$incumbents, n_sub)
-  expect_length(res$nodes, n_sub)
+  expect_length(res$iterations, n_sub)
   expect_length(res$converged, n_sub)
   expect_length(res$budget_hit, n_sub)
-  expect_type(res$nodes, "integer")
+  expect_type(res$iterations, "integer")
   expect_type(res$converged, "logical")
   expect_type(res$budget_hit, "logical")
   expect_identical(res$method, "bernstein")
@@ -281,7 +281,7 @@ test_that("converged and budget_hit distinguish the two ways of stopping", {
   # Mutually exclusive per subnull: a search stops one way or the other.
   expect_false(any(starved$converged & starved$budget_hit))
   # Every subnull that ran out of budget used all of it.
-  expect_true(all(starved$nodes[starved$budget_hit] == 2L))
+  expect_true(all(starved$iterations[starved$budget_hit] == 2L))
 
   # The starved bound is still valid, just looser -- which is the whole reason
   # the distinction is worth reporting rather than erroring on.

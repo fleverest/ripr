@@ -418,6 +418,26 @@ node <- function(box, id, parent = NA_integer_, depth = 0L, born = 0L) {
   box
 }
 
+#' Strip a node to what a record needs
+#'
+#' Geometry and scalars, no coefficients: `V` is `K^2` numbers against 10,626
+#' for `coef` at `K = 5, n = 20`, so a whole run's history costs less than one
+#' live node.
+#' @keywords internal
+#' @noRd
+node_stub <- function(box, retired, fate) {
+  list(
+    id = box$id,
+    parent = box$parent,
+    depth = box$depth,
+    born = box$born,
+    retired = retired,
+    fate = fate,
+    ub = box$ub,
+    V = box$V
+  )
+}
+
 node_ubs <- function(nodes) vapply(nodes, function(b) b$ub, numeric(1L))
 
 
@@ -548,6 +568,7 @@ certify_sup <- function(
   best <- boxes_best(active, lat)
   eta <- rounding_slack(seeds, lat, round_slack)
   rejected <- list()
+  retired_nodes <- list()
   trace <- numeric(max_iter)
   it <- 0L
   reason <- NULL
@@ -584,6 +605,7 @@ certify_sup <- function(
       )
     })
     next_id <- next_id + length(kids)
+    retired_nodes <- c(retired_nodes, list(node_stub(parent, it, "split")))
     active <- c(active[-j], kids)
     kid_best <- boxes_best(kids, lat)
     if (kid_best$value > best$value) {
@@ -598,6 +620,10 @@ certify_sup <- function(
         b
       })
     )
+    retired_nodes <- c(
+      retired_nodes,
+      lapply(pruned$drop, node_stub, retired = it, fate = "pruned")
+    )
     active <- pruned$keep
     trace[it] <- certified_bound(best$value, slack, pruned$kept_ub, eta)
   }
@@ -609,6 +635,10 @@ certify_sup <- function(
     active = active,
     rejected = rejected,
     iterations = it,
+    history = c(
+      retired_nodes,
+      lapply(active, node_stub, retired = NA_integer_, fate = "active")
+    ),
     converged = identical(reason, "converged"),
     budget_hit = identical(reason, "budget_hit"),
     trace = trace[seq_len(it)]

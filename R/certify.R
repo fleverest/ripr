@@ -221,8 +221,6 @@ unimplemented_message <- function(family, subnull) {
 }
 
 
-# --- Estimating ---------------------------------------------------------------
-
 #' The expectation of a random variable as a function of the parameter
 #'
 #' \eqn{E_\theta[X] = \sum_x P_\theta(x) X(x)}{E_theta[X] = sum_x P_theta(x) X(x)},
@@ -289,10 +287,9 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 
 #' Flatten a run's branch-and-bound nodes into a table
 #'
-#' `active` and `rejected` are the *leaves* of the tree, and they tile the seed
-#' exactly: a run of `it` iterations makes `it` splits and so leaves `it + 1`
-#' of them. Internal nodes are not retained -- a split replaces its parent --
-#' so the tree is recoverable through `parent`, not by holding every node.
+#' One row per node ever created, with the iteration it appeared (`born`), the
+#' iteration it left the active set (`retired`) and why (`fate`: `"split"`,
+#' `"pruned"`, or `"active"` for one still live at the end).
 #'
 #' Coefficients are dropped. They are the bulk of a node (10,626 doubles each at
 #' `K = 5, n = 20`, against a handful for everything else here) and nothing
@@ -300,12 +297,12 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 #' @keywords internal
 #' @noRd
 node_table <- function(result, subnull) {
-  leaves <- c(result$active, result$rejected)
-  if (!length(leaves)) {
+  nodes <- result$history
+  if (!length(nodes)) {
     return(NULL)
   }
   field <- function(name, template) {
-    vapply(leaves, function(b) b[[name]] %||% template, template)
+    vapply(nodes, function(b) b[[name]] %||% template, template)
   }
   data.frame(
     subnull = as.integer(subnull),
@@ -313,14 +310,11 @@ node_table <- function(result, subnull) {
     parent = field("parent", NA_integer_),
     depth = field("depth", NA_integer_),
     born = field("born", NA_integer_),
-    died = field("died", NA_integer_),
-    pruned = c(
-      rep(FALSE, length(result$active)),
-      rep(TRUE, length(result$rejected))
-    ),
+    retired = field("retired", NA_integer_),
+    fate = field("fate", NA_character_),
     upper = field("ub", NA_real_),
-    volume = vapply(leaves, function(b) abs(det(b$V)), numeric(1L)),
-    vertices = I(lapply(leaves, function(b) b$V)),
+    volume = vapply(nodes, function(b) abs(det(b$V)), numeric(1L)),
+    vertices = I(lapply(nodes, function(b) b$V)),
     row.names = NULL
   )
 }
@@ -331,10 +325,9 @@ node_table <- function(result, subnull) {
 #' Same computation as [certify()], reporting the branch-and-bound tree instead
 #' of the certificate. One row per leaf of the search, per subnull.
 #'
-#' The leaves tile their subnull exactly, so at `K = 3` the `vertices` column
-#' draws the partition of the facet directly, in barycentric coordinates.
-#' `born` and `died` give the iteration each node appeared and was pruned at,
-#' so the same data replays as an animation rather than only a final state.
+#' The nodes live at any iteration tile their subnull exactly, so at `K = 3` the
+#' `vertices` column draws the partition of the facet directly, in barycentric
+#' coordinates, at every step and not merely at the end.
 #' `depth` against `born` shows the shape of the tree: a max-bound queue rule
 #' can produce a chain rather than anything balanced, which is visible here and
 #' nowhere else.
@@ -342,8 +335,8 @@ node_table <- function(result, subnull) {
 #' Only bounding methods that use branch and bound populate this. A method that
 #' bounds in closed form contributes no rows.
 #' @inheritParams certify
-#' @return A data frame with `subnull`, `id`, `parent`, `depth`, `born`, `died`,
-#'   `pruned`, `upper`, `volume` and a `vertices` list column, plus the
+#' @return A data frame with `subnull`, `id`, `parent`, `depth`, `born`,
+#'   `retired`, `fate`, `upper`, `volume` and a `vertices` list column, plus the
 #'   certificate itself in the `"certificate"` attribute and the per-iteration
 #'   bound in `"trace"`.
 #' @seealso [certify()]
@@ -372,8 +365,6 @@ certify_trace <- function(
   nodes
 }
 
-
-# --- Certifying ---------------------------------------------------------------
 
 #' Certify an upper bound on the largest null expectation
 #'

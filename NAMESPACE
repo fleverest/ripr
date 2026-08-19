@@ -3,6 +3,7 @@
 export(as_outcomes)
 export(atoms)
 export(certify)
+export(certify_trace)
 export(chart)
 export(compile_engine)
 export(compile_loglik)

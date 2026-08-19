@@ -4,7 +4,14 @@
 \alias{certify}
 \title{Certify an upper bound on the largest null expectation}
 \usage{
-certify(x, null, tol = 1e-06, max_nodes = 20000L, max_coefficients = 1024^2)
+certify(
+  x,
+  null,
+  tol = 1e-06,
+  max_nodes = 20000L,
+  max_coefficients = 1024^2,
+  .record = FALSE
+)
 }
 \arguments{
 \item{x}{A \link{random_variable}.}
@@ -18,13 +25,17 @@ algorithms.}
 
 \item{max_coefficients}{Refuse above this many Bernstein coefficients
 (for bounding multinomial expectation in simplices).}
+
+\item{.record}{Also return branch-and-bound nodes. Use \code{\link[=certify_trace]{certify_trace()}}
+rather than this directly.}
 }
 \value{
 A list with \code{sup_ub}, \code{sup_lb}, the \code{random_variable} and \code{null} it
 holds for, the \code{method} names that produced it (one per distinct subnull
-geometry), and per-subnull \code{bounds}, \code{incumbents}, \code{nodes}, \code{converged}
-and \code{budget_hit}. \code{budget_hit} flags when a search stopped at \code{max_nodes}
-with the gap still open, so its bound is valid but likely loose.
+geometry), and per-subnull \code{bounds}, \code{incumbents}, \code{iterations},
+\code{converged} and \code{budget_hit}. \code{budget_hit} flags when a search stopped at
+\code{max_nodes} with the gap still open, so its bound is valid but likely
+loose.
 }
 \description{
 A \strong{proven} upper bound on

@@ -250,3 +250,25 @@ test_that("printing returns the variable invisibly", {
   expect_silent(invisible(capture.output(out <- print(R))))
   expect_true(S7_inherits(out, random_variable))
 })
+
+test_that("format() gives the expression, and does not error", {
+  family <- multinomial_family(n_trials = 4L, k = 3L)
+  Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), family)
+  x <- mixture_likelihood(Q, label = "Q")
+  p <- mixture_likelihood(Q, label = "P*")
+
+  expect_identical(format(x), "Q")
+  expect_identical(format(x / p), "Q / P*")
+  expect_identical(format(x / 4.27), "Q / 4.27")
+
+  # A scalar, not the deparsed function, and not multi-line.
+  expect_type(format(x), "character")
+  expect_length(format(x), 1L)
+
+  # `print()` is the expression plus a class banner, so the two must agree.
+  expect_true(any(grepl(
+    format(x / p),
+    capture.output(print(x / p)),
+    fixed = TRUE
+  )))
+})

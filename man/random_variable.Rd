@@ -3,6 +3,7 @@
 \name{random_variable}
 \alias{random_variable}
 \alias{print,ripr::random_variable-method}
+\alias{format,ripr::random_variable-method}
 \title{A random variable on a sample space}
 \usage{
 random_variable(
@@ -15,6 +16,9 @@ random_variable(
 
 ## S7 method for class <ripr::random_variable>
 print(x, ...)
+
+## S7 method for class <ripr::random_variable>
+format(x, ...)
 }
 \arguments{
 \item{f}{The mapping that defines the random variable, accepting an \verb{(n, d)}
@@ -40,6 +44,14 @@ A \code{random_variable} \code{X} takes one element of the sample space (a lengt
 vector for a \code{d}-dimensional sample space) and returns a number, or \code{n}
 elements as an \verb{(n, d)} matrix and returns \code{n} numbers. The input is checked
 by \code{\link[=as_outcomes]{as_outcomes()}} first.
+
+\code{format()} gives the expression alone, without the class
+banner \code{print()} adds.
+
+Needed rather than inherited: the parent is \code{class_function}, so
+\code{format.default()} reaches \code{deparse()}. \code{rv_expression()} already calls
+\code{format()} on non-\code{random_variable} operands, which is how \code{X / 4.27}
+renders its divisor, so the generic has to work on these too.
 }
 \details{
 \code{Inf} can be a legitimate value here. A likelihood ratio can be genuinely

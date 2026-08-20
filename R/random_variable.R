@@ -147,10 +147,22 @@ family_label <- function(family) {
 #' @rdname random_variable
 #' @export
 method(print, random_variable) <- function(x, ...) {
-  cat("<random_variable>", rv_expression(x), "\n")
+  cat("<random_variable>", format(x), "\n")
   cat("  on", family_label(x@family), "\n")
   invisible(x)
 }
+
+
+#' @description `format()` gives the expression alone, without the class
+#'   banner `print()` adds.
+#'
+#' Needed rather than inherited: the parent is `class_function`, so
+#' `format.default()` reaches `deparse()`. `rv_expression()` already calls
+#' `format()` on non-`random_variable` operands, which is how `X / 4.27`
+#' renders its divisor, so the generic has to work on these too.
+#' @rdname random_variable
+#' @export
+method(format, random_variable) <- function(x, ...) rv_expression(x)
 
 
 # --- Mixture Likelihood RV ----------------------------------------------------

@@ -5,364 +5,387 @@ output: github_document
 <!-- README.md is generated from README.Rmd. Edit the .Rmd and run devtools::build_readme(). -->
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "figures/README-",
+  dev = "svg",
+  out.width = "100%"
+)
 ```
 
 # ripr
 
-`ripr` computes the **reverse information projection** (RIPr) `P*` of an
-alternative distribution `Q` onto a (possibly non-convex, union-structured)
-null hypothesis, together with the **duality-gap certificate** for the rescaled
-e-variable `(Q / P*) / (1 + gap)`.
+`ripr` computes reverse information projections onto nulls that take the form of a union of convex parts, and then proves an upper bound on the expectation over the null of whatever random variable you get.
+The projection is fitted via Li--Barron, Frank-–Wolfe and/or EM.
+Bounds on the null expectation are proved by a branch and bound algorithm (currently only for multinomial via the Bernstein enclosure).
+At the end, you get a random variable that is genuinely an e-variable for the respective null.
 
-How strong that certificate is depends on how the gap was obtained, and every
-certificate says which case it is in via `gap_certified`. For a multinomial
-family on simplex-shaped null faces with an exact engine, pass
-`bnb = bnb_control()` and the gap comes from a Bernstein branch-and-bound
-**upper** bound on `sup_theta G`: the rescaled e-variable's expectation under
-every null distribution is then at most 1 as a proven inequality. Otherwise the
-gap comes from a multi-start BFGS search, which returns a *lower* bound on the
-face maximum — so a missed global optimum leaves the e-variable
-under-corrected, and the guarantee is evidence rather than proof. With a Monte
-Carlo engine there is a second, separate error: the gap is estimated, so the
-bound is stochastic and holds at level `conf` (default 0.95), at the worst-case
-`theta*` the certifying sample selects.
+The idea it rests on is simpler than the reverse information projection itself. For any non-negative, bounded random variable `X`, and `b` is any number at least `sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at most one; i.e. `E = X / b` is an e-variable.
+Nothing requires `X` to be the true minimiser of KL divergence.
+**This means that we need not fit the projection exactly:** any approximation can be used so long as we correct the resulting likelihood ratio to yield a valid e-variable, and the quality of the approximation determines only how much e-power survives the correction.
+That splits a hard, non-convex optimisation problem into an easy one (approximate) and a proof (bound), and it this is what `ripr` facilitates.
 
-The projection is found by Frank--Wolfe and EM over a mixture of atoms on the
-null faces. It requires the specification of a sampling `family` (the model
-`p_theta`), the null geometry (a union of `face`s), and a surrogate `alternative`
-`Q`. The alternative is an `outcome_distribution` — a law over the sample space —
-which you can supply directly or build from a `mixing` measure over the
-parameter space (e.g. `point_mixing`, `finite_mixing`), marginalised through the
-family. These components are templated as
-[S7](https://rconsortium.github.io/S7/) base classes, so new sample spaces drop
-in without touching the algorithmic core. The algorithms require the ability to
-compute KL divergences and gradients, which may be implemented either via
-**exact** numerical methods or by **Monte Carlo** sampling. These two routes are
-encapsulated in the `engine` class.
 
+## Installation
 
 ```{r install, eval = FALSE}
-# install from github
-renv::install("fleverest/ripr")
+# install.packages("remotes")
+remotes::install_github("fleverest/ripr")
 ```
 
+## Approximate, then correct
 
-## Example 1: a one-sided binomial null
+Take a three-category multinomial distribution (with `n = 20`) and the plurality null: candidate 1 does not win outright, `H0 = union_j {theta : theta_1 <= theta_j}`.
+This null can be written as a union of convex parts; one region where `theta_1 <= theta_2` and another where `theta_1 <= theta_3`.
+Each part (or sub-null) is a simplex, so we represent the plurality null as a single `null_model` holding two `simplex_null` subnulls.
 
-Let `X ~ Binomial(10, p)`, written as a 2-category multinomial with
-`theta = (p, 1 - p)`. Consider testing `H_0: p <= 1/2` against `H_1: p > 1/2`,
-adopting the simple alternative `Q = Binomial(10, 3/4)`. The RIPr of `Q` onto
-the convex null is a **point mass at `p = 1/2`**. We demonstrate this using both
-the exact and Monte Carlo engines.
-
-```{r ex1, message = FALSE}
+```{r problem, message = FALSE}
 library(ripr)
-n <- 10
-fam <- multinomial_family(n_trials = n, k = 2)
-# `ripr_problem` takes Q as an `outcome_distribution` over the sample space.
-# Build one by marginalising a `mixing` measure over the parameter theta (here
-# it is just a point mass at theta = (3/4, 1/4)) through the family, giving the
-# outcome law Q = Binomial(10, 3/4).
-Q <- as_marginal(point_mixing(theta_star = c(0.75, 0.25)), fam)
 
-# H_0 = {p <= 1/2} is the simplex segment from p = 0 to the tie p = 1/2.
-face <- polytope_face(vertices = cbind(c(0, 1), c(0.5, 0.5)), face_index = 1)
-null <- null_region(faces = list(face))
-```
+K <- 3L
+n <- 20L
+family <- multinomial_family(n_trials = n, k = K)
 
-**Exact engine** (enumerates all 11 outcomes):
-
-```{r ex1-exact}
-set.seed(1)
-prob <- ripr_problem(fam, null, Q)
-res <- run_ripr(
-  prob,
-  # Deliberately initialising somewhere sub-optimal for illustrative purposes
-  init_atoms = matrix(c(0.25, 0.75), ncol = 1),
-  init_atom_faces = 1L,
-  fw_iters = 8,
-  em_iters = 5,
-  prune_threshold = 1e-6, # drop the numerically-dead atoms for output
-  verbose = FALSE
-)
-
-cbind(
-  p = res$projection@mixing@components[1, ],
-  weight = res$projection@mixing@weights
-)
-```
-
-`res$projection` is a `marginal` — the fitted `P*` as a distribution over
-outcomes — and its `@mixing` is the `finite_mixing` holding the atoms and
-weights on the null. `run_ripr()` returns the fitted e-variable directly; call
-`e_value()` on new
-data. Observing `(8, 2)` yields evidence against `H_0`, while a tie `(5, 5)`
-yields evidence in favour of it:
-
-```{r ex1-evalue}
-res$e_variable
-```
-
-```{r}
-e_value(res$e_variable, rbind(c(8, 2), c(5, 5)))
-```
-
-### Certifying the gap deterministically
-
-`gap` is what makes the rescaling valid, and by default it comes from a search:
-`oracle()` maximises `G(theta) = E_Q[p_theta / P*]` by multi-start BFGS, so it
-returns a *lower* bound on the face maximum. For a multinomial family on
-simplex-shaped faces with an exact engine, the gap can instead be **proved**.
-`p_theta(x)` is the degree-`n` Bernstein basis function at the count vector `x`,
-so `G` already *is* a Bernstein form, with coefficients `q(x) / P*(x)`. That
-basis is non-negative and sums to one, so the largest coefficient bounds `G`
-across the whole face for free, and de Casteljau subdivision refines it.
-`certifiable()` reports whether a problem qualifies:
-
-```{r ex1-certifiable}
-certifiable(face, prob$engine, fam)
-```
-
-```{r ex1-bnb}
-heuristic <- certify(res$projection, prob, n_draws = 1e5)
-certified <- certify(res$projection, prob, bnb = bnb_control())
-
-data.frame(
-  method = c(heuristic$gap_method, certified$gap_method),
-  theta_star = c(heuristic$oracle_theta[1], certified$oracle_theta[1]),
-  gap_used = c(heuristic$gap_used, certified$gap_used),
-  certified = c(heuristic$gap_certified, certified$gap_certified)
-)
-```
-
-The certified gap is the *larger* of the two, and that is the whole point. `G`
-is increasing on this null, so its supremum sits at the face's boundary vertex
-`p = 1/2` — but `oracle()` searches in a softmax parametrisation that covers
-only the face's *interior*, and the objective is nearly flat there, so BFGS
-stops just short, at the projection's own atom. The bound evaluates the vertex
-exactly.
-
-Small as the difference is (in this example), it is the difference between an
-e-variable and not one. `E_theta[e(X)]` must be at most 1 at every `theta` inthe null:
-
-```{r ex1-guarantee}
-X <- support(fam)
-null_expectation <- function(gap, p) {
-  ev <- e_variable(numerator = Q, projection = res$projection, gap = gap)
-  sum(exp(log_density(fam, c(p, 1 - p)) + e_value(ev, X, log = TRUE)))
-}
-# Distance above 1 at the worst-case theta. Positive is a violation.
-c(
-  heuristic = null_expectation(heuristic$gap_used, 0.5) - 1,
-  certified = null_expectation(certified$gap_used, 0.5) - 1
-)
-```
-
-`bnb_iterations` is 0 here: the largest Bernstein coefficient already sits at
-the vertex attaining the maximum; with a single atom mixture, the likelihood
-ratio in monotone in `p`. The bound is exactly tight before any subdivision
-happens. Harder faces bisect until `bound - incumbent <= tol`. The bound is
-valid at *every* iteration, so `tol` and `max_iter` buy tightness, never
-validity.
-
-To carry the guarantee through a fit rather than re-certifying afterwards, pass
-`certify_bnb` — the returned `e_variable` then records the guarantee level, so a
-caller holding only that object can still tell a proven rescaling from a
-heuristic one:
-
-```{r ex1-run-certified}
-set.seed(1)
-res_cert <- run_ripr(
-  prob,
-  init_atoms = matrix(c(0.25, 0.75), ncol = 1),
-  init_atom_faces = 1L,
-  fw_iters = 8,
-  em_iters = 5,
-  prune_threshold = 1e-6,
-  verbose = FALSE,
-  certify_bnb = bnb_control()
-)
-res_cert$e_variable
-```
-
-This path needs all three of an exact engine, a family whose density is a
-Bernstein basis function of `theta` (the multinomial's is; a Gaussian's is not),
-and bounded simplex faces — `halfspace_face` has no simplex to subdivide, which
-is a permanent gap rather than a missing feature. Every other combination
-degrades to the heuristic path and reports `gap_certified = FALSE` rather than
-pretending; `require_certified = TRUE` turns that fallback into an error naming
-what blocked it. See `?certify` for what the two regimes cover, and
-`bnb_control()`'s `max_coef` for the cost ceiling — coefficients per sub-simplex
-are `choose(n + K - 1, K - 1)`, so certification caps the usable batch size more
-tightly than optimisation does.
-
-**Monte Carlo engine** (1000 draws from `Q`) reaches the same projection:
-
-```{r ex1-mc}
-set.seed(3)
-eng_mc <- mc_engine(fam, Q, n_draws = 1000)
-prob_mc <- ripr_problem(fam, null, Q, engine = eng_mc)
-res_mc <- run_ripr(
-  prob_mc,
-  init_atoms = matrix(c(0.25, 0.75), ncol = 1),
-  init_atom_faces = 1L,
-  fw_iters = 10,
-  em_iters = 10,
-  gap_tol = 1e-3,
-  verbose = FALSE
-)
-
-cbind(
-  p = res_mc$projection@mixing@components[1, ],
-  weight = res_mc$projection@mixing@weights
-)
-```
-
-`set.seed()` matters here: an `mc_engine` freezes its draw set at construction,
-so a run is reproducible, but certification resamples and is not deterministic
-across seeds.
-
-## The result of a fit
-
-`run_ripr()` returns six elements, partitioned by where each number came from:
-`projection` and `e_variable` are the deliverables, `certificate` holds
-everything measured on a fresh certification sample, `history` and `checkpoints`
-hold everything measured on the fit sample, and `converged` reports whether the
-*fit* gap met `gap_tol`.
-
-```{r ex1-str}
-names(res_mc)
-```
-
-The certificate reports the guaranteed e-value growth rate, the standard error
-of the estimated gap, and the settings that produced it. Certification always
-runs on draws independent of the fit, and on `10x` as many by default --
-it is a single oracle sweep, not a per-iteration cost, so it is cheap to
-certify far more thoroughly than you fit:
-
-```{r ex1-cert}
-unlist(res_mc$certificate[c(
-  "gap",
-  "gap_se",
-  "gap_used",
-  "growth_rate",
-  "n_draws",
-  "ess"
-)])
-```
-
-`history` is one row per outer iteration, with the inner init/FW/EM steps and
-the oracle argmax nested as list columns:
-
-```{r ex1-history}
-res_mc$history[, c("iter", "gap", "gap_se", "support_size", "kl_after_em")]
-head(res_mc$history$kl_trace[[1]], 4) # the init + EM steps inside iteration 0
-```
-
-`checkpoints$final` is always present and describes the returned `projection`
-*after* pruning. Its three fields are exactly the `init_atoms`,
-`init_atom_faces` and `init_weights` arguments needed to resume the fit, so a
-run can be continued without re-deriving anything (`init_weights` matters once a
-projection has more than one atom — without it the atoms carry over but the
-mixture restarts from uniform weights):
-
-```{r ex1-final}
-str(res_mc$checkpoints$final, max.level = 1)
-```
-
-### Re-certifying on a larger sample
-
-The Monte Carlo certificate is a stochastic bound, and deliberately a
-conservative one. `certify()` resamples fresh draws from `Q` (it does *not*
-reuse the fit draws) and takes the oracle maximum over the null faces; that
-maximum is biased *upward* for the true `sup_theta G`, which is the safe
-direction, and `gap_used` inflates it further to a one-sided bound at level
-`conf`. **`gap_used` is the only quantity that may be used to rescale an
-e-variable.** Re-certifying the *same* fitted projection on more draws needs no
-re-fitting — just raise `n_draws`:
-
-```{r ex1-recert}
-set.seed(9)
-cert <- certify(res_mc$projection, prob_mc, n_draws = 1e5)
-c(gap = cert$gap, se = cert$gap_se, gap_used = cert$gap_used, ess = cert$ess)
-```
-
-`certify()` takes the fitted `projection` (or any `finite_mixing` of atoms on the
-null) and sweeps the oracle over the null faces. It resamples the problem's own
-engine by default; pass `engine =` to certify against a different one (say an
-`exact_engine`).
-
-`estimate = TRUE` draws a second independent sample and adds `gap_est`, an
-*unbiased* point estimate of the gap at the selected `theta*`. It is a
-diagnostic — useful for comparing `fw_variant`s or deciding whether to keep
-optimising — and is biased downward relative to `sup_theta G`. It must never be
-used to rescale an e-variable.
-
-## Example 2: A 4-category plurality null
-
-Let `X ~ Multinomial(25, theta)`. Consider testing `H_0: theta_1 <= theta_i` for
-some `i!=1` against `H_1: theta_1 > theta_i` for all `i!=1`, adopting the simple
-alternative `Q = Multinomial(25, (0.3, 0.27, 0.23, 0.15, 0.05))`. The RIPr of `Q` onto
-the null is no longer a point mass on the boundary.
-
-```{r ex2, message = FALSE}
-n <- 25
-k <- 5
-q <- c(0.3, 0.27, 0.23, 0.15, 0.05)
-
-# The plurality null can be written as H_0 = H_02 ∪ H_03 ∪ H_04, where
-# H_0i = {theta_1 <= theta_i} is a subsimplex with vertices satisfying
-# (i) theta_1=theta_i=1/2, (ii) theta_1=theta_i=0, and
-# (iii) theta_j = 1 for all other j.
-plurality_faces <- function(K) {
+plurality <- null_model(
+  family,
   lapply(2:K, function(j) {
-    basis <- lapply(setdiff(seq_len(K), 1L), function(k) {
-      v <- numeric(K)
-      v[k] <- 1
-      v
-    })
-    tie <- numeric(K)
-    tie[c(1L, j)] <- 0.5
-    polytope_face(
-      vertices = do.call(cbind, c(basis, list(tie))),
-      face_index = j
-    )
+    # The two sub-simplices: one for each subnull.
+    vertices <- diag(K)
+    vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+    simplex_null(vertices = vertices)
   })
+)
+```
+
+We nominate a discrete mixture-multinomial distribution, in this case the mixing measure is just a single dirac at `q = (0.40, 0.35, 0.25)`, yielding a simple `Multinomial(20, q)` alternative.
+
+```{r alternative}
+W1 <- finite_mixing(
+  components = cbind(
+    c(0.40, 0.35, 0.25)
+  ),
+  weights = c(1)
+)
+Q <- mixture(W1, family)
+```
+
+```{r helpers, include = FALSE}
+tri_xy <- function(theta) {
+  rbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0)) %*% as.matrix(theta)
 }
 
-fam <- multinomial_family(n_trials = n, k = k)
-Q <- as_marginal(point_mixing(theta_star = q), fam)
-faces <- plurality_faces(k)
-null <- null_region(faces = faces)
-prob <- ripr_problem(fam, null, Q)
+plot_null <- function(
+  null,
+  points = NULL,
+  weights = NULL,
+  main = NULL,
+  fill = "#c96f5b",
+  bg = c("#2c6f9b", "white"),
+  alpha = 0.55
+) {
+  corners <- tri_xy(diag(3))
+  op <- par(mar = c(0.5, 0.5, if (is.null(main)) 0.5 else 2, 0.5))
+  on.exit(par(op), add = TRUE)
+  plot.new()
+  plot.window(c(-0.05, 1.05), c(-0.05, 0.92), asp = 1)
+  for (s in null@subnulls) {
+    xy <- tri_xy(s@vertices)
+    polygon(
+      xy[1, ],
+      xy[2, ],
+      col = adjustcolor(fill, 0.45),
+      border = fill,
+      lwd = 1.5
+    )
+  }
+  polygon(corners[1, ], corners[2, ], border = "grey50")
+  text(
+    corners[1, ],
+    corners[2, ],
+    c(1, 2, 3),
+    pos = c(3, 1, 1),
+    cex = 0.8,
+    col = "grey40"
+  )
+  if (!is.null(points)) {
+    groups <- if (is.list(points)) points else list(points)
+    sizes <- if (is.list(weights)) weights else list(weights)
+    # Marker area proportional to mixing weight -- `cex` scales a linear
+    # dimension, so the honest map is sqrt -- on a scale shared across groups,
+    # so a heavy atom looks heavy wherever it sits.
+    all_w <- unlist(sizes)
+    for (g in seq_along(groups)) {
+      xy <- tri_xy(groups[[g]])
+      w <- sizes[[min(g, length(sizes))]]
+      cex <- if (is.null(w)) 1.2 else pmax(0.35, 1.7 * sqrt(w / max(all_w)))
+      points(
+        xy[1, ],
+        xy[2, ],
+        pch = 21,
+        bg = adjustcolor(bg[[(g - 1L) %% length(bg) + 1L]], alpha),
+        col = "grey15",
+        cex = cex,
+        lwd = 1.1
+      )
+    }
+  }
+  if (!is.null(main)) {
+    title(main, font.main = 1, cex.main = 1)
+  }
+  invisible(NULL)
+}
+```
 
-# atoms to start from: one for each face
-init <- do.call(
-  cbind,
-  lapply(faces, function(f) init_point(f, q))
+```{r plot-plurality}
+#| echo: false
+#| fig.width: 4.5
+#| fig.height: 4
+#| out.width: "60%"
+#| fig.align: "center" 
+#| fig.cap: Plurality null, with the support of the alternative mixing distribution W1.
+plot_null(
+  plurality,
+  points = W1@components,
+  weights = W1@weights / 4,
+  bg = "white"
 )
+```
 
-res <- run_ripr(
-  prob,
-  init_atoms = init,
-  init_atom_faces = seq_len(k - 1),
-  fw_iters = 10,
-  em_iters = 10,
-  verbose = FALSE
+The two subnulls overlap, and the alternative sits in the cap above them where candidate 1 leads.
+The fitting procedure is implemented as a sequence of steps: `fw_step` for Frank--Wolfe updates and `em_step` for EM (also `lb_step` for Li--Barron, but not recommended).
+Here we demonstrate running 40 steps of a Frank--Wolfe procedure.
+After running Frank--Wolfe, `ripr_finish` can be used to solve the weights, and remove any low-mass atoms.
+
+```{r fit}
+set.seed(1)
+state <- ripr_init(Q, plurality)
+state <- fw_step(state, times = 40L, until = gap_below(1e-10))
+fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+
+c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
+```
+
+```{r plot-plurality-fit}
+#| echo: false
+#| fig.width: 4.5
+#| fig.height: 4
+#| out.width: "60%"
+#| fig.align: "center" 
+#| fig.cap: Plurality null, with the support of the mixing distributions W1 (alternative) and W0 (null, fitted).
+plot_null(
+  plurality,
+  points = list(fit$W0@components, W1@components),
+  weights = list(fit$W0@weights, W1@weights / 4)
 )
+```
 
-heuristic <- certify(res$projection, prob, n_draws = 1e5)
-certified <- certify(res$projection, prob, bnb = bnb_control(tol = 1e-9))
+The fit projection attains a KL divergence (from `Q`) of approximately `r round(fit$kl, 4)`.
+The `gap` quanitty corresponds to an estimate of the Frank--Wolfe duality gap, which at the true value bounds the expectation of the ratio `Q / P*` over the null by `1 + gap`.
+However, our `gap` estimate here is not an upper bound on the true quantity, so it can not be used directly to obtain a certified e-value.
 
-data.frame(
-  method = c(heuristic$gap_method, certified$gap_method),
-  gap_used = c(heuristic$gap_used, certified$gap_used),
-  certified = c(heuristic$gap_certified, certified$gap_certified)
+With our fit projection, we may construct a `random_variable` that computes the mixture likelihood ratio `Q / P*`, i.e. our candidate e-variable:
+
+```{r ratio}
+X <- mixture_likelihood(Q, label = "Q") /
+  mixture_likelihood(fit$P_star, label = "P*")
+X
+```
+
+`random_variable`s are effectively functions that map elements of the sample space to their realisation:
+
+```{r rv_outcome}
+outcomes <- rbind(
+  c(10L, 10L, 0L),
+  c(8L, 7L, 5L)
+)
+X(outcomes)
+```
+
+Finally, we may use `certify()` to prove an upper bound on the null expectation.
+It returns a proven upper bound alongside the largest value the search actually attained, and the two bracket the true upper bound which is generally unknown:
+
+```{r certify}
+cert <- certify(X, plurality, tol = 1e-9)
+c(
+  upper = cert$sup_ub,
+  attained = cert$sup_lb,
+  width = cert$sup_ub - cert$sup_lb
+)
+```
+
+The bound lands just above one: it precisely bounds `1 + gap`, with `gap` the *true* Frank--Wolfe duality gap that the fit stopped on.
+
+```{r identity}
+c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
+```
+
+The re-scaled random variable `E = X / cert$sup_ub` is then a genuine e-variable for `plurality`:
+
+```{r evariable}
+E <- X / cert$sup_ub
+print(E)
+print(E(outcomes))
+```
+
+
+### The correction does not need a good fit
+
+Replace the projection with something that is not the RIPr at all and certify the resulting ratio:
+
+```{r bad-fit}
+bad <- mixture(point_mixing(rep(1 / K, K)), family)
+X_bad <- mixture_likelihood(Q, label = "Q") /
+  mixture_likelihood(bad, label = "P0")
+cert_bad <- certify(X_bad, plurality, tol = 1e-9)
+
+c(good = cert$sup_ub, bad = cert_bad$sup_ub)
+```
+
+Both rescale to valid e-variables.
+The important quality that differentiates them is e-power, i.e. log-growth: the expected log e-value under the alternative, which is what compounds over a sequential procedure.
+We could measure growth as follows.
+
+```{r growth}
+growth <- function(E, Q) {
+  outcomes <- support(E@family)
+  e_values <- E(outcomes)
+  Q_expectation <- dist_log_density(Q, outcomes) |>
+    exp() %*%
+    log(e_values)
+  c(Q_expectation) # return as scalar
+}
+
+E_gr <- growth(E, Q)
+
+c(good = E_gr, bad = growth(X_bad / cert_bad$sup_ub, Q))
+```
+
+A negative growth rate means that we lose evidence on average even when the alternative is true: useless, but not invalid.
+**Validity is free from the certification and correction procedure; while fitting a good approximation buys e-power.** 
+
+### How close to optimal is `E`?
+
+When `P*` is the true reverse information projection of `Q` onto `null`, the attained KL divergence `KL(Q || P*)` is precisely the growth-rate of the resulting e-variable `Q / P*`.
+For any fitted `P`, the KL divergence is above the optimum, so the final kl divergence of the fit upper bounds the optimal KL, and thus the optimal growth-rate.
+Our e-variable will not be growth-rate optimal unless it is the true minimiser.
+Therefore we know the optimum growth-rate will lie somewhere in the interval between `growth(E, Q)` and `fit$kl` (provided `fit$kl` is not an estimate, e.g. via Monte Carlo):
+
+```{r growth-kl-gap}
+c(
+  lower = E_gr,
+  upper = fit$kl,
+  width = fit$kl - E_gr
 )
 ```
 
 
-## Example 3
+## A different multinomial null
 
-TODO: Gaussian plurality via quadrature/monte carlo.
+Consider the null `H0: theta_1, theta_2, theta_3 <= 1 / 2`, i.e. no category holds an outright majority (exceeds a proportion of `1 / 2`).
+This forms the medial triangle in the 2-simplex.
+We nominate a discrete mixture alternative with one dirac per section in the alternative, equally weighted.
+
+```{r medial}
+medial <- null_model(
+  family,
+  list(simplex_null(
+    vertices = cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
+  ))
+)
+
+W_maj <- finite_mixing(
+  components = cbind(
+    c(0.6, 0.2, 0.2),
+    c(0.2, 0.6, 0.2),
+    c(0.2, 0.2, 0.6)
+  ),
+  weights = c(1 / 3, 1 / 3, 1 / 3)
+)
+Q_maj <- mixture(W_maj, family)
+```
+
+```{r plot-medial-null}
+#| echo: false
+#| fig.width: 4.5
+#| fig.height: 4
+#| out.width: "60%"
+#| fig.align: "center" 
+#| fig.cap: Medial-triangle null, with the support of W_maj.
+plot_null(
+  medial,
+  points = W_maj@components,
+  weights = W_maj@weights / 4,
+  bg = "white"
+)
+```
+
+Here we demonstrate a slightly more elegant fitting procedure here that interleaves Frank--Wolfe and EM steps:
+
+```{r medial-alternative}
+hybrid_step <- function(state, times) {
+  for (iter in seq_len(times)) {
+    state <- state |> fw_step() |> em_step()
+  }
+  state
+}
+
+set.seed(2)
+fit_medial <- ripr_init(Q_maj, medial) |>
+  hybrid_step(times = 40L) |>
+  ripr_finish(
+    reoptimise = TRUE,
+    identify = TRUE,
+    record_gap = TRUE
+  )
+X_medial <- mixture_likelihood(Q_maj, label = "Q") /
+  mixture_likelihood(fit_medial$P_star, label = "P*")
+
+c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
+```
+
+```{r plot-medial-fit}
+#| echo: false
+#| fig.width: 4.5
+#| fig.height: 4
+#| out.width: "60%"
+#| fig.align: "center" 
+#| fig.cap: Medial-triangle null, with the support of W_maj and W0 (fitted).
+plot_null(
+  medial,
+  points = list(fit_medial$W0@components, W_maj@components),
+  weights = list(fit_medial$W0@weights, W_maj@weights / 4)
+)
+```
+
+## Searching for a supremum is not the same as proving a bound
+
+`sup_lb()` hunts for the largest null expectation by multi-start gradient ascent.
+It is much cheaper than proving a bound, and it works on families and geometries that may not have an implemented bounding procedure, but it is **not** a certificate.
+It reports what it found; a lower bound on the supremum.
+Something larger may sit somewhere difficult to reach via gradient ascent.
+
+```{r sup-lb}
+c(searched = sup_lb(X, plurality)$sup_lb, certified = cert$sup_ub)
+```
+
+Where no bounding method has been implemented, `certify()` refuses:
+
+```{r refuse, error = TRUE}
+gaussian <- gaussian_family(dim = 2L)
+null <- null_model(
+  gaussian,
+  list(halfspace_null(normal = c(1, -1), offset = 0))
+)
+Y <- mixture_likelihood(mixture(point_mixing(c(0, 0)), gaussian))
+certify(Y, null)
+```
+
+
+
+## References
+
+Larsson, Ramdas & Ruf (2025), *The numeraire e-variable*; Grunwald, de Heide &
+Koolen (2024), *Safe testing*; Leroy (2012) for the branch-and-bound scheme;
+Garloff (1986) for the range enclosure; Prautzsch, Boehm & Paluszny,
+*Bezier and B-Spline Techniques*, chapters 10--11.

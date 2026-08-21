@@ -29,8 +29,8 @@ NULL
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -87,8 +87,8 @@ ripr_state <- new_class(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -111,8 +111,8 @@ flat_atoms <- function(state) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -129,8 +129,8 @@ flat_weights <- function(state) unlist(state@weights, use.names = FALSE)
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)

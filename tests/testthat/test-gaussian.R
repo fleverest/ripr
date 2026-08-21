@@ -94,7 +94,7 @@ test_that("the covariance must be symmetric positive definite", {
 test_that("a NULL covariance gives the identity", {
   fam <- gaussian_family(dim = 3)
   expect_equal(fam@sigma, diag(3))
-  expect_equal(param_dim(fam), 3L)
+  expect_equal(space_dim(fam@parameter_space), 3L)
 })
 
 # --- Conjugate mixing measure -------------------------------------------------

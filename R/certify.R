@@ -43,7 +43,7 @@ NULL
 #'
 #' Currently only multinomial is supported, but this architecture makes it
 #' easier to extend to other families and geometries later.
-#' @return A list of methods, each with `name`, `family`, `subnull`, `bound_fn`
+#' @return A list of methods, each with `name`, `family`, `region`, `bound_fn`
 #'   and a one-line `description`.
 #' @keywords internal
 #' @noRd
@@ -52,7 +52,7 @@ certify_methods <- function() {
     list(
       name = "bernstein",
       family = multinomial_family,
-      subnull = simplex_null,
+      region = simplex_region,
       bound_fn = bernstein_bound,
       description = paste(
         "Bernstein enclosure for multinomial expectations over simplices"
@@ -175,13 +175,13 @@ bernstein_bound <- function(x, family, subnulls, control) {
 }
 
 
-#' Fetch a method that can certify a (family, subnull) combination, or `NULL`
+#' Fetch a method that can certify a (family, region) combination, or `NULL`
 #' @keywords internal
 #' @noRd
-certify_method <- function(family, subnull) {
+certify_method <- function(family, region) {
   for (method in certify_methods()) {
     fits <- S7_inherits(family, method$family) &&
-      S7_inherits(subnull, method$subnull)
+      S7_inherits(region, method$region)
     if (fits) {
       return(method)
     }
@@ -196,15 +196,15 @@ certify_method <- function(family, subnull) {
 class_name <- function(x) attr(S7_class(x), "name")
 
 
-#' Explain that no implemented method covers this (family, subnull) combination
+#' Explain that no implemented method covers this (family, region) combination
 #'
 #' Says what is missing rather than what is impossible. Certifying some other
 #' pairing of family and geometry is a matter of deriving and implementing a
 #' bound, not of the thing being unbounded.
 #' @keywords internal
 #' @noRd
-unimplemented_message <- function(family, subnull) {
-  geometry <- class_name(subnull)
+unimplemented_message <- function(family, region) {
+  geometry <- class_name(region)
   paste0(
     "No bounding method is implemented for ",
     class_name(family),
@@ -265,8 +265,8 @@ expectation_objective <- function(family, values) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
@@ -356,8 +356,8 @@ node_table <- function(result, subnull) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
@@ -404,7 +404,7 @@ certify_trace <- function(
 #' `1` or less says `X` is already an e-variable for `H0`, and otherwise
 #' `X / bound` is one.
 #'
-#' Certification is refused for any (family, subnull) combination with no known
+#' Certification is refused for any (family, region) combination with no known
 #' bounding method.
 #'
 #' Currently only multinomial families with simplex subnulls are supported. The
@@ -437,8 +437,8 @@ certify_trace <- function(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
@@ -466,7 +466,7 @@ certify <- function(
     null@subnulls,
     function(s) certify_method(family, s)
   )
-  # Stop if any (family, subnull) combination is not implemented. Report the
+  # Stop if any (family, region) combination is not implemented. Report the
   # offending subnulls rather than the null model, and deduplicate: a plurality
   # null has one subnull per candidate and they share a geometry, so the same
   # message would otherwise repeat K - 1 times.

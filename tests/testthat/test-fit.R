@@ -17,7 +17,7 @@ plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
       replace(numeric(k), i, 1)
     })
     tie <- replace(numeric(k), c(1L, j), 0.5)
-    simplex_null(vertices = do.call(cbind, c(basis, list(tie))))
+    simplex_region(vertices = do.call(cbind, c(basis, list(tie))))
   })
   ripr_init(
     Q,
@@ -34,7 +34,7 @@ binomial <- function(p = 0.75, ...) {
   Q <- mixture(point_mixing(theta_star = c(p, 1 - p)), fam)
   ripr_init(
     Q,
-    null_model(fam, list(simplex_null(vertices = cbind(c(0, 1), c(0.5, 0.5))))),
+    null_model(fam, list(simplex_region(vertices = cbind(c(0, 1), c(0.5, 0.5))))),
     exact_engine(),
     control = ripr_control(...)
   )
@@ -85,7 +85,7 @@ test_that("initialisation does not depend on the engine's randomness", {
   # the seed.
   fam <- multinomial_family(n_trials = 12, k = 4)
   Q <- mixture(point_mixing(c(0.42, 0.31, 0.16, 0.11)), fam)
-  sub <- list(simplex_null(
+  sub <- list(simplex_region(
     vertices = cbind(
       c(0, 1, 0, 0),
       c(0, 0, 1, 0),

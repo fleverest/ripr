@@ -9,7 +9,7 @@ fixture <- function(snapshot = "none") {
   fam <- multinomial_family(n_trials = 8, k = 3)
   alternative <- mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
   subnulls <- lapply(2:3, function(j) {
-    simplex_null(
+    simplex_region(
       vertices = cbind(
         c(0, 1, 0),
         c(0, 0, 1),
@@ -146,7 +146,7 @@ test_that("KL is zero when the mixture is the alternative", {
     atoms = list(matrix(theta, ncol = 1L)),
     weights = list(1),
     alternative = alternative,
-    null = null_model(fam, list(simplex_null(vertices = diag(3)))),
+    null = null_model(fam, list(simplex_region(vertices = diag(3)))),
     engine = resolve_engine(exact_engine(), alternative, fam),
     control = ripr_control(),
     trace = empty_trace(),

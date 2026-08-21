@@ -35,8 +35,8 @@ NULL
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -133,8 +133,8 @@ ripr_init <- function(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -238,8 +238,8 @@ run_steps <- function(state, times, until, counter, phase, advance) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -309,8 +309,8 @@ fw_step <- function(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -392,8 +392,8 @@ lb_step <- function(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -441,8 +441,8 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
@@ -543,8 +543,8 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)

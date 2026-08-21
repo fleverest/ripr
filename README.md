@@ -40,7 +40,7 @@ plurality null: candidate 1 does not win outright,
 a union of convex parts; one region where `theta_1 <= theta_2` and
 another where `theta_1 <= theta_3`. Each part (or sub-null) is a
 simplex, so we represent the plurality null as a single `null_model`
-holding two `simplex_null` subnulls.
+holding two `simplex_region` subnulls.
 
 ``` r
 library(ripr)
@@ -55,7 +55,7 @@ plurality <- null_model(
     # The two sub-simplices: one for each subnull.
     vertices <- diag(K)
     vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
-    simplex_null(vertices = vertices)
+    simplex_region(vertices = vertices)
   })
 )
 ```
@@ -259,7 +259,7 @@ equally weighted.
 ``` r
 medial <- null_model(
   family,
-  list(simplex_null(
+  list(simplex_region(
     vertices = cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
   ))
 )
@@ -343,14 +343,14 @@ Where no bounding method has been implemented, `certify()` refuses:
 gaussian <- gaussian_family(dim = 2L)
 null <- null_model(
   gaussian,
-  list(halfspace_null(normal = c(1, -1), offset = 0))
+  list(halfspace_region(normal = c(1, -1), offset = 0))
 )
 Y <- mixture_likelihood(mixture(point_mixing(c(0, 0)), gaussian))
 certify(Y, null)
 #> Error:
 #> ! Cannot certify:
-#> No bounding method is implemented for gaussian_family expectations over halfspace_null.
-#> Certifying this requires deriving and implementing a bound on gaussian_family expectations over halfspace_null. Nothing here says one does not exist. In the meantime, `sup_lb()` still searches, and reports a lower bound.
+#> No bounding method is implemented for gaussian_family expectations over halfspace_region.
+#> Certifying this requires deriving and implementing a bound on gaussian_family expectations over halfspace_region. Nothing here says one does not exist. In the meantime, `sup_lb()` still searches, and reports a lower bound.
 ```
 
 ## References

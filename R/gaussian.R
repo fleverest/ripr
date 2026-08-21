@@ -75,6 +75,7 @@ gaussian_family <- new_class(
     new_object(
       S7_object(),
       sample_space = real_space(dim),
+      parameter_space = real_region(dim),
       n_dim = dim,
       sigma = sigma,
       chol_l = t(chol(sigma)),
@@ -82,9 +83,6 @@ gaussian_family <- new_class(
     )
   }
 )
-
-
-method(param_dim, gaussian_family) <- function(family) as.integer(family@n_dim)
 
 
 method(compile_loglik, gaussian_family) <- function(family, x) {
@@ -181,11 +179,6 @@ method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
 # --- Mode and reference parameter for a Gaussian mixing measures --------------
 
 method(mode_parameter, gaussian_mixing) <- function(x) x@prior_mean
-
-
-method(reference_parameter, gaussian_family) <- function(family) {
-  rep(0, family@n_dim)
-}
 
 
 # --- Moments, for Gauss-Hermite quadrature ------------------------------------

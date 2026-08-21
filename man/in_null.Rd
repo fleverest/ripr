@@ -21,7 +21,7 @@ Does any subnull contain this parameter value?
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
-null <- null_model(fam, list(halfspace_null(c(1, -1, 0))))
+null <- null_model(fam, list(halfspace_region(c(1, -1, 0))))
 in_null(null, c(0.2, 0.5, 0.3))
 in_null(null, c(0.6, 0.2, 0.2))
 }

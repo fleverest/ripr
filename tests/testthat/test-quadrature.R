@@ -90,7 +90,11 @@ test_that("the exact engine refuses a family with no enumerable support", {
   toy <- new_class("toy_family", parent = parametric_family)
   direct <- new_class("direct_law", parent = outcome_distribution)
   expect_error(
-    resolve_engine(exact_engine(), direct(), toy(sample_space = real_space(1L))),
+    resolve_engine(
+      exact_engine(),
+      direct(),
+      toy(sample_space = real_space(1L), parameter_space = real_region(1L))
+    ),
     "cannot be enumerated"
   )
 })

@@ -37,8 +37,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)

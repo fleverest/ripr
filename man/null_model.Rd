@@ -9,7 +9,8 @@ null_model(family = parametric_family(), subnulls = list())
 \arguments{
 \item{family}{A \link{parametric_family}.}
 
-\item{subnulls}{A non-empty list of \link{subnull} objects.}
+\item{subnulls}{A non-empty list of \link{parameter_space} objects, the convex
+pieces of the null.}
 }
 \value{
 A \code{null_model}.
@@ -26,8 +27,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 null_model(
   fam,
   list(
-    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 }

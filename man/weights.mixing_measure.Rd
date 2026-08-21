@@ -12,8 +12,7 @@
 Numeric vector summing to 1.
 }
 \description{
-Methods on \code{\link[stats:weights]{stats::weights()}} rather than a new generic, so the natural name
-is available without masking anything.
+Weights of a mixing measure
 }
 \examples{
 weights(finite_mixing(components = cbind(c(0.5, 0.5)), weights = 1))

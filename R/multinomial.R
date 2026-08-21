@@ -35,14 +35,13 @@ multinomial_family <- new_class(
     new_object(
       S7_object(),
       sample_space = space,
+      # The full k-simplex, spanned by its vertices {e_1, ..., e_k}.
+      parameter_space = simplex_region(vertices = diag(space@k)),
       n_trials = space@n,
       k = space@k
     )
   }
 )
-
-
-method(param_dim, multinomial_family) <- function(family) as.integer(family@k)
 
 
 method(compile_loglik, multinomial_family) <- function(family, x) {
@@ -64,9 +63,4 @@ method(score, multinomial_family) <- function(family, theta, x) {
 
 method(draw, multinomial_family) <- function(family, theta, n_obs) {
   t(stats::rmultinom(n_obs, size = family@n_trials, prob = theta))
-}
-
-
-method(reference_parameter, multinomial_family) <- function(family) {
-  rep(1 / family@k, family@k)
 }

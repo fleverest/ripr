@@ -403,7 +403,7 @@ a union of convex parts – one region where
 <code>theta_1 &lt;= theta_2</code> and another where
 <code>theta_1 &lt;= theta_3</code> – and each part is a simplex, so the
 plurality null is a single <code>null_model</code> holding two
-<code>simplex_null</code> subnulls.</p>
+<code>simplex_region</code> subnulls.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>K <span class="ot">&lt;-</span> <span class="dv">3</span><span class="dt">L</span></span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">20</span><span class="dt">L</span></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>family <span class="ot">&lt;-</span> <span class="fu">multinomial_family</span>(<span class="at">n_trials =</span> n, <span class="at">k =</span> K)</span>
@@ -414,7 +414,7 @@ plurality null is a single <code>null_model</code> holding two
 <span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>    <span class="co"># The two sub-simplices: one for each subnull.</span></span>
 <span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>    vertices <span class="ot">&lt;-</span> <span class="fu">diag</span>(K)</span>
 <span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>    vertices[, <span class="dv">1</span><span class="dt">L</span>] <span class="ot">&lt;-</span> <span class="fu">replace</span>(<span class="fu">numeric</span>(K), <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, j), <span class="fl">0.5</span>)</span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>    <span class="fu">simplex_null</span>(<span class="at">vertices =</span> vertices)</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>    <span class="fu">simplex_region</span>(<span class="at">vertices =</span> vertices)</span>
 <span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>  })</span>
 <span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>)</span></code></pre></div>
 <p>We nominate a discrete mixture-multinomial distribution as the
@@ -580,7 +580,7 @@ steps, and nominate an alternative with one dirac per section, equally
 weighted.</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>medial <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
 <span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  family,</span>
-<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">simplex_null</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">simplex_region</span>(</span>
 <span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>    <span class="at">vertices =</span> <span class="fu">cbind</span>(<span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="dv">0</span>, <span class="fl">0.5</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>))</span>
 <span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  ))</span>
 <span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>)</span>
@@ -636,19 +636,19 @@ somewhere gradient ascent could not reach.</p>
 <span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="co">#&gt;  searched certified </span></span>
 <span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="co">#&gt;  1.000077  1.000134</span></span></code></pre></div>
 <p>Where no bounding method has been implemented for a given combination
-of family and subnull geometry, <code>certify()</code> refuses outright,
+of family and region geometry, <code>certify()</code> refuses outright,
 rather than silently returning something unproven:</p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>gaussian <span class="ot">&lt;-</span> <span class="fu">gaussian_family</span>(<span class="at">dim =</span> <span class="dv">2</span><span class="dt">L</span>)</span>
 <span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>null <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
 <span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  gaussian,</span>
-<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">halfspace_null</span>(<span class="at">normal =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="sc">-</span><span class="dv">1</span>), <span class="at">offset =</span> <span class="dv">0</span>))</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">halfspace_region</span>(<span class="at">normal =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="sc">-</span><span class="dv">1</span>), <span class="at">offset =</span> <span class="dv">0</span>))</span>
 <span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>)</span>
 <span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">mixture_likelihood</span>(<span class="fu">mixture</span>(<span class="fu">point_mixing</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), gaussian))</span>
 <span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="fu">certify</span>(Y, null)</span>
 <span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
 <span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="co">#&gt; ! Cannot certify:</span></span>
-<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="co">#&gt; No bounding method is implemented for gaussian_family expectations over halfspace_null.</span></span>
-<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; Certifying this requires deriving and implementing a bound on gaussian_family expectations over halfspace_null. Nothing here says one does not exist. In the meantime, `sup_lb()` still searches, and reports a lower bound.</span></span></code></pre></div>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="co">#&gt; No bounding method is implemented for gaussian_family expectations over halfspace_region.</span></span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; Certifying this requires deriving and implementing a bound on gaussian_family expectations over halfspace_region. Nothing here says one does not exist. In the meantime, `sup_lb()` still searches, and reports a lower bound.</span></span></code></pre></div>
 <p><code>sup_lb()</code> still works here, since it needs no bounding
 method – only a search.</p>
 </div>
@@ -659,14 +659,15 @@ with a runnable example on each. A few starting points if you’re
 extending rather than just using the package:</p>
 <ul>
 <li><code>?parametric_family</code> and its generics
-(<code>param_dim()</code>, <code>compile_loglik()</code>,
-<code>score()</code>, <code>draw()</code>) describe the interface a new
-observation model must implement; <code>?sample_space</code> describes
-the set its outcomes are drawn from.</li>
-<li><code>?subnull</code> and its generics (<code>chart()</code>,
-<code>contains()</code>, <code>project()</code>) describe the interface
-a new convex geometry must implement; <code>?simplex_null</code> and
-<code>?halfspace_null</code> are the two built-in examples.</li>
+(<code>compile_loglik()</code>, <code>score()</code>,
+<code>draw()</code>) describe the interface a new observation model must
+implement. <code>?sample_space</code> and <code>?parameter_space</code>
+describe the two sets it maps between.</li>
+<li><code>?parameter_space</code> and its generics
+(<code>chart()</code>, <code>contains()</code>, <code>project()</code>)
+describe the interface a new convex geometry must implement;
+<code>?simplex_region</code> and <code>?halfspace_region</code> are the
+two built-in examples.</li>
 <li><code>?quadrature</code>, <code>?exact_engine</code>,
 <code>?mc_engine</code> and <code>?gh_engine</code> describe how
 expectations under the alternative are approximated, and how to add a

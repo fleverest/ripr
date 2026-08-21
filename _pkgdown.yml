@@ -25,29 +25,34 @@ reference:
   - parametric_family
   - multinomial_family
   - gaussian_family
-  - param_dim
   - compile_loglik
   - log_density
   - log_density_batch
   - score
   - draw
 
-- title: Null hypotheses
+- title: Parameter spaces
   desc: >
-    A null is a finite union of convex `subnull` pieces. Each subnull owns
-    its own geometry: membership, projection, and an unconstrained chart.
+    A `parameter_space` is a convex set of parameter values: a family's own
+    `Theta`, or one convex piece of a null. Each owns its geometry --
+    membership, projection, and an unconstrained chart to optimise in.
   contents:
-  - subnull
-  - simplex_null
-  - halfspace_null
-  - singleton_null
-  - null_model
+  - parameter_space
+  - simplex_region
+  - halfspace_region
+  - point_region
+  - real_region
   - chart
   - contains
   - project
   - init_point
-  - objective
-  - maximise_over
+
+- title: Null hypotheses
+  desc: >
+    A null is a family together with a finite union of convex parameter
+    regions.
+  contents:
+  - null_model
   - n_subnulls
   - in_null
 

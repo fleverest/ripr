@@ -1,4 +1,4 @@
-#' @include sample_space.R
+#' @include sample_space.R parameter_space.R
 NULL
 
 #' Parametric families
@@ -6,7 +6,13 @@ NULL
 #' A `parametric_family` defines the model \eqn{p_\theta(x)}{p_theta(x)}. It has
 #' no knowledge of null hypotheses, alternatives, or any optimisation procedure.
 #' Families provide a log-likelihood compiler, score functions and a sampler.
+#'
+#' A family is the pair of a [parameter_space] \eqn{\Theta}{Theta} and the map
+#' \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
+#' [sample_space]; the two spaces are what the family carries, and everything
+#' else it offers is a way of navigating that map.
 #' @param sample_space The [sample_space] that outcomes belong to.
+#' @param parameter_space The [parameter_space] that parameters belong to.
 #' @examples
 #' # `parametric_family` is abstract; families subclass it, e.g.
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -16,19 +22,11 @@ NULL
 parametric_family <- new_class(
   "parametric_family",
   abstract = TRUE,
-  properties = list(sample_space = sample_space)
+  properties = list(
+    sample_space = sample_space,
+    parameter_space = parameter_space
+  )
 )
-
-
-#' Dimension of the parameter vector
-#' @param family A [parametric_family].
-#' @return Integer parameter dimension.
-#' @examples
-#' param_dim(multinomial_family(n_trials = 4L, k = 3L))
-#' @export
-param_dim <- new_generic("param_dim", "family", function(family) {
-  S7::S7_dispatch()
-})
 
 
 #' Compile the log-likelihood function for a fixed set of outcomes
@@ -80,7 +78,7 @@ log_density_batch <- function(family, theta_mat, x) {
 
 #' Log density `log p_theta(x)`
 #' @param family A [parametric_family].
-#' @param theta Parameter vector of length [param_dim()].
+#' @param theta Parameter vector of length `space_dim(family@parameter_space)`.
 #' @param x `(M, K)` matrix of outcomes, or a length-`K` vector for one outcome.
 #' @return Length-`M` numeric vector.
 #' @examples
@@ -128,9 +126,17 @@ draw <- new_generic("draw", "family", function(family, theta, n_obs) {
 #' A reference point for the parameter space.
 #'
 #' Used as a fallback for initialising the atoms for a RIPr optimisation run,
-#' where the alternative does not take the form of a mixture.
+#' where the alternative does not take the form of a mixture. Defaults to the
+#' point of the parameter space closest to the origin, which is the centroid for
+#' a simplex and the origin itself for an unconstrained space.
 #' @keywords internal
 #' @noRd
 reference_parameter <- new_generic("reference_parameter", "family", \(family) {
   S7::S7_dispatch()
 })
+
+
+method(reference_parameter, parametric_family) <- function(family) {
+  space <- family@parameter_space
+  project(space, rep(0, space_dim(space)))
+}

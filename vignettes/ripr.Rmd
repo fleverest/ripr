@@ -126,7 +126,7 @@ null: candidate 1 does not win outright,
 This null is a union of convex parts -- one region where
 `theta_1 <= theta_2` and another where `theta_1 <= theta_3` -- and each part
 is a simplex, so the plurality null is a single `null_model` holding two
-`simplex_null` subnulls.
+`simplex_region` subnulls.
 
 ```{r problem}
 K <- 3L
@@ -139,7 +139,7 @@ plurality <- null_model(
     # The two sub-simplices: one for each subnull.
     vertices <- diag(K)
     vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
-    simplex_null(vertices = vertices)
+    simplex_region(vertices = vertices)
   })
 )
 ```
@@ -317,7 +317,7 @@ with one dirac per section, equally weighted.
 ```{r medial}
 medial <- null_model(
   family,
-  list(simplex_null(
+  list(simplex_region(
     vertices = cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
   ))
 )
@@ -376,14 +376,14 @@ c(searched = sup_lb(X, plurality)$sup_lb, certified = cert$sup_ub)
 ```
 
 Where no bounding method has been implemented for a given combination of
-family and subnull geometry, `certify()` refuses outright, rather than
+family and region geometry, `certify()` refuses outright, rather than
 silently returning something unproven:
 
 ```{r refuse, error = TRUE}
 gaussian <- gaussian_family(dim = 2L)
 null <- null_model(
   gaussian,
-  list(halfspace_null(normal = c(1, -1), offset = 0))
+  list(halfspace_region(normal = c(1, -1), offset = 0))
 )
 Y <- mixture_likelihood(mixture(point_mixing(c(0, 0)), gaussian))
 certify(Y, null)
@@ -398,12 +398,12 @@ The function reference lists every exported function and S7 class, with a
 runnable example on each. A few starting points if you're extending rather
 than just using the package:
 
-- `?parametric_family` and its generics (`param_dim()`, `compile_loglik()`,
-  `score()`, `draw()`) describe the interface a new observation model must
-  implement; `?sample_space` describes the set its outcomes are drawn from.
-- `?subnull` and its generics (`chart()`, `contains()`, `project()`) describe
-  the interface a new convex geometry must implement; `?simplex_null` and
-  `?halfspace_null` are the two built-in examples.
+- `?parametric_family` and its generics (`compile_loglik()`, `score()`,
+  `draw()`) describe the interface a new observation model must implement.
+  `?sample_space` and `?parameter_space` describe the two sets it maps between.
+- `?parameter_space` and its generics (`chart()`, `contains()`, `project()`)
+  describe the interface a new convex geometry must implement; `?simplex_region`
+  and `?halfspace_region` are the two built-in examples.
 - `?quadrature`, `?exact_engine`, `?mc_engine` and `?gh_engine` describe how
   expectations under the alternative are approximated, and how to add a new
   rule.

@@ -49,7 +49,7 @@ This exists to prove that a particular random variable is an e-variable for
 \code{1} or less says \code{X} is already an e-variable for \code{H0}, and otherwise
 \code{X / bound} is one.
 
-Certification is refused for any (family, subnull) combination with no known
+Certification is refused for any (family, region) combination with no known
 bounding method.
 
 Currently only multinomial families with simplex subnulls are supported. The
@@ -65,8 +65,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))

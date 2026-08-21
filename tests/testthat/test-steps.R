@@ -16,7 +16,7 @@ plurality <- function(n = 12, k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
       replace(numeric(k), i, 1)
     })
     tie <- replace(numeric(k), c(1L, j), 0.5)
-    simplex_null(vertices = do.call(cbind, c(basis, list(tie))))
+    simplex_region(vertices = do.call(cbind, c(basis, list(tie))))
   })
   ripr_init(
     Q,

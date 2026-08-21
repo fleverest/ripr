@@ -9,7 +9,7 @@ log_density(family, theta, x)
 \arguments{
 \item{family}{A \link{parametric_family}.}
 
-\item{theta}{Parameter vector of length \code{\link[=param_dim]{param_dim()}}.}
+\item{theta}{Parameter vector of length \code{space_dim(family@parameter_space)}.}
 
 \item{x}{\verb{(M, K)} matrix of outcomes, or a length-\code{K} vector for one outcome.}
 }

@@ -4,15 +4,26 @@
 \alias{parametric_family}
 \title{Parametric families}
 \usage{
-parametric_family(sample_space = sample_space())
+parametric_family(
+  sample_space = sample_space(),
+  parameter_space = parameter_space()
+)
 }
 \arguments{
 \item{sample_space}{The \link{sample_space} that outcomes belong to.}
+
+\item{parameter_space}{The \link{parameter_space} that parameters belong to.}
 }
 \description{
 A \code{parametric_family} defines the model \eqn{p_\theta(x)}{p_theta(x)}. It has
 no knowledge of null hypotheses, alternatives, or any optimisation procedure.
 Families provide a log-likelihood compiler, score functions and a sampler.
+}
+\details{
+A family is the pair of a \link{parameter_space} \eqn{\Theta}{Theta} and the map
+\eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
+\link{sample_space}; the two spaces are what the family carries, and everything
+else it offers is a way of navigating that map.
 }
 \examples{
 # `parametric_family` is abstract; families subclass it, e.g.

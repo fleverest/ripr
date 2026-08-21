@@ -117,10 +117,6 @@ method(atoms, finite_mixing) <- function(x) x@components
 
 
 #' Weights of a mixing measure
-#'
-#' Methods on [stats::weights()] rather than a new generic, so the natural name
-#' is available without masking anything.
-#'
 #' @param object A [mixing_measure].
 #' @param ... Ignored.
 #' @return Numeric vector summing to 1.
@@ -181,7 +177,7 @@ method(prune, finite_mixing) <- function(x, threshold = 1e-8) {
 #' The point the measure places the highest mass or density. Used to seed the
 #' starting point for the RIPr optimiser.
 #' @param x A [mixing_measure].
-#' @return Numeric vector of length [param_dim()].
+#' @return Numeric vector of a parameter's length.
 #' @examples
 #' w <- finite_mixing(
 #'   components = cbind(c(0.6, 0.4), c(0.2, 0.8)),

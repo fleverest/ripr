@@ -14,8 +14,11 @@ test_that("a family carries the sample space its outcomes live in", {
   expect_identical(gaussian_family(dim = 2)@sample_space, real_space(2L))
 })
 
-test_that("param_dim for multinomial is the number of categories", {
-  expect_equal(param_dim(multinomial_family(n_trials = 7, k = 5)), 5L)
+test_that("a family carries the parameter space its parameters live in", {
+  fam <- multinomial_family(n_trials = 7, k = 5)
+  expect_equal(space_dim(fam@parameter_space), 5L)
+  expect_true(contains(fam@parameter_space, rep(1 / 5, 5)))
+  expect_equal(space_dim(gaussian_family(dim = 3)@parameter_space), 3L)
 })
 
 # --- Log density --------------------------------------------------------------
@@ -138,7 +141,10 @@ test_that("a family with no compile_loglik method errors", {
   # compile_loglik is the one density method a family must supply; there is no
   # default, so an incomplete family fails loudly rather than silently.
   toy <- new_class("toy_family", parent = parametric_family)
-  toy_fam <- toy(sample_space = real_space(1L))
+  toy_fam <- toy(
+    sample_space = real_space(1L),
+    parameter_space = real_region(1L)
+  )
   expect_error(compile_loglik(toy_fam, matrix(1:4, nrow = 2)))
 })
 

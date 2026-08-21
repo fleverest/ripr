@@ -13,7 +13,7 @@ plurality_subnulls <- function(k) {
   lapply(2:k, function(j) {
     vertices <- diag(k)
     vertices[, 1L] <- replace(numeric(k), c(1L, j), 0.5)
-    simplex_null(vertices = vertices)
+    simplex_region(vertices = vertices)
   })
 }
 
@@ -425,14 +425,14 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
         list(
           name = "bernstein",
           family = multinomial_family,
-          subnull = simplex_null,
+          region = simplex_region,
           bound_fn = bernstein_bound,
           description = "real"
         ),
         list(
           name = "fake",
           family = multinomial_family,
-          subnull = halfspace_null,
+          region = halfspace_region,
           bound_fn = fake_bound_fn,
           description = "stub"
         )
@@ -446,9 +446,9 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
   null <- null_model(
     family,
     list(
-      halfspace_null(normal = c(1, -1), offset = 0),
-      simplex_null(vertices = facet),
-      halfspace_null(normal = c(0, 1, -1), offset = 0)
+      halfspace_region(normal = c(1, -1, 0), offset = 0),
+      simplex_region(vertices = facet),
+      halfspace_region(normal = c(0, 1, -1), offset = 0)
     )
   )
   x <- tabulated_rv(family, rep(1, nrow(enumerate_space(family@sample_space))))
@@ -460,7 +460,7 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
   expect_setequal(res$method, c("bernstein", "fake"))
   # The stub was called once, with both of its subnulls together.
   expect_length(seen, 1L)
-  expect_identical(seen[[1L]], c("halfspace_null", "halfspace_null"))
+  expect_identical(seen[[1L]], c("halfspace_region", "halfspace_region"))
 })
 
 test_that("certify() rejects a bound_fn that returns the wrong number of results", {
@@ -469,7 +469,7 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
       list(list(
         name = "short",
         family = multinomial_family,
-        subnull = simplex_null,
+        region = simplex_region,
         bound_fn = function(x, family, subnulls, control) list(),
         description = "stub"
       ))
@@ -521,7 +521,7 @@ test_that("certify() refuses a family and geometry it has no method for", {
   family <- gaussian_family(dim = 2L)
   null <- null_model(
     family,
-    list(halfspace_null(normal = c(1, -1), offset = 0))
+    list(halfspace_region(normal = c(1, -1), offset = 0))
   )
   x <- random_variable(
     function(x) rep(1, nrow(as.matrix(x))),
@@ -529,7 +529,7 @@ test_that("certify() refuses a family and geometry it has no method for", {
   )
   expect_error(certify(x, null), "No bounding method is implemented")
   expect_error(certify(x, null), "gaussian_family")
-  expect_error(certify(x, null), "halfspace_null")
+  expect_error(certify(x, null), "halfspace_region")
 })
 
 test_that("the refusal names the subnull, not the null model", {
@@ -538,7 +538,7 @@ test_that("the refusal names the subnull, not the null model", {
   family <- gaussian_family(dim = 2L)
   null <- null_model(
     family,
-    list(halfspace_null(normal = c(1, -1), offset = 0))
+    list(halfspace_region(normal = c(1, -1), offset = 0))
   )
   x <- random_variable(
     function(x) rep(1, nrow(as.matrix(x))),
@@ -554,8 +554,8 @@ test_that("the refusal is not repeated once per subnull", {
   null <- null_model(
     family,
     list(
-      halfspace_null(normal = c(1, -1), offset = 0),
-      halfspace_null(normal = c(1, 0), offset = 0)
+      halfspace_region(normal = c(1, -1), offset = 0),
+      halfspace_region(normal = c(1, 0), offset = 0)
     )
   )
   x <- random_variable(

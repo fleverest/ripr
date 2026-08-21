@@ -10,7 +10,7 @@ mode_parameter(x)
 \item{x}{A \link{mixing_measure}.}
 }
 \value{
-Numeric vector of length \code{\link[=param_dim]{param_dim()}}.
+Numeric vector of a parameter's length.
 }
 \description{
 The point the measure places the highest mass or density. Used to seed the

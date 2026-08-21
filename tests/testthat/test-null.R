@@ -1,4 +1,4 @@
-# Properties of R/subnull.R.
+# Properties of R/parameter_space.R and R/null.R.
 #
 # The geometry is checked by round-trips and idempotence rather than against
 # stored coordinates, since a chart is only required to be *a* parametrisation,
@@ -14,14 +14,14 @@ plurality_simplex <- function(k, j) {
   })
   tie <- numeric(k)
   tie[c(1L, j)] <- 0.5
-  simplex_null(vertices = do.call(cbind, c(basis, list(tie))))
+  simplex_region(vertices = do.call(cbind, c(basis, list(tie))))
 }
 
 plurality_halfspace <- function(k, j) {
   a <- numeric(k)
   a[1L] <- 1
   a[j] <- -1
-  halfspace_null(normal = a, offset = 0)
+  halfspace_region(normal = a, offset = 0)
 }
 
 # --- Charts -------------------------------------------------------------------
@@ -125,7 +125,7 @@ test_that("a simplex subnull contains its own vertices", {
 })
 
 test_that("a singleton contains only its own point", {
-  s <- singleton_null(theta = c(0.5, 0.5))
+  s <- point_region(theta = c(0.5, 0.5))
   expect_true(contains(s, c(0.5, 0.5)))
   expect_false(contains(s, c(0.6, 0.4)))
   expect_equal(project(s, c(0.9, 0.1)), c(0.5, 0.5))
@@ -228,7 +228,7 @@ test_that("maximise_over accepts seeds lying outside the subnull", {
 })
 
 test_that("maximise_over on a singleton evaluates the point", {
-  s <- singleton_null(theta = c(0.5, 0.5))
+  s <- point_region(theta = c(0.5, 0.5))
   obj <- objective(value = \(theta) sum(theta^2), grad = \(theta) 2 * theta)
   res <- maximise_over(s, obj)
   expect_equal(res$theta, c(0.5, 0.5))
@@ -279,17 +279,95 @@ test_that("in_null is the union of the pieces", {
 test_that("null_model rejects an empty or malformed subnull list", {
   fam <- multinomial_family(n_trials = 4, k = 2)
   expect_error(null_model(fam, list()), "non-empty")
-  expect_error(null_model(fam, list("not a subnull")), "must be a `subnull`")
+  expect_error(
+    null_model(fam, list("not a region")),
+    "must be a `parameter_space`"
+  )
 })
 
-test_that("simplex_null rejects a malformed vertex matrix", {
-  expect_error(simplex_null(vertices = c(0.5, 0.5)), "must be a matrix")
+test_that("simplex_region rejects a malformed vertex matrix", {
+  expect_error(simplex_region(vertices = c(0.5, 0.5)), "must be a matrix")
   expect_error(
-    simplex_null(vertices = matrix(numeric(0), nrow = 2L, ncol = 0L)),
+    simplex_region(vertices = matrix(numeric(0), nrow = 2L, ncol = 0L)),
     "must be a matrix"
   )
 })
 
-test_that("halfspace_null rejects a zero normal", {
-  expect_error(halfspace_null(normal = c(0, 0)), "non-zero")
+test_that("halfspace_region rejects a zero normal", {
+  expect_error(halfspace_region(normal = c(0, 0)), "non-zero")
+})
+
+# --- Dimension ----------------------------------------------------------------
+
+test_that("every region reports the dimension of the parameters it holds", {
+  expect_equal(space_dim(simplex_region(vertices = diag(3))), 3L)
+  expect_equal(space_dim(halfspace_region(normal = c(1, -1, 0))), 3L)
+  expect_equal(space_dim(point_region(theta = c(0.5, 0.3, 0.2))), 3L)
+  expect_equal(space_dim(real_region(3L)), 3L)
+})
+
+test_that("a region of the wrong dimension is refused at construction", {
+  # Without this the comparison inside `contains()` recycles instead of
+  # complaining, and `in_null()` returns TRUE for a parameter it never checked:
+  #   null_model(multinomial_family(4, 3), list(halfspace_region(c(1, -1))))
+  #   in_null(null, c(0.2, 0.5, 0.3))  # TRUE, silently wrong
+  fam <- multinomial_family(n_trials = 4, k = 3)
+  expect_error(
+    null_model(fam, list(halfspace_region(normal = c(1, -1)))),
+    "dimension 3"
+  )
+  expect_error(
+    null_model(fam, list(point_region(theta = c(0.5, 0.5)))),
+    "dimension 3"
+  )
+  expect_error(
+    null_model(fam, list(simplex_region(vertices = diag(3)), real_region(2L))),
+    "dimension 3"
+  )
+  expect_silent(null_model(fam, list(real_region(3L))))
+})
+
+test_that("a family's parameter space has the family's own dimension", {
+  # `param_dim()` used to answer this; `space_dim()` on the parameter space
+  # subsumes it, and unlike a per-family method it cannot disagree with the
+  # geometry the null is checked against.
+  fam <- multinomial_family(n_trials = 7, k = 5)
+  expect_equal(space_dim(fam@parameter_space), 5L)
+  expect_true(contains(fam@parameter_space, rep(1 / 5, 5)))
+  expect_false(contains(fam@parameter_space, c(0.5, 0.5, 0.5, 0.5, 0.5)))
+})
+
+# --- The unconstrained region -------------------------------------------------
+
+test_that("a real region contains every finite point and moves none", {
+  r <- real_region(2L)
+  expect_true(contains(r, c(1e6, -3)))
+  expect_false(contains(r, c(Inf, 0)))
+  expect_equal(project(r, c(3, -1)), c(3, -1))
+})
+
+test_that("the real region's chart is the identity", {
+  r <- real_region(3L)
+  ch <- chart(r)
+  expect_equal(ch$n_par, 3L)
+  theta <- c(0.4, -2, 7)
+  expect_equal(ch$to_theta(ch$from_theta(theta)), theta)
+  expect_equal(ch$jacobian(theta), diag(3))
+  expect_equal(dim(ch$seed(5L)), c(3L, 5L))
+  u <- cbind(c(1, 2, 3), c(-1, 0, 1))
+  expect_equal(ch$to_theta_batch(u), u)
+})
+
+test_that("maximise_over finds an interior optimum on a real region", {
+  # The one geometry here whose chart covers the whole set, so the supremum is
+  # attained rather than approached.
+  set.seed(1)
+  target <- c(1.5, -0.5)
+  obj <- objective(
+    value = function(theta) -sum((theta - target)^2),
+    grad = function(theta) -2 * (theta - target)
+  )
+  found <- maximise_over(real_region(2L), obj, n_seeds = 50L, n_restarts = 5L)
+  expect_equal(found$theta, target, tolerance = 1e-6)
+  expect_equal(found$value, 0, tolerance = 1e-10)
 })

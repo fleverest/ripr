@@ -6,11 +6,10 @@
 `ripr` computes reverse information projections onto nulls that take the
 form of a union of convex parts, and then proves an upper bound on the
 expectation over the null of whatever random variable you get. The
-projection is fitted via Li–Barron, Frank-–Wolfe and/or EM. Bounds on
-the null expectation are proved by a branch and bound algorithm
-(currently only for multinomial via the Bernstein enclosure). At the
-end, you get a random variable that is genuinely an e-variable for the
-respective null.
+projection is fitted via Li–Barron, Frank–Wolfe and/or EM. Bounds on the
+null expectation are proved by a branch and bound algorithm (currently
+only for multinomial via the Bernstein enclosure). At the end, you get a
+random variable that is genuinely an e-variable for the respective null.
 
 The idea it rests on is simpler than the reverse information projection
 itself. For any non-negative, bounded random variable `X`, and `b` is

@@ -20,3 +20,14 @@ The null is a set of \emph{distributions}, so it needs both the model and the
 geometry; keeping them together means nothing downstream has to carry them as
 separate arguments that could disagree.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+# The plurality null
+null_model(
+  fam,
+  list(
+    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  )
+)
+}

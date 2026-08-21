@@ -32,6 +32,11 @@ than Monte Carlo needs draws.
 Unlike \code{\link[=mc_engine]{mc_engine()}} the error here is bias, not variance, so \code{\link[=expect_se]{expect_se()}}
 reports \code{0} and says nothing about accuracy. Raise \code{n_nodes} and compare.
 }
+\examples{
+fam <- gaussian_family(dim = 2L)
+Q <- mixture(point_mixing(c(0, 0)), fam)
+resolve_engine(gh_engine(n_nodes = 10L), Q, fam)
+}
 \references{
 \insertRef{GolubWelsch1969}{ripr}
 }

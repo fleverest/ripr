@@ -19,3 +19,7 @@ Length-\code{M} numeric vector.
 \description{
 Log density \verb{log p_theta(x)}
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+log_density(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
+}

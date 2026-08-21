@@ -15,3 +15,7 @@ Integer.
 \description{
 Number of atoms in a mixing measure
 }
+\examples{
+n_atoms(point_mixing(theta_star = c(0.5, 0.5)))
+n_atoms(finite_mixing(components = cbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
+}

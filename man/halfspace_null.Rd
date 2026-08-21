@@ -29,3 +29,7 @@ Having no vertices, a halfspace admits no certified gap bound. That is a
 property of the representation rather than a missing feature -- see
 \code{\link[=simplex_null]{simplex_null()}} for the bounded alternative.
 }
+\examples{
+# `{theta : theta_1 <= theta_2}`
+halfspace_null(normal = c(1, -1), offset = 0)
+}

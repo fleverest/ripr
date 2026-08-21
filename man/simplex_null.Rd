@@ -25,6 +25,10 @@ Holding vertices rather than constraints is what makes a certified bound
 possible later: de Casteljau subdivision needs something to subdivide, and a
 halfspace has no vertices.
 }
+\examples{
+# The 2-simplex in R^3, e.g. the full multinomial parameter space:
+simplex_null(vertices = diag(3))
+}
 \references{
 \insertRef{BeckTeboulle2009}{ripr}
 

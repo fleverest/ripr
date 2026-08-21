@@ -20,3 +20,7 @@ matrix, and returns the \verb{(n, d)} form. Anything else is an error: a random
 variable is only defined on its own sample space, and silently reshaping the
 wrong thing would give a number rather than a complaint.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+as_outcomes(fam, c(2L, 1L, 1L))
+}

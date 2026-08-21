@@ -19,3 +19,8 @@ contains(subnull, theta, tol = 1e-08)
 \description{
 Is a parameter in the subnull?
 }
+\examples{
+s <- simplex_null(vertices = diag(3))
+contains(s, c(1 / 3, 1 / 3, 1 / 3))
+contains(s, c(2, -1, 0))
+}

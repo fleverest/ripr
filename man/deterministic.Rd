@@ -17,3 +17,9 @@ deterministic(engine)
 Carlo. A deterministic rule may still carry approximation error, but it is
 bias rather than variance, so \code{\link[=expect_se]{expect_se()}} does not describe it.
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+deterministic(resolve_engine(exact_engine(), Q, fam))
+deterministic(resolve_engine(mc_engine(100L), Q, fam))
+}

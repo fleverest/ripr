@@ -21,8 +21,22 @@ The updated \link{ripr_state}.
 }
 \description{
 Each sweep updates every weight, then moves every atom within its own
-subnull. The support neither grows nor shrinks: only an oracle can add an
-atom to the mixture.
+subnull. The support neither grows nor shrinks: only an oracle method such as
+\code{\link[=fw_step]{fw_step()}} or \code{\link[=lb_step]{lb_step()}} can add an atom to the mixture.
+}
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+plurality <- null_model(
+  fam,
+  list(
+    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  )
+)
+Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+state <- ripr_init(Q, plurality) |> fw_step(times = 3L) |> em_step(times = 10L)
+state@trace$kl
 }
 \seealso{
 \link{oracles}, \link{predicates}

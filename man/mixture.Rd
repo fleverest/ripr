@@ -20,3 +20,7 @@ The law of \code{X} when \eqn{\theta \sim W}{theta ~ W} and
 its family, so it is evaluable on data. Both \eqn{Q = P_{W_1}}{Q = P_W1} and
 \eqn{\widehat{P}^* = P_{\widehat{W}_0}}{P_star_hat} are mixtures.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
+}

@@ -16,3 +16,10 @@ Numeric vector of length \code{\link[=param_dim]{param_dim()}}.
 The point the measure places the highest mass or density. Used to seed the
 starting point for the RIPr optimiser.
 }
+\examples{
+w <- finite_mixing(
+  components = cbind(c(0.6, 0.4), c(0.2, 0.8)),
+  weights = c(0.3, 0.7)
+)
+mode_parameter(w)
+}

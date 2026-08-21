@@ -23,3 +23,7 @@ The sample space is continuous, so \code{\link[=support]{support()}} errors: pai
 \code{\link[=mc_engine]{mc_engine()}} or \code{\link[=gh_engine]{gh_engine()}} rather than \code{\link[=exact_engine]{exact_engine()}}. It is also a
 family for which a certified gap bound is unavailable.
 }
+\examples{
+gaussian_family(dim = 2L)
+gaussian_family(dim = 2L, sigma = diag(c(1, 4)))
+}

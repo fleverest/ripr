@@ -16,6 +16,11 @@ outcomes.
 The mixing-measure/mixture distinction follows the mixture-model literature:
 \eqn{W}{W} is the \code{mixing_measure}, \eqn{P_W}{P_W} is the \link{mixture}.
 }
+\examples{
+# `mixing_measure` is abstract; [point_mixing()] and [finite_mixing()]
+# subclass it, e.g.
+S7::S7_inherits(point_mixing(theta_star = c(0.5, 0.5)), mixing_measure)
+}
 \references{
 \insertRef{Lindsay1995}{ripr}
 }

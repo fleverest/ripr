@@ -12,3 +12,9 @@ the RIPr problem consumes as the alternative \eqn{Q}{Q}. A \link{mixture} is one
 implementation; a closed-form outcome law can subclass this directly with no
 mixing measure behind it.
 }
+\examples{
+# `outcome_distribution` is abstract; [mixture()] subclasses it, e.g.
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
+S7::S7_inherits(Q, outcome_distribution)
+}

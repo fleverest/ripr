@@ -15,3 +15,7 @@ is_finite_support(family)
 \description{
 Does this family have a finite, enumerable sample space?
 }
+\examples{
+is_finite_support(multinomial_family(n_trials = 4L, k = 3L))
+is_finite_support(gaussian_family(dim = 1L))
+}

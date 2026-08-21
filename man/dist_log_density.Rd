@@ -17,3 +17,8 @@ Length-\code{M} numeric vector.
 \description{
 Log density of an outcome distribution
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
+dist_log_density(Q, c(2L, 1L, 1L))
+}

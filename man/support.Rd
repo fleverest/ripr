@@ -17,3 +17,6 @@ Every outcome with positive probability under some parameter. Families with
 infinite sample spaces error: exact integration over the sample space is
 undefined for them, not merely slow.
 }
+\examples{
+support(multinomial_family(n_trials = 3L, k = 2L))
+}

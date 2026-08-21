@@ -21,3 +21,7 @@ Per-outcome contributions in the family's own parameter coordinates, with no
 constraint projection applied. Applying the Jacobian of a parametrisation
 belongs to whatever owns that parametrisation.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+score(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
+}

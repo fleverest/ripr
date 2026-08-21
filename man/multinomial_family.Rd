@@ -19,3 +19,6 @@ The \code{n}-trial, \code{K}-category multinomial. The support enumeration and i
 multinomial coefficients are built once at construction and stored as plain
 data rather than closures, so a serialised family carries no environment.
 }
+\examples{
+multinomial_family(n_trials = 20L, k = 3L)
+}

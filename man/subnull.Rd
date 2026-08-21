@@ -22,3 +22,9 @@ A subnull owns its geometry -- membership, projection, and a \code{\link[=chart]
 unconstrained coordinates -- and nothing else. The oracle is written once
 against the chart, so a new subnull type needs no optimisation code.
 }
+\examples{
+# `subnull` is abstract; simplex_null(), halfspace_null() and
+# singleton_null() subclass it, e.g.
+s <- simplex_null(vertices = diag(3))
+S7::S7_inherits(s, subnull)
+}

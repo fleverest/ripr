@@ -13,7 +13,10 @@ singleton_null(theta = integer(0))
 A \code{singleton_null}.
 }
 \description{
-The degenerate convex set \eqn{\{\theta^*\}}{{theta*}}. Its role is to let a
-likelihood ratio state the null it is valid for: \eqn{Q / P}{Q / P} is an
-e-variable for \eqn{\{P\}}{{P}} and generally for nothing larger.
+The degenerate convex set \eqn{\{\theta\}}{{theta}}. Its role is to let a
+likelihood ratio state the null it is valid for: \eqn{Q / P_\theta}{Q / P_theta}
+is an e-variable for \eqn{\{P_\theta\}}{{P_theta}}.
+}
+\examples{
+singleton_null(theta = c(0.5, 0.3, 0.2))
 }

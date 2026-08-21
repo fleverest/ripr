@@ -19,3 +19,10 @@ The Monte Carlo standard error of \code{\link[=expect_q]{expect_q()}}, and exact
 deterministic rule. A deterministic rule with approximation error has bias
 rather than variance, so \code{0} here is not a claim of exactness.
 }
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+engine <- resolve_engine(mc_engine(200L), Q, fam)
+expect_se(engine, engine@nodes[, 1])
+}

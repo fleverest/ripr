@@ -15,3 +15,6 @@ Integer.
 \description{
 Distinct from \code{\link[=param_dim]{param_dim()}} in principle, though equal for every family here.
 }
+\examples{
+outcome_dim(multinomial_family(n_trials = 4L, k = 3L))
+}

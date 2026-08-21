@@ -17,3 +17,8 @@ Returns \code{NULL} when there is none. \eqn{Q}{Q} is fixed a priori and need no
 be a mixture over the parameter space, so the family cannot in general be
 recovered from it.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
+dist_family(Q)
+}

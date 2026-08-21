@@ -15,3 +15,6 @@ atoms(x)
 \description{
 Parameter atoms of a mixing measure
 }
+\examples{
+atoms(finite_mixing(components = cbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
+}

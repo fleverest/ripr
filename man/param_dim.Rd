@@ -15,3 +15,6 @@ Integer parameter dimension.
 \description{
 Dimension of the parameter vector
 }
+\examples{
+param_dim(multinomial_family(n_trials = 4L, k = 3L))
+}

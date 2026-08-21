@@ -15,3 +15,8 @@ Integer.
 \description{
 Number of quadrature nodes
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+n_nodes(resolve_engine(exact_engine(), Q, fam))
+}

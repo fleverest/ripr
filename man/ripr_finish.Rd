@@ -26,9 +26,7 @@ ripr_finish(
 default.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the \emph{returned} mixture,
-filling \code{gap_final}. Off by default, since it costs a full oracle sweep.
-Turn it on to measure what refining and pruning did to the gap: \code{gap_fit}
-alone cannot show that, as it describes the state on the way in.}
+filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
 
 \item{tol, max_iter}{Passed to the weight solve.}
 
@@ -36,8 +34,10 @@ alone cannot show that, as it describes the state on the way in.}
 }
 \value{
 A list with \code{W0} (a \link{finite_mixing}), \code{P_star} (a \link{mixture}), \code{kl} of
-the returned mixture, \code{gap_fit}, \code{gap_final}, \code{rounds}, \code{atoms}, \code{weights},
-\code{subnull}, \code{trace} and \code{snapshots}.
+the returned mixture, \code{gap_fit} (the last Frank--Wolfe gap recorded during
+fitting, \code{NA} if none was), \code{gap_final} (a fresh Frank--Wolfe gap over the
+returned mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms},
+\code{weights}, \code{subnull}, \code{trace} and \code{snapshots}.
 }
 \description{
 Converts a fitted state into a mixture. By default that is all it does: the
@@ -76,6 +76,23 @@ and dropping atoms leaves more of the null uncovered. Measured on a \code{K = 4}
 problem, both refinements together took KL from 0.120 to 0.096 and the gap
 from 0.43 to 1.28. Which matters depends on whether the mixture is wanted for
 its fit or for a certificate resting on the gap.
+}
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+plurality <- null_model(
+  fam,
+  list(
+    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  )
+)
+Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
+fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+fit$kl
+fit$gap_fit
+fit$gap_final
 }
 \references{
 \insertRef{FercoqGramfortSalmon2015}{ripr}

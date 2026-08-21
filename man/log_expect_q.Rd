@@ -20,3 +20,9 @@ where \code{\link[=expect_q]{expect_q()}} would overflow, which it does routinel
 at audit scale exceed the range of a double long before they stop being
 meaningful.
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+engine <- resolve_engine(exact_engine(), Q, fam)
+log_expect_q(engine, log(engine@nodes[, 1] + 1))
+}

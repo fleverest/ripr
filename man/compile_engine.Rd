@@ -22,3 +22,10 @@ Engines hold their nodes as plain data and compile on demand rather than
 storing the evaluator, so a serialised engine carries no captured
 environment.
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+engine <- resolve_engine(exact_engine(), Q, fam)
+ll <- compile_engine(engine)
+ll(cbind(c(0.5, 0.5), c(0.2, 0.8)))
+}

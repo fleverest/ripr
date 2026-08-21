@@ -25,3 +25,8 @@ mixture, and hence what forces the duality gap to be non-negative, so a
 violation is an error rather than a warning: every downstream quantity would
 be wrong.
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+resolve_engine(exact_engine(), Q, fam)
+}

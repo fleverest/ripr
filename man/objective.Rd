@@ -21,3 +21,11 @@ A list to pass to \code{\link[=maximise_over]{maximise_over()}}.
 \description{
 Bundle an objective for \code{\link[=maximise_over]{maximise_over()}}
 }
+\examples{
+obj <- objective(
+  value = function(theta) -sum((theta - c(0.2, 0.3, 0.5))^2),
+  grad = function(theta) -2 * (theta - c(0.2, 0.3, 0.5))
+)
+s <- simplex_null(vertices = diag(3))
+maximise_over(s, obj)
+}

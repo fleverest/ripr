@@ -22,3 +22,8 @@ used for every column.}
 Recompiles on every call, so in a loop over many \code{theta} at fixed \code{x},
 use \code{\link[=compile_loglik]{compile_loglik()}} once and call its result instead.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
+log_density_batch(fam, cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)), x)
+}

@@ -42,3 +42,8 @@ density at the drawn nodes, and the objective needs both.
 
 Build one with \code{\link[=resolve_engine]{resolve_engine()}} rather than the raw constructor.
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+resolve_engine(exact_engine(), Q, fam)
+}

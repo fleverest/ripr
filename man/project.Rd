@@ -18,3 +18,7 @@ A parameter vector in the subnull.
 The closest point of the subnull to \code{theta}. Idempotent up to tolerance, and
 its output always satisfies \code{\link[=contains]{contains()}}.
 }
+\examples{
+s <- simplex_null(vertices = diag(3))
+project(s, c(2, -1, 0))
+}

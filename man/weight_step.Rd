@@ -23,14 +23,30 @@ The updated \link{ripr_state}.
 \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)} with the atoms
 held fixed: the exact M-step for the weights, guaranteed monotone in KL.
 Iterated to convergence this is the corrective half of fully-corrective
-Frank--Wolfe, so \code{fw_step(1) |> weight_step(500)} is one FCFW iteration.
-Note however that \code{lb_step(1) |> weight_step(500)} is not one Li--Barron
+Frank--Wolfe, so \code{fw_step(1) |> weight_step(big_num)} is one FCFW iteration.
+Note however that \code{lb_step(1) |> weight_step(big_num)} is not one Li--Barron
 step with fully corrective weights incorporated as the inner optimisation.
 }
 \details{
 \code{until = support_gap_below(tol)} is the natural stopping rule, and is what
 makes \code{times} a budget rather than a target. Expect to reach it: the rate
 degrades as atoms crowd together, which is what Frank--Wolfe makes them do.
+}
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+plurality <- null_model(
+  fam,
+  list(
+    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  )
+)
+Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+state <- ripr_init(Q, plurality) |>
+  fw_step(times = 5L) |>
+  weight_step(times = 20L, until = support_gap_below(1e-6))
+state@trace$kl
 }
 \seealso{
 \link{predicates}

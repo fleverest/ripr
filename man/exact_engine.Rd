@@ -19,3 +19,8 @@ Nodes carrying no mass under the alternative are screened out at resolution.
 They contribute nothing, and keeping them would put \code{-Inf} in \code{log_q}, where
 the \code{0 * -Inf} in the objective becomes \code{NaN}.
 }
+\examples{
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+resolve_engine(exact_engine(), Q, fam)
+}

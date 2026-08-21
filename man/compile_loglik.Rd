@@ -27,3 +27,9 @@ off because the outcomes stay fixed for a whole fit while \code{theta} moves
 thousands of times. Closing over \code{x} rather than taking a cache argument also
 means precomputed constants cannot be paired with the wrong outcomes.
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
+ll <- compile_loglik(fam, x)
+ll(cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)))
+}

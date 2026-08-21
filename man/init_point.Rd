@@ -17,3 +17,7 @@ A parameter vector in the subnull.
 \description{
 Defaults to projecting a reference point, typically the alternative's mean.
 }
+\examples{
+s <- simplex_null(vertices = diag(3))
+init_point(s, c(1, 0, 0))
+}

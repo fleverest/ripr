@@ -17,3 +17,9 @@ dist_draw(dist, n_obs)
 \description{
 Draw outcomes from a distribution
 }
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
+dist_draw(Q, n_obs = 3L)
+}

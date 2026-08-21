@@ -18,3 +18,10 @@ A \link{finite_mixing} over the survivors.
 Atoms are pruned by weight only, never merged, so survivors may still
 coincide in parameter space.
 }
+\examples{
+w <- finite_mixing(
+  components = cbind(c(0.6, 0.4), c(0.2, 0.8), c(0.5, 0.5)),
+  weights = c(0.98, 0.01, 0.01)
+)
+prune(w, threshold = 0.05)
+}

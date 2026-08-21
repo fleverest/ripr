@@ -37,3 +37,11 @@ returned value can fall below \verb{max_j G(theta_j)}, which the mixture already
 guarantees is at least 1, and a duality gap computed from it would come out
 spuriously negative.
 }
+\examples{
+s <- simplex_null(vertices = diag(3))
+obj <- objective(
+  value = function(theta) -sum((theta - c(0.2, 0.3, 0.5))^2),
+  grad = function(theta) -2 * (theta - c(0.2, 0.3, 0.5))
+)
+maximise_over(s, obj, n_seeds = 50L, n_restarts = 5L)
+}

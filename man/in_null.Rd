@@ -2,7 +2,7 @@
 % Please edit documentation in R/null.R
 \name{in_null}
 \alias{in_null}
-\title{Does any subnull contain this parameter?}
+\title{Does any subnull contain this parameter value?}
 \usage{
 in_null(null, theta, tol = 1e-08)
 }
@@ -17,5 +17,11 @@ in_null(null, theta, tol = 1e-08)
 \code{TRUE} or \code{FALSE}.
 }
 \description{
-Does any subnull contain this parameter?
+Does any subnull contain this parameter value?
+}
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+null <- null_model(fam, list(halfspace_null(c(1, -1, 0))))
+in_null(null, c(0.2, 0.5, 0.3))
+in_null(null, c(0.6, 0.2, 0.2))
 }

@@ -11,3 +11,8 @@ Two branches: a \link{mixing_measure} over a family's \emph{parameter} space, an
 \link{outcome_distribution} over its \emph{sample} space. A \code{\link[=mixture]{mixture()}} bridges them.
 The \code{distribution} class has no interface of its own.
 }
+\examples{
+# `distribution` is abstract; [mixing_measure] and [outcome_distribution]
+# subclass it, e.g.
+S7::S7_inherits(point_mixing(theta_star = c(0.5, 0.5)), distribution)
+}

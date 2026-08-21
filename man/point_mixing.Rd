@@ -15,3 +15,6 @@ A \code{point_mixing}.
 \description{
 Its induced \link{mixture} is the family at \code{theta_star}.
 }
+\examples{
+point_mixing(theta_star = c(0.4, 0.35, 0.25))
+}

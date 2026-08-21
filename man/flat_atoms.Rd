@@ -18,3 +18,15 @@ within its own subnull's block. So the flat ordering is not chronological: an
 atom added at iteration 5 may sit before one added at iteration 2. Use
 \code{\link[=flat_subnull]{flat_subnull()}} to recover which block a column came from.
 }
+\examples{
+plurality <- null_model(
+  fam,
+  list(
+    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  )
+)
+Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+state <- ripr_init(Q, plurality)
+flat_atoms(state)
+}

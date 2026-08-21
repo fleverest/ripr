@@ -33,3 +33,9 @@ Charts generally cover only the relative interior, so a maximum attained at a
 vertex or at infinity is approached but never reached. That is why the search
 below returns a lower bound on the true supremum.
 }
+\examples{
+s <- simplex_null(vertices = diag(3))
+ch <- chart(s)
+ch$n_par
+ch$to_theta(c(0, 0))
+}

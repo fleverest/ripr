@@ -19,3 +19,8 @@ draw(family, theta, n_obs)
 \description{
 Named \code{draw} rather than \code{simulate} to avoid masking \code{\link[stats:simulate]{stats::simulate()}}.
 }
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+draw(fam, c(0.5, 0.3, 0.2), n_obs = 5L)
+}

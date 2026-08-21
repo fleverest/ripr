@@ -91,3 +91,11 @@ If both operands are random variables, they must be defined on the same sample
 space, checked here rather than at evaluation, so a mismatch is reported where
 it was written.
 }
+\examples{
+fam <- gaussian_family(dim = 1)
+X <- random_variable(\(x) dnorm(x, 1), family = fam)
+Y <- 2 * X + 3
+Y(as.matrix(0:2))
+Z <- X / X
+Z(as.matrix(0:2))
+}

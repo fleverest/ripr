@@ -18,3 +18,9 @@ A \code{finite_mixing}.
 A discrete measure on finitely many parameter atoms; the shape of
 \eqn{\widehat{W}_0}{W0_hat}.
 }
+\examples{
+finite_mixing(
+  components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+  weights = c(0.5, 0.5)
+)
+}

@@ -15,3 +15,14 @@ Integer.
 \description{
 Number of convex pieces in a null
 }
+\examples{
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+plurality <- null_model(
+  fam,
+  list(
+    simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  )
+)
+n_subnulls(plurality)
+}

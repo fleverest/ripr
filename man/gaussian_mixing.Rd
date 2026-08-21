@@ -20,3 +20,8 @@ A prior \eqn{\mu \sim N(m, V)}{mu ~ N(m, V)} over the mean of a
 \eqn{N(m, \Sigma + V)}{N(m, sigma + V)} in closed form, so no numerical
 integration is needed to evaluate it.
 }
+\examples{
+fam <- gaussian_family(dim = 2L)
+prior <- gaussian_mixing(prior_mean = c(0, 0), prior_cov = diag(2))
+dist_log_density(mixture(prior, fam), c(0.5, 0.5))
+}

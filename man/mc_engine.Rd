@@ -18,3 +18,9 @@ draws are frozen when the spec is resolved, so a fit is reproducible under
 \code{set.seed()}; resolving the same spec again draws afresh, which is how
 certification obtains a sample independent of the fit.
 }
+\examples{
+set.seed(1)
+fam <- multinomial_family(n_trials = 3L, k = 2L)
+Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+resolve_engine(mc_engine(200L), Q, fam)
+}

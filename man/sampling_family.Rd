@@ -12,3 +12,8 @@ else; no knowledge of null hypotheses, alternatives, or any optimisation.
 Families supply a compiled log-likelihood, the score, a sampler, and support
 enumeration (for finite families).
 }
+\examples{
+# `sampling_family` is abstract; families subclass it, e.g.
+fam <- multinomial_family(n_trials = 4L, k = 3L)
+S7::S7_inherits(fam, sampling_family)
+}

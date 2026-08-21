@@ -482,7 +482,7 @@ certified bound below.</p>
 <span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fu">mixture_likelihood</span>(fit<span class="sc">$</span>P_star, <span class="at">label =</span> <span class="st">&quot;P*&quot;</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>X</span>
 <span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co">#&gt; &lt;random_variable&gt; Q / P* </span></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt;   on multinomial_family, dimension 3</span></span></code></pre></div>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt;   on count_space, dimension 3</span></span></code></pre></div>
 <p><code>random_variable</code>s are callable: they map elements of the
 sample space to their realisation.</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>outcomes <span class="ot">&lt;-</span> <span class="fu">rbind</span>(</span>
@@ -514,7 +514,7 @@ a genuine e-variable for <code>plurality</code>:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>E <span class="ot">&lt;-</span> X <span class="sc">/</span> cert<span class="sc">$</span>sup_ub</span>
 <span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">print</span>(E)</span>
 <span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="co">#&gt; &lt;random_variable&gt; Q / P* / 1.000134 </span></span>
-<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt;   on multinomial_family, dimension 3</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt;   on count_space, dimension 3</span></span>
 <span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">E</span>(outcomes))</span>
 <span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="co">#&gt; [1] 0.8469532 1.0777750</span></span></code></pre></div>
 </div>
@@ -536,7 +536,7 @@ uniform point mass – and certify the resulting ratio:</p>
 e-power – the log-growth, or expected log e-value under the alternative,
 that compounds over a sequential procedure:</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>growth <span class="ot">&lt;-</span> <span class="cf">function</span>(E, Q) {</span>
-<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  outcomes <span class="ot">&lt;-</span> <span class="fu">support</span>(E<span class="sc">@</span>family)</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  outcomes <span class="ot">&lt;-</span> <span class="fu">enumerate_space</span>(E<span class="sc">@</span>sample_space)</span>
 <span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  e_values <span class="ot">&lt;-</span> <span class="fu">E</span>(outcomes)</span>
 <span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  Q_expectation <span class="ot">&lt;-</span> <span class="fu">dist_log_density</span>(Q, outcomes) <span class="sc">|&gt;</span></span>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>    <span class="fu">exp</span>() <span class="sc">%*%</span></span>
@@ -658,10 +658,11 @@ method – only a search.</p>
 with a runnable example on each. A few starting points if you’re
 extending rather than just using the package:</p>
 <ul>
-<li><code>?sampling_family</code> and its generics
+<li><code>?parametric_family</code> and its generics
 (<code>param_dim()</code>, <code>compile_loglik()</code>,
-<code>score()</code>, <code>draw()</code>, <code>support()</code>)
-describe the interface a new observation model must implement.</li>
+<code>score()</code>, <code>draw()</code>) describe the interface a new
+observation model must implement; <code>?sample_space</code> describes
+the set its outcomes are drawn from.</li>
 <li><code>?subnull</code> and its generics (<code>chart()</code>,
 <code>contains()</code>, <code>project()</code>) describe the interface
 a new convex geometry must implement; <code>?simplex_null</code> and

@@ -4,26 +4,14 @@
 # definition of a multinomial, plus the invariants that make compiling a
 # log-likelihood safe.
 
-# --- Support enumeration ------------------------------------------------------
+# --- Sample space -------------------------------------------------------------
 
-test_that("enumerate_counts produces every count vector exactly once", {
-  for (n in c(0L, 1L, 5L)) {
-    for (k in c(1L, 2L, 4L)) {
-      x <- enumerate_counts(n, k)
-      expect_equal(nrow(x), choose(n + k - 1, k - 1))
-      expect_equal(ncol(x), k)
-      expect_true(all(rowSums(x) == n))
-      expect_true(all(x >= 0))
-      expect_equal(nrow(unique(x)), nrow(x))
-    }
-  }
-})
-
-test_that("support errors informatively for families without one", {
-  toy <- new_class("toy_family", parent = sampling_family)
-  expect_error(support(toy()), "no enumerable support")
-  expect_false(is_finite_support(toy()))
-  expect_true(is_finite_support(multinomial_family(2, 2)))
+test_that("a family carries the sample space its outcomes live in", {
+  # Enumeration, membership and dimension belong to the space; a family only
+  # holds a reference to one. Their properties live in `test-sample_space.R`.
+  fam <- multinomial_family(n_trials = 4, k = 3)
+  expect_identical(fam@sample_space, count_space(n = 4L, k = 3L))
+  expect_identical(gaussian_family(dim = 2)@sample_space, real_space(2L))
 })
 
 test_that("param_dim for multinomial is the number of categories", {
@@ -34,7 +22,7 @@ test_that("param_dim for multinomial is the number of categories", {
 
 test_that("the multinomial pmf sums to 1 over its support", {
   fam <- multinomial_family(n_trials = 10, k = 3)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   for (theta in list(
     c(1 / 3, 1 / 3, 1 / 3),
     c(0.7, 0.2, 0.1),
@@ -46,16 +34,16 @@ test_that("the multinomial pmf sums to 1 over its support", {
 
 test_that("a boundary parameter gives -Inf, not NaN, off its face", {
   fam <- multinomial_family(n_trials = 4, k = 3)
-  ld <- log_density(fam, c(0.5, 0.5, 0), support(fam))
+  ld <- log_density(fam, c(0.5, 0.5, 0), enumerate_space(fam@sample_space))
   expect_false(anyNA(ld))
-  dead <- support(fam)[, 3] > 0 # positive count in the zero-probability category
+  dead <- enumerate_space(fam@sample_space)[, 3] > 0 # positive count in the zero-probability category
   expect_true(all(ld[dead] == -Inf))
   expect_true(all(is.finite(ld[!dead])))
 })
 
 test_that("log_density_batch column c equals log_density of column c", {
   fam <- multinomial_family(n_trials = 6, k = 4)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   theta_mat <- cbind(
     c(0.25, 0.25, 0.25, 0.25),
     c(0.7, 0.1, 0.1, 0.1),
@@ -78,7 +66,7 @@ test_that("log_density accepts a bare vector as one outcome", {
 
 test_that("a compiled evaluator matches the one-off wrapper", {
   fam <- multinomial_family(n_trials = 12, k = 4)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   ld <- compile_loglik(fam, x)
   theta_mat <- cbind(
     c(0.25, 0.25, 0.25, 0.25),
@@ -90,7 +78,7 @@ test_that("a compiled evaluator matches the one-off wrapper", {
 
 test_that("a compiled evaluator is reusable across different theta", {
   fam <- multinomial_family(n_trials = 8, k = 3)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   ld <- compile_loglik(fam, x)
   for (theta in list(
     c(1 / 3, 1 / 3, 1 / 3),
@@ -109,7 +97,7 @@ test_that("a compiled evaluator does not alias its outcome matrix", {
   # what it computes. Copy-on-modify ensures this, just including as a sanity
   # check.
   fam <- multinomial_family(n_trials = 6, k = 3)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   ld <- compile_loglik(fam, x)
   before <- ld(matrix(c(0.5, 0.3, 0.2), ncol = 1L))
   x[1L, 1L] <- 99L
@@ -120,7 +108,7 @@ test_that("compiling against a subset of outcomes evaluates on that subset", {
   # Monte Carlo and quadrature engines compile against their own nodes, not the
   # full support, so this is the ordinary case rather than an edge one.
   fam <- multinomial_family(n_trials = 10, k = 3)
-  nodes <- support(fam)[c(2L, 5L, 9L), , drop = FALSE]
+  nodes <- enumerate_space(fam@sample_space)[c(2L, 5L, 9L), , drop = FALSE]
   ld <- compile_loglik(fam, nodes)
   theta <- c(0.5, 0.3, 0.2)
   expect_equal(
@@ -149,8 +137,9 @@ test_that("compiling accepts a bare vector as a single outcome", {
 test_that("a family with no compile_loglik method errors", {
   # compile_loglik is the one density method a family must supply; there is no
   # default, so an incomplete family fails loudly rather than silently.
-  toy <- new_class("toy_family", parent = sampling_family)
-  expect_error(compile_loglik(toy(), matrix(1:4, nrow = 2)))
+  toy <- new_class("toy_family", parent = parametric_family)
+  toy_fam <- toy(sample_space = real_space(1L))
+  expect_error(compile_loglik(toy_fam, matrix(1:4, nrow = 2)))
 })
 
 # --- Score --------------------------------------------------------------------
@@ -160,7 +149,7 @@ test_that("Mnom score matches a central finite difference of log_density", {
   # the simplex. The score is returned in raw coordinates, so the directional
   # derivative is what lines up.
   fam <- multinomial_family(n_trials = 8, k = 3)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   theta <- c(0.45, 0.35, 0.20)
   s <- score(fam, theta, x)
   eps <- 1e-6
@@ -176,14 +165,14 @@ test_that("Mnom score matches a central finite difference of log_density", {
 test_that("Mnom score is x_j / theta_j", {
   fam <- multinomial_family(n_trials = 8, k = 3)
   theta <- c(0.45, 0.35, 0.20)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   expect_equal(score(fam, theta, x), sweep(x, 2L, theta, "/"))
 })
 
 test_that("Mnom score is 0 rather than NaN where a zero count meets zero mass", {
   fam <- multinomial_family(n_trials = 3, k = 3)
-  s <- score(fam, c(0.5, 0.5, 0), support(fam))
-  zero_count <- support(fam)[, 3] == 0
+  s <- score(fam, c(0.5, 0.5, 0), enumerate_space(fam@sample_space))
+  zero_count <- enumerate_space(fam@sample_space)[, 3] == 0
   expect_false(any(is.nan(s[zero_count, 3])))
   expect_true(all(s[zero_count, 3] == 0))
 })

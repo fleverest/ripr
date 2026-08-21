@@ -7,7 +7,7 @@
 mixing_measure()
 }
 \description{
-A law \eqn{W}{W} over the parameter set of a \link{sampling_family}: a point mass
+A law \eqn{W}{W} over the parameter set of a \link{parametric_family}: a point mass
 (\code{\link[=point_mixing]{point_mixing()}}) or a finite weighted set of atoms (\code{\link[=finite_mixing]{finite_mixing()}}).
 Paired with a family via \code{\link[=mixture]{mixture()}} it induces the law \eqn{P_W}{P_W} over
 outcomes.

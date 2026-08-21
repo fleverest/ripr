@@ -1,4 +1,4 @@
-#' @include family.R mixture.R
+#' @include sample_space.R mixture.R
 NULL
 
 # Random variables on a sample space, and arithmetic over them.
@@ -18,7 +18,7 @@ NULL
 #' A `random_variable` `X` takes one element of the sample space (a length-`d`
 #' vector for a `d`-dimensional sample space) and returns a number, or `n`
 #' elements as an `(n, d)` matrix and returns `n` numbers. The input is checked
-#' by [as_outcomes()] first.
+#' by [validate_outcome()] first.
 #'
 #' `Inf` can be a legitimate value here. A likelihood ratio can be genuinely
 #' infinite when the denominator is not absolutely continuous with respect to
@@ -26,7 +26,7 @@ NULL
 #'
 #' @param f The mapping that defines the random variable, accepting an `(n, d)`
 #'   matrix and returning `n` numbers.
-#' @param family The [sampling_family] whose sample space this is defined on.
+#' @param sample_space The [sample_space] this variable is defined on.
 #' @param label How to name this variable when printing. Ignored when `op` is
 #'   given, since the expression is then built from the operands.
 #' @param op The operator that produced this variable, or `NA` for a leaf. Set
@@ -34,21 +34,21 @@ NULL
 #' @return A callable `random_variable`.
 #' @seealso [mixture_likelihood()], [random_variable_arithmetic]
 #' @examples
-#' X <- random_variable(\(x) dnorm(x, 1), family = gaussian_family(dim = 1))
+#' X <- random_variable(\(x) dnorm(x, 1), sample_space = real_space(1))
 #' X(as.matrix(0:2))
 #' @export
 random_variable <- new_class(
   "random_variable",
   parent = class_function,
   properties = list(
-    family = sampling_family,
+    sample_space = sample_space,
     label = class_character,
     op = class_character,
     operands = class_list
   ),
   constructor = function(
     f,
-    family,
+    sample_space,
     label = "<rv>",
     op = NA_character_,
     operands = list()
@@ -56,7 +56,7 @@ random_variable <- new_class(
     # Forced so the closure captures values, not promises: `saveRDS` on a
     # `class_function` parent serialises whatever the environment holds.
     force(f)
-    force(family)
+    force(sample_space)
     if (!is.function(f)) {
       stop("`f` must be a function.", call. = FALSE)
     }
@@ -64,13 +64,13 @@ random_variable <- new_class(
     new_object(
       function(x) {
         force(x)
-        out <- f(as_outcomes(family, x))
+        out <- f(validate_outcome(sample_space, x))
         if (!is.numeric(out)) {
           stop("a random variable must return numbers.", call. = FALSE)
         }
         as.vector(out)
       },
-      family = family,
+      sample_space = sample_space,
       label = label,
       op = op,
       operands = operands
@@ -136,9 +136,9 @@ rv_expression <- function(x) {
 #' A short description of a sample space
 #' @keywords internal
 #' @noRd
-family_label <- function(family) {
-  name <- attr(S7_class(family), "name")
-  sprintf("%s, dimension %d", name, outcome_dim(family))
+space_label <- function(space) {
+  name <- attr(S7_class(space), "name")
+  sprintf("%s, dimension %d", name, space_dim(space))
 }
 
 
@@ -148,7 +148,7 @@ family_label <- function(family) {
 #' @export
 method(print, random_variable) <- function(x, ...) {
   cat("<random_variable>", format(x), "\n")
-  cat("  on", family_label(x@family), "\n")
+  cat("  on", space_label(x@sample_space), "\n")
   invisible(x)
 }
 
@@ -194,7 +194,7 @@ mixture_likelihood <- function(dist, label = NULL) {
   force(dist)
   random_variable(
     function(x) exp(dist_log_density(dist, x)),
-    family = dist@family,
+    sample_space = dist@family@sample_space,
     label = label
   )
 }
@@ -223,7 +223,7 @@ mixture_likelihood <- function(dist, label = NULL) {
 #' @return A [random_variable].
 #' @examples
 #' fam <- gaussian_family(dim = 1)
-#' X <- random_variable(\(x) dnorm(x, 1), family = fam)
+#' X <- random_variable(\(x) dnorm(x, 1), sample_space = fam@sample_space)
 #' Y <- 2 * X + 3
 #' Y(as.matrix(0:2))
 #' Z <- X / X
@@ -233,23 +233,27 @@ NULL
 
 
 #' Both operands must live on the same sample space
+#'
+#' Compared by value, not identity: two separately built `count_space(20, 3)`
+#' objects are `identical()`, so variables from unrelated families over the same
+#' space combine freely.
 #' @keywords internal
 #' @noRd
-shared_family <- function(e1, e2) {
+shared_space <- function(e1, e2) {
   if (!S7_inherits(e1, random_variable)) {
-    return(e2@family)
+    return(e2@sample_space)
   }
   if (!S7_inherits(e2, random_variable)) {
-    return(e1@family)
+    return(e1@sample_space)
   }
-  if (!identical(e1@family, e2@family)) {
+  if (!identical(e1@sample_space, e2@sample_space)) {
     stop(
       "random variables are defined on different sample spaces, so they ",
       "cannot be combined.",
       call. = FALSE
     )
   }
-  e1@family
+  e1@sample_space
 }
 
 
@@ -261,7 +265,7 @@ shared_family <- function(e1, e2) {
 #' @keywords internal
 #' @noRd
 combine_rv <- function(e1, e2, op, symbol) {
-  family <- shared_family(e1, e2)
+  space <- shared_space(e1, e2)
   force(op)
   left <- if (S7_inherits(e1, random_variable)) e1 else NULL
   right <- if (S7_inherits(e2, random_variable)) e2 else NULL
@@ -288,7 +292,7 @@ combine_rv <- function(e1, e2, op, symbol) {
       b <- if (is.null(right)) const_right else right(x)
       op(a, b)
     },
-    family = family,
+    sample_space = space,
     op = symbol,
     operands = list(e1, e2)
   )

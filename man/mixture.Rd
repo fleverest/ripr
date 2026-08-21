@@ -4,12 +4,12 @@
 \alias{mixture}
 \title{Mixture \code{P_W} induced by a mixing measure and a family}
 \usage{
-mixture(mixing = mixing_measure(), family = sampling_family())
+mixture(mixing = mixing_measure(), family = parametric_family())
 }
 \arguments{
 \item{mixing}{A \link{mixing_measure} over the parameter space.}
 
-\item{family}{The \link{sampling_family} whose kernel is mixed.}
+\item{family}{The \link{parametric_family} whose kernel is mixed.}
 }
 \value{
 A \code{mixture}.

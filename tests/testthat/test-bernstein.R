@@ -32,8 +32,8 @@ rand_lambda <- function(K) {
 # --- Coefficient ordering -----------------------------------------------------
 
 test_that("compositions() agrees row-for-row with enumerate_counts()", {
-  # Load-bearing. `certify()` passes `x(support(family))` straight in as
-  # Bernstein coefficients, so the multinomial support order and the lattice
+  # Load-bearing. `certify()` passes `x(enumerate_space(space))` straight in
+  # as Bernstein coefficients, so the count-space order and the lattice
   # row order must be the same enumeration. They are computed by two unrelated
   # routines -- recursive prefixing here, stars and bars there -- and nothing
   # else forces them to agree.
@@ -357,8 +357,8 @@ test_that("the Bernstein form reproduces linear functions exactly", {
   #
   # Read alongside the pmf/basis test in `test-certify.R`, this is the half of
   # "E_theta[x_1] = n theta_1" that lives here. The other half -- that the
-  # coefficients ARE X on the lattice -- is a statement about `support()` and
-  # cannot be checked without a family.
+  # coefficients ARE X on the lattice -- is a statement about
+  # `enumerate_space()` and cannot be checked without a family.
   n <- 2L
   lat <- bernstein_lattice(n, 3L)
   coef <- coef_by_index(

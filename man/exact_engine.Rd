@@ -10,7 +10,7 @@ exact_engine()
 An engine spec for \code{\link[=resolve_engine]{resolve_engine()}}.
 }
 \description{
-Nodes are the family's full \code{\link[=support]{support()}} and the weights are the alternative's
+Nodes are the family's full sample space and the weights are the alternative's
 own probabilities, so expectations are exact. Available only for families
 with an enumerable sample space.
 }

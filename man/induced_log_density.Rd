@@ -9,7 +9,7 @@ induced_log_density(mixing, family, x)
 \arguments{
 \item{mixing}{A \link{mixing_measure}.}
 
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{x}{\verb{(M, K)} matrix of outcomes.}
 }

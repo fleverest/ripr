@@ -55,7 +55,7 @@ dist_draw <- new_generic("dist_draw", "dist", function(dist, n_obs) {
 #' be a mixture over the parameter space, so the family cannot in general be
 #' recovered from it.
 #' @param dist An [outcome_distribution].
-#' @return A [sampling_family], or `NULL`.
+#' @return A [parametric_family], or `NULL`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), fam)
@@ -77,7 +77,7 @@ method(dist_family, outcome_distribution) <- function(dist) NULL
 #' \eqn{\widehat{P}^* = P_{\widehat{W}_0}}{P_star_hat} are mixtures.
 #'
 #' @param mixing A [mixing_measure] over the parameter space.
-#' @param family The [sampling_family] whose kernel is mixed.
+#' @param family The [parametric_family] whose kernel is mixed.
 #' @return A `mixture`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -86,7 +86,7 @@ method(dist_family, outcome_distribution) <- function(dist) NULL
 mixture <- new_class(
   "mixture",
   parent = outcome_distribution,
-  properties = list(mixing = mixing_measure, family = sampling_family)
+  properties = list(mixing = mixing_measure, family = parametric_family)
 )
 
 
@@ -107,7 +107,7 @@ method(dist_draw, mixture) <- function(dist, n_obs) {
 
 #' Induced log density `log int p_theta(x) dW(theta)`
 #' @param mixing A [mixing_measure].
-#' @param family A [sampling_family].
+#' @param family A [parametric_family].
 #' @param x `(M, K)` matrix of outcomes.
 #' @return Length-`M` numeric vector.
 #' @keywords internal
@@ -120,7 +120,7 @@ induced_log_density <- new_generic(
 
 #' Draw from the induced mixture
 #' @param mixing A [mixing_measure].
-#' @param family A [sampling_family].
+#' @param family A [parametric_family].
 #' @param n_obs Number of draws.
 #' @return `(n_obs, K)` numeric matrix.
 #' @keywords internal
@@ -131,7 +131,7 @@ induced_draw <- new_generic(
 )
 
 
-method(induced_log_density, list(point_mixing, sampling_family)) <- function(
+method(induced_log_density, list(point_mixing, parametric_family)) <- function(
   mixing,
   family,
   x
@@ -140,7 +140,7 @@ method(induced_log_density, list(point_mixing, sampling_family)) <- function(
 }
 
 
-method(induced_draw, list(point_mixing, sampling_family)) <- function(
+method(induced_draw, list(point_mixing, parametric_family)) <- function(
   mixing,
   family,
   n_obs
@@ -149,7 +149,7 @@ method(induced_draw, list(point_mixing, sampling_family)) <- function(
 }
 
 
-method(induced_log_density, list(finite_mixing, sampling_family)) <- function(
+method(induced_log_density, list(finite_mixing, parametric_family)) <- function(
   mixing,
   family,
   x
@@ -161,7 +161,7 @@ method(induced_log_density, list(finite_mixing, sampling_family)) <- function(
 }
 
 
-method(induced_draw, list(finite_mixing, sampling_family)) <- function(
+method(induced_draw, list(finite_mixing, parametric_family)) <- function(
   mixing,
   family,
   n_obs

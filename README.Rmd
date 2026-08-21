@@ -250,7 +250,7 @@ We could measure growth as follows.
 
 ```{r growth}
 growth <- function(E, Q) {
-  outcomes <- support(E@family)
+  outcomes <- enumerate_space(E@sample_space)
   e_values <- E(outcomes)
   Q_expectation <- dist_log_density(Q, outcomes) |>
     exp() %*%

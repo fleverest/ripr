@@ -48,9 +48,9 @@ test_that("resolve_engine errors when the weights do not sum to one", {
   bad <- structure(
     function(alternative, family) {
       quadrature(
-        nodes = support(family),
-        log_w = log(rep(1 / 3, nrow(support(family)))),
-        log_q = dist_log_density(alternative, support(family)),
+        nodes = enumerate_space(family@sample_space),
+        log_w = log(rep(1 / 3, nrow(enumerate_space(family@sample_space)))),
+        log_q = dist_log_density(alternative, enumerate_space(family@sample_space)),
         family = family,
         deterministic = TRUE
       )
@@ -65,7 +65,7 @@ test_that("resolve_engine errors when the weights do not sum to one", {
 test_that("the exact engine integrates against the true Q", {
   s <- q_binomial()
   eng <- resolve_engine(exact_engine(), s$Q, s$family)
-  x <- support(s$family)
+  x <- enumerate_space(s$family@sample_space)
 
   # E_Q[X_1] for Binomial(10, 0.75) is 7.5.
   expect_equal(expect_q(eng, x[, 1]), 7.5, tolerance = 1e-10)
@@ -87,11 +87,11 @@ test_that("the exact engine drops nodes carrying no Q mass", {
 })
 
 test_that("the exact engine refuses a family with no enumerable support", {
-  toy <- new_class("toy_family", parent = sampling_family)
+  toy <- new_class("toy_family", parent = parametric_family)
   direct <- new_class("direct_law", parent = outcome_distribution)
   expect_error(
-    resolve_engine(exact_engine(), direct(), toy()),
-    "no enumerable support"
+    resolve_engine(exact_engine(), direct(), toy(sample_space = real_space(1L))),
+    "cannot be enumerated"
   )
 })
 
@@ -232,7 +232,7 @@ test_that("compile_engine is consistent across repeated compilations", {
 
 test_that("quadrature rejects mismatched node, weight and q lengths", {
   fam <- multinomial_family(n_trials = 3, k = 2)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   expect_error(
     quadrature(
       nodes = x,

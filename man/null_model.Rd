@@ -4,10 +4,10 @@
 \alias{null_model}
 \title{A null hypothesis: a family together with its parameter region}
 \usage{
-null_model(family = sampling_family(), subnulls = list())
+null_model(family = parametric_family(), subnulls = list())
 }
 \arguments{
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{subnulls}{A non-empty list of \link{subnull} objects.}
 }

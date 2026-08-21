@@ -73,10 +73,10 @@ test_that("draws have the right mean and covariance", {
   expect_equal(stats::cov(d), sigma, tolerance = 0.05)
 })
 
-test_that("the Gaussian has no enumerable support", {
+test_that("the Gaussian has no enumerable sample space", {
   fam <- gaussian_family(dim = 2)
-  expect_false(is_finite_support(fam))
-  expect_error(support(fam), "no enumerable support")
+  expect_false(is_finite_space(fam@sample_space))
+  expect_error(enumerate_space(fam@sample_space), "cannot be enumerated")
 })
 
 test_that("the covariance must be symmetric positive definite", {

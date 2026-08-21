@@ -14,6 +14,7 @@ fixture <- function(n = 8L, k = 3L) {
   theta <- seq(k, 1) / sum(seq(k, 1))
   list(
     family = fam,
+    space = fam@sample_space,
     Q = mixture(point_mixing(theta), fam),
     P = mixture(point_mixing(rep(1 / k, k)), fam)
   )
@@ -42,7 +43,7 @@ test_that("a random variable takes one element or many", {
   # One element as a length-d vector gives one number; n of them as an (n, d)
   # matrix gives n. The wrapped function only ever sees the matrix form.
   f <- fixture()
-  first <- random_variable(function(x) x[, 1L], f$family)
+  first <- random_variable(function(x) x[, 1L], f$space)
   expect_equal(first(c(4, 2, 2)), 4)
   expect_equal(first(rbind(c(4, 2, 2), c(0, 8, 0))), c(4, 0))
   expect_length(first(c(4, 2, 2)), 1L)
@@ -57,7 +58,7 @@ test_that("the wrapped function is never handed unchecked input", {
       seen <<- x
       rep(0, nrow(x))
     },
-    f$family
+    f$space
   )
   invisible(probe(c(4, 2, 2)))
   expect_true(is.matrix(seen))
@@ -80,7 +81,7 @@ test_that("a ratio integrates to 1 against its own denominator", {
   # anything, so it catches a mis-signed or mis-weighted density.
   f <- fixture()
   R <- mixture_likelihood(f$Q) / mixture_likelihood(f$P)
-  outcomes <- support(f$family)
+  outcomes <- enumerate_space(f$family@sample_space)
   expect_equal(
     sum(exp(dist_log_density(f$P, outcomes)) * R(outcomes)),
     1,
@@ -117,12 +118,12 @@ test_that("input must be numeric and present", {
   expect_match(error_message(R(c(4, NaN, 4))), "outcomes must not be missing")
 })
 
-test_that("multinomial outcomes must be counts summing to n_trials", {
+test_that("count outcomes must be counts summing to the total", {
   # The shape check alone would let through a vector of the right length that
   # is not a point of the sample space at all.
   f <- fixture()
   R <- mixture_likelihood(f$Q)
-  expect_match(error_message(R(c(4, 2, 1))), "sum to `n_trials`", fixed = TRUE)
+  expect_match(error_message(R(c(4, 2, 1))), "summing to 8", fixed = TRUE)
   expect_match(error_message(R(c(9, -1, 0))), "non-negative whole numbers")
   expect_match(error_message(R(c(4.5, 2, 1.5))), "non-negative whole numbers")
   expect_silent(R(c(8, 0, 0)))
@@ -174,7 +175,7 @@ test_that("a derived variable still checks its input", {
   # behalf; each operand checks, so any variable is sound on its own.
   f <- fixture()
   R <- mixture_likelihood(f$Q) / 2
-  expect_error(R(c(4, 2, 1)), "sum to `n_trials`")
+  expect_error(R(c(4, 2, 1)), "summing to 8")
 })
 
 test_that("variables on different sample spaces cannot be combined", {
@@ -200,7 +201,7 @@ test_that("a leaf prints its label", {
   expect_match(rv_expression(mixture_likelihood(Q)), "^Q$")
   expect_match(rv_expression(mixture_likelihood(Q, label = "alt")), "^alt$")
   expect_match(
-    rv_expression(random_variable(function(x) x[, 1L], f$family)),
+    rv_expression(random_variable(function(x) x[, 1L], f$space)),
     "rv"
   )
 })

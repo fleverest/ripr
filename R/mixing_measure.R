@@ -13,7 +13,7 @@ distribution <- new_class("distribution", abstract = TRUE)
 
 #' Mixing measure over a family's parameter space
 #'
-#' A law \eqn{W}{W} over the parameter set of a [sampling_family]: a point mass
+#' A law \eqn{W}{W} over the parameter set of a [parametric_family]: a point mass
 #' ([point_mixing()]) or a finite weighted set of atoms ([finite_mixing()]).
 #' Paired with a family via [mixture()] it induces the law \eqn{P_W}{P_W} over
 #' outcomes.

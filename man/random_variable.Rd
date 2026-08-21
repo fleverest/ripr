@@ -8,7 +8,7 @@
 \usage{
 random_variable(
   f,
-  family,
+  sample_space,
   label = "<rv>",
   op = NA_character_,
   operands = list()
@@ -24,7 +24,7 @@ format(x, ...)
 \item{f}{The mapping that defines the random variable, accepting an \verb{(n, d)}
 matrix and returning \code{n} numbers.}
 
-\item{family}{The \link{sampling_family} whose sample space this is defined on.}
+\item{sample_space}{The \link{sample_space} this variable is defined on.}
 
 \item{label}{How to name this variable when printing. Ignored when \code{op} is
 given, since the expression is then built from the operands.}
@@ -43,7 +43,7 @@ A callable \code{random_variable}.
 A \code{random_variable} \code{X} takes one element of the sample space (a length-\code{d}
 vector for a \code{d}-dimensional sample space) and returns a number, or \code{n}
 elements as an \verb{(n, d)} matrix and returns \code{n} numbers. The input is checked
-by \code{\link[=as_outcomes]{as_outcomes()}} first.
+by \code{\link[=validate_outcome]{validate_outcome()}} first.
 
 \code{format()} gives the expression alone, without the class
 banner \code{print()} adds.
@@ -59,7 +59,7 @@ infinite when the denominator is not absolutely continuous with respect to
 the numerator.
 }
 \examples{
-X <- random_variable(\(x) dnorm(x, 1), family = gaussian_family(dim = 1))
+X <- random_variable(\(x) dnorm(x, 1), sample_space = real_space(1))
 X(as.matrix(0:2))
 }
 \seealso{

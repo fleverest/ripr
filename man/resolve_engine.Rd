@@ -11,7 +11,7 @@ resolve_engine(spec, alternative, family, tol = 1e-08)
 
 \item{alternative}{The alternative \eqn{Q}{Q}, an \link{outcome_distribution}.}
 
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{tol}{Tolerance on the weight sum.}
 }

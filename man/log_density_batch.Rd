@@ -7,7 +7,7 @@
 log_density_batch(family, theta_mat, x)
 }
 \arguments{
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{theta_mat}{\verb{(d, C)} matrix of parameter columns, where \code{d} is the
 dimension of the parameter and \code{C} the number of columns. The same \code{x} is

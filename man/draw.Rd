@@ -7,7 +7,7 @@
 draw(family, theta, n_obs)
 }
 \arguments{
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{theta}{Parameter vector.}
 
@@ -17,7 +17,7 @@ draw(family, theta, n_obs)
 \verb{(n_obs, k)} numeric matrix.
 }
 \description{
-Named \code{draw} rather than \code{simulate} to avoid masking \code{\link[stats:simulate]{stats::simulate()}}.
+Draw observations from \code{p_theta}
 }
 \examples{
 set.seed(1)

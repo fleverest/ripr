@@ -593,7 +593,7 @@ method(contains, singleton_null) <- function(subnull, theta, tol = 1e-8) {
 #' geometry; keeping them together means nothing downstream has to carry them as
 #' separate arguments that could disagree.
 #'
-#' @param family A [sampling_family].
+#' @param family A [parametric_family].
 #' @param subnulls A non-empty list of [subnull] objects.
 #' @return A `null_model`.
 #' @examples
@@ -609,7 +609,7 @@ method(contains, singleton_null) <- function(subnull, theta, tol = 1e-8) {
 #' @export
 null_model <- new_class(
   "null_model",
-  properties = list(family = sampling_family, subnulls = class_list),
+  properties = list(family = parametric_family, subnulls = class_list),
   validator = function(self) {
     if (length(self@subnulls) == 0L) {
       return("`subnulls` must be a non-empty list")

@@ -42,6 +42,7 @@ Config/roxygen2/version: 8.1.0
 Collate:
     'numerics.R'
     'bernstein.R'
+    'sample_space.R'
     'family.R'
     'null.R'
     'mixing_measure.R'

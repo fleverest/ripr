@@ -25,14 +25,14 @@ plurality_null <- function(n, k) {
 # A random variable pinned to given values on the support, so the tests do not
 # depend on a fit having converged to anything in particular.
 tabulated_rv <- function(family, values) {
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   key <- apply(outcomes, 1L, paste, collapse = "-")
   force(values)
   random_variable(
     function(x) {
       values[match(apply(as.matrix(x), 1L, paste, collapse = "-"), key)]
     },
-    family = family,
+    sample_space = family@sample_space,
     label = "<tabulated>"
   )
 }
@@ -42,7 +42,7 @@ facet_grid_max <- function(family, values, vertices, m = 60L) {
   k <- ncol(vertices)
   weights <- compositions(m, k) / m
   theta <- weights %*% t(vertices)
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   max(as.vector(crossprod(
     exp(log_density_batch(family, t(theta), outcomes)),
     values
@@ -63,7 +63,7 @@ test_that("sup_ub is never below a dense grid search", {
   set.seed(101)
   null <- plurality_null(n = 8L, k = 3L)
   for (rep in 1:8) {
-    values <- stats::runif(nrow(support(null@family)), 0, 10)
+    values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
     res <- certify(tabulated_rv(null@family, values), null, tol = 1e-9)
     expect_gte(res$sup_ub, null_grid_max(null, values))
   }
@@ -75,7 +75,7 @@ test_that("sup_ub stays valid when the node budget is exhausted", {
   # `certify()` be interrupted.
   set.seed(102)
   null <- plurality_null(n = 8L, k = 3L)
-  values <- stats::runif(nrow(support(null@family)), 0, 10)
+  values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   x <- tabulated_rv(null@family, values)
   truth <- null_grid_max(null, values)
 
@@ -91,7 +91,7 @@ test_that("sup_ub stays valid when the node budget is exhausted", {
 test_that("sup_ub brackets sup_lb", {
   set.seed(103)
   null <- plurality_null(n = 10L, k = 3L)
-  values <- stats::runif(nrow(support(null@family)), 0, 10)
+  values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   x <- tabulated_rv(null@family, values)
   res <- certify(x, null, tol = 1e-9)
   expect_gte(res$sup_ub, res$sup_lb)
@@ -109,7 +109,7 @@ test_that("dividing by the bound gives an e-variable", {
   set.seed(104)
   null <- plurality_null(n = 8L, k = 4L)
   family <- null@family
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   values <- stats::runif(nrow(outcomes), 0, 5)
   x <- tabulated_rv(family, values)
   res <- certify(x, null, tol = 1e-9)
@@ -154,7 +154,7 @@ test_that("dividing by the bound gives an e-variable", {
 
 test_that("a constant variable certifies to its own value", {
   null <- plurality_null(n = 6L, k = 3L)
-  x <- tabulated_rv(null@family, rep(3.5, nrow(support(null@family))))
+  x <- tabulated_rv(null@family, rep(3.5, nrow(enumerate_space(null@family@sample_space))))
   res <- certify(x, null, tol = 1e-9)
   expect_equal(res$sup_lb, 3.5)
   expect_lt(res$sup_ub - 3.5, 1e-12)
@@ -167,7 +167,7 @@ test_that("a variable maximised at a facet vertex needs no subdivision", {
   n <- 6L
   null <- plurality_null(n = n, k = 3L)
   family <- null@family
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   q <- c(0.1, 0.8, 0.1)
   values <- exp(as.vector(outcomes %*% (log(q) - log(rep(1 / 3, 3)))))
   res <- certify(tabulated_rv(family, values), null, tol = 1e-9)
@@ -188,7 +188,7 @@ test_that("a variable maximised at a facet vertex needs no subdivision", {
 test_that("a variable maximised in a facet interior does need subdivision", {
   set.seed(110)
   null <- plurality_null(n = 8L, k = 3L)
-  outcomes <- support(null@family)
+  outcomes <- enumerate_space(null@family@sample_space)
   values <- stats::runif(nrow(outcomes), 0, 10)
   res <- certify(tabulated_rv(null@family, values), null, tol = 1e-9)
 
@@ -221,7 +221,7 @@ test_that("the certified bound is a bound on the expectation itself", {
   set.seed(108)
   null <- plurality_null(n = 6L, k = 3L)
   family <- null@family
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   values <- stats::runif(nrow(outcomes), 0, 10)
   res <- certify(tabulated_rv(family, values), null, tol = 1e-9)
 
@@ -240,7 +240,7 @@ test_that("the certified bound is a bound on the expectation itself", {
 test_that("certify() reports one entry per subnull", {
   set.seed(105)
   null <- plurality_null(n = 6L, k = 4L)
-  values <- stats::runif(nrow(support(null@family)), 0, 10)
+  values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   res <- certify(tabulated_rv(null@family, values), null, tol = 1e-6)
 
   n_sub <- length(null@subnulls)
@@ -260,7 +260,7 @@ test_that("certify() reports one entry per subnull", {
 test_that("certify() carries back the variable and null it holds for", {
   # A certificate that does not name what it certifies is not a certificate.
   null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
   res <- certify(x, null)
   expect_identical(res$random_variable, x)
   expect_identical(res$null, null)
@@ -269,7 +269,7 @@ test_that("certify() carries back the variable and null it holds for", {
 test_that("converged and budget_hit distinguish the two ways of stopping", {
   set.seed(111)
   null <- plurality_null(n = 8L, k = 3L)
-  values <- stats::runif(nrow(support(null@family)), 0, 10)
+  values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   x <- tabulated_rv(null@family, values)
 
   tight <- certify(x, null, tol = 1e-12, max_nodes = 5000L)
@@ -295,7 +295,7 @@ test_that("certify_trace() records every node, and they tile at every step", {
   null <- plurality_null(n = 8L, k = 3L)
   x <- tabulated_rv(
     null@family,
-    stats::runif(nrow(support(null@family)), 0, 10)
+    stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   )
   nodes <- certify_trace(x, null, tol = 1e-9)
 
@@ -324,7 +324,7 @@ test_that("certify_trace() records the tree and the order it was built in", {
   null <- plurality_null(n = 8L, k = 3L)
   x <- tabulated_rv(
     null@family,
-    stats::runif(nrow(support(null@family)), 0, 10)
+    stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   )
   nodes <- certify_trace(x, null, tol = 1e-9)
 
@@ -365,7 +365,7 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
   null <- plurality_null(n = 8L, k = 3L)
   x <- tabulated_rv(
     null@family,
-    stats::runif(nrow(support(null@family)), 0, 10)
+    stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   )
 
   nodes <- certify_trace(x, null, tol = 1e-9)
@@ -391,7 +391,7 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
 
 test_that("certify() does not record unless asked", {
   null <- plurality_null(n = 6L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
   expect_null(certify(x, null)$record)
   expect_null(certify(x, null)$traces)
   expect_type(certify(x, null)$iterations, "integer")
@@ -451,7 +451,7 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
       halfspace_null(normal = c(0, 1, -1), offset = 0)
     )
   )
-  x <- tabulated_rv(family, rep(1, nrow(support(family))))
+  x <- tabulated_rv(family, rep(1, nrow(enumerate_space(family@sample_space))))
   res <- certify(x, null, tol = 1e-9)
 
   # Subnulls 1 and 3 went to the stub, subnull 2 to the real bound_fn
@@ -476,7 +476,7 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
     }
   )
   null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
   expect_error(certify(x, null), "returned 0 results for 2 subnulls")
 })
 
@@ -523,7 +523,10 @@ test_that("certify() refuses a family and geometry it has no method for", {
     family,
     list(halfspace_null(normal = c(1, -1), offset = 0))
   )
-  x <- random_variable(function(x) rep(1, nrow(as.matrix(x))), family = family)
+  x <- random_variable(
+    function(x) rep(1, nrow(as.matrix(x))),
+    sample_space = family@sample_space
+  )
   expect_error(certify(x, null), "No bounding method is implemented")
   expect_error(certify(x, null), "gaussian_family")
   expect_error(certify(x, null), "halfspace_null")
@@ -537,7 +540,10 @@ test_that("the refusal names the subnull, not the null model", {
     family,
     list(halfspace_null(normal = c(1, -1), offset = 0))
   )
-  x <- random_variable(function(x) rep(1, nrow(as.matrix(x))), family = family)
+  x <- random_variable(
+    function(x) rep(1, nrow(as.matrix(x))),
+    sample_space = family@sample_space
+  )
   msg <- tryCatch(certify(x, null), error = conditionMessage)
   expect_false(grepl("null_model", msg, fixed = TRUE))
   expect_false(grepl("FALSE", msg, fixed = TRUE))
@@ -552,7 +558,10 @@ test_that("the refusal is not repeated once per subnull", {
       halfspace_null(normal = c(1, 0), offset = 0)
     )
   )
-  x <- random_variable(function(x) rep(1, nrow(as.matrix(x))), family = family)
+  x <- random_variable(
+    function(x) rep(1, nrow(as.matrix(x))),
+    sample_space = family@sample_space
+  )
   msg <- tryCatch(certify(x, null), error = conditionMessage)
   expect_identical(
     lengths(regmatches(msg, gregexpr("No bounding method", msg))),
@@ -564,7 +573,7 @@ test_that("certify() refuses a variable that is not finite on the support", {
   # An infinite value is legitimate for a likelihood ratio and fatal for a
   # bound: the supremum is then unbounded and no finite certificate exists.
   null <- plurality_null(n = 4L, k = 3L)
-  values <- rep(1, nrow(support(null@family)))
+  values <- rep(1, nrow(enumerate_space(null@family@sample_space)))
   values[3L] <- Inf
   expect_error(
     certify(tabulated_rv(null@family, values), null),
@@ -574,7 +583,7 @@ test_that("certify() refuses a variable that is not finite on the support", {
 
 test_that("certify() refuses a lattice above the coefficient budget", {
   null <- plurality_null(n = 8L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
   expect_error(
     certify(x, null, max_coefficients = 10L),
     "above `max_coefficients`"
@@ -585,7 +594,7 @@ test_that("certify() refuses a lattice above the coefficient budget", {
 
 test_that("certify() rejects a non-random_variable and bad control values", {
   null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(support(null@family))))
+  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
   expect_error(certify(function(x) 1, null), "must be a `random_variable`")
   expect_error(certify(x, null, tol = -1))
   expect_error(certify(x, null, max_nodes = 0))
@@ -598,7 +607,7 @@ test_that("sup_lb() reports a value the objective actually attains", {
   set.seed(106)
   null <- plurality_null(n = 8L, k = 3L)
   family <- null@family
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   values <- stats::runif(nrow(outcomes), 0, 10)
   x <- tabulated_rv(family, values)
   found <- sup_lb(x, null, n_seeds = 100L, n_restarts = 10L)
@@ -628,7 +637,7 @@ test_that("sup_lb() reports a value the objective actually attains", {
 test_that("sup_lb() improves on a single seed given more of them", {
   set.seed(109)
   null <- plurality_null(n = 8L, k = 3L)
-  outcomes <- support(null@family)
+  outcomes <- enumerate_space(null@family@sample_space)
 
   ratios <- vapply(
     seq_len(8L),

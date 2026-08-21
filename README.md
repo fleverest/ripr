@@ -131,7 +131,7 @@ X <- mixture_likelihood(Q, label = "Q") /
   mixture_likelihood(fit$P_star, label = "P*")
 X
 #> <random_variable> Q / P* 
-#>   on multinomial_family, dimension 3
+#>   on count_space, dimension 3
 ```
 
 `random_variable`s are effectively functions that map elements of the
@@ -178,7 +178,7 @@ e-variable for `plurality`:
 E <- X / cert$sup_ub
 print(E)
 #> <random_variable> Q / P* / 1.000134 
-#>   on multinomial_family, dimension 3
+#>   on count_space, dimension 3
 print(E(outcomes))
 #> [1] 0.8469532 1.0777750
 ```
@@ -206,7 +206,7 @@ procedure. We could measure growth as follows.
 
 ``` r
 growth <- function(E, Q) {
-  outcomes <- support(E@family)
+  outcomes <- enumerate_space(E@sample_space)
   e_values <- E(outcomes)
   Q_expectation <- dist_log_density(Q, outcomes) |>
     exp() %*%

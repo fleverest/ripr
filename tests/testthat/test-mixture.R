@@ -10,7 +10,7 @@ test_that("a point mixing induces the family at its own parameter", {
   fam <- multinomial_family(n_trials = 10, k = 2)
   theta <- c(0.75, 0.25)
   p <- mixture(point_mixing(theta_star = theta), fam)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   expect_equal(dist_log_density(p, x), log_density(fam, theta, x))
 })
 
@@ -22,7 +22,7 @@ test_that("an induced mixture is itself a probability distribution", {
     fam
   )
   expect_equal(
-    sum(exp(dist_log_density(p, support(fam)))),
+    sum(exp(dist_log_density(p, enumerate_space(fam@sample_space)))),
     1,
     tolerance = 1e-12
   )
@@ -32,7 +32,7 @@ test_that("a finite mixture is the weighted sum of its components", {
   fam <- multinomial_family(n_trials = 6, k = 3)
   w <- c(0.4, 0.6)
   comp <- cbind(c(0.5, 0.3, 0.2), c(0.1, 0.1, 0.8))
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   p <- mixture(finite_mixing(components = comp, weights = w), fam)
 
   manual <- log(
@@ -46,7 +46,7 @@ test_that("a finite mixture is the weighted sum of its components", {
 test_that("a degenerate finite mixing agrees with the point mixing", {
   fam <- multinomial_family(n_trials = 5, k = 3)
   theta <- c(0.5, 0.3, 0.2)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   a <- mixture(point_mixing(theta_star = theta), fam)
   b <- mixture(
     finite_mixing(components = matrix(theta, ncol = 1L), weights = 1),
@@ -57,7 +57,7 @@ test_that("a degenerate finite mixing agrees with the point mixing", {
 
 test_that("a zero-weight atom contributes nothing", {
   fam <- multinomial_family(n_trials = 5, k = 3)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   live <- c(0.5, 0.3, 0.2)
   with_dead <- mixture(
     finite_mixing(
@@ -80,7 +80,7 @@ test_that("a mixture carrying a boundary atom stays finite where it should", {
     ),
     fam
   )
-  ld <- dist_log_density(p, support(fam))
+  ld <- dist_log_density(p, enumerate_space(fam@sample_space))
   expect_true(all(is.finite(ld)))
   expect_equal(sum(exp(ld)), 1, tolerance = 1e-12)
 })
@@ -138,7 +138,7 @@ test_that("draws from a mixture are consistent with its density", {
   )
   set.seed(42)
   d <- dist_draw(p, 2e5)
-  x <- support(fam)
+  x <- enumerate_space(fam@sample_space)
   empirical <- vapply(
     seq_len(nrow(x)),
     \(i) mean(d[, 1] == x[i, 1]),

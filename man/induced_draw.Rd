@@ -9,7 +9,7 @@ induced_draw(mixing, family, n_obs)
 \arguments{
 \item{mixing}{A \link{mixing_measure}.}
 
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{n_obs}{Number of draws.}
 }

@@ -4,12 +4,25 @@ template:
   bootstrap: 5
 
 reference:
+- title: Sample spaces
+  desc: >
+    A `sample_space` owns the set an observation is drawn from: its dimension,
+    which objects are elements of it, and (when finite) all of them.
+  contents:
+  - sample_space
+  - count_space
+  - real_space
+  - space_dim
+  - validate_outcome
+  - enumerate_space
+  - is_finite_space
+
 - title: Observation models
   desc: >
-    A `sampling_family` owns the model `p_theta(x)`: a compiled log-likelihood,
-    score, sampler and (for finite families) support enumeration.
+    A `parametric_family` owns the model `p_theta(x)`: a compiled
+    log-likelihood, score and sampler over a sample space.
   contents:
-  - sampling_family
+  - parametric_family
   - multinomial_family
   - gaussian_family
   - param_dim
@@ -18,10 +31,6 @@ reference:
   - log_density_batch
   - score
   - draw
-  - support
-  - outcome_dim
-  - as_outcomes
-  - is_finite_support
 
 - title: Null hypotheses
   desc: >

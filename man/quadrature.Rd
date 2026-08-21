@@ -8,7 +8,7 @@ quadrature(
   nodes = NULL,
   log_w = integer(0),
   log_q = integer(0),
-  family = sampling_family(),
+  family = parametric_family(),
   deterministic = logical(0)
 )
 }
@@ -19,7 +19,7 @@ quadrature(
 
 \item{log_q}{Length-\code{M} log density of the alternative at \code{nodes}.}
 
-\item{family}{The \link{sampling_family} the nodes live over.}
+\item{family}{The \link{parametric_family} the nodes live over.}
 
 \item{deterministic}{Is the rule free of sampling error?}
 }

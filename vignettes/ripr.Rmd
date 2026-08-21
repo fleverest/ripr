@@ -273,7 +273,7 @@ compounds over a sequential procedure:
 
 ```{r growth}
 growth <- function(E, Q) {
-  outcomes <- support(E@family)
+  outcomes <- enumerate_space(E@sample_space)
   e_values <- E(outcomes)
   Q_expectation <- dist_log_density(Q, outcomes) |>
     exp() %*%
@@ -398,9 +398,9 @@ The function reference lists every exported function and S7 class, with a
 runnable example on each. A few starting points if you're extending rather
 than just using the package:
 
-- `?sampling_family` and its generics (`param_dim()`, `compile_loglik()`,
-  `score()`, `draw()`, `support()`) describe the interface a new observation
-  model must implement.
+- `?parametric_family` and its generics (`param_dim()`, `compile_loglik()`,
+  `score()`, `draw()`) describe the interface a new observation model must
+  implement; `?sample_space` describes the set its outcomes are drawn from.
 - `?subnull` and its generics (`chart()`, `contains()`, `project()`) describe
   the interface a new convex geometry must implement; `?simplex_null` and
   `?halfspace_null` are the two built-in examples.

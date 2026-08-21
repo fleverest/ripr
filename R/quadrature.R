@@ -20,7 +20,7 @@ NULL
 #' @param nodes `(M, K)` matrix of evaluation points.
 #' @param log_w Length-`M` log quadrature weights; `exp(log_w)` sums to 1.
 #' @param log_q Length-`M` log density of the alternative at `nodes`.
-#' @param family The [sampling_family] the nodes live over.
+#' @param family The [parametric_family] the nodes live over.
 #' @param deterministic Is the rule free of sampling error?
 #' @return A `quadrature`.
 #' @examples
@@ -34,7 +34,7 @@ quadrature <- new_class(
     nodes = class_any,
     log_w = class_numeric,
     log_q = class_numeric,
-    family = sampling_family,
+    family = parametric_family,
     deterministic = class_logical
   ),
   validator = function(self) {
@@ -178,7 +178,7 @@ new_engine_spec <- function(fn) {
 
 #' Exact enumeration over a finite sample space
 #'
-#' Nodes are the family's full [support()] and the weights are the alternative's
+#' Nodes are the family's full sample space and the weights are the alternative's
 #' own probabilities, so expectations are exact. Available only for families
 #' with an enumerable sample space.
 #'
@@ -193,7 +193,7 @@ new_engine_spec <- function(fn) {
 #' @export
 exact_engine <- function() {
   new_engine_spec(function(alternative, family) {
-    nodes <- support(family)
+    nodes <- enumerate_space(family@sample_space)
     log_q <- dist_log_density(alternative, nodes)
     live <- is.finite(log_q)
     quadrature(
@@ -249,7 +249,7 @@ mc_engine <- function(n_draws) {
 #'
 #' @param spec An engine spec, e.g. from [exact_engine()] or [mc_engine()].
 #' @param alternative The alternative \eqn{Q}{Q}, an [outcome_distribution].
-#' @param family A [sampling_family].
+#' @param family A [parametric_family].
 #' @param tol Tolerance on the weight sum.
 #' @return A [quadrature].
 #' @examples
@@ -312,7 +312,7 @@ method(gaussian_moments, mixture) <- function(dist) {
 #' not Gaussian, however well defined its moments are.
 #'
 #' @param mixing A [mixing_measure].
-#' @param family A [sampling_family].
+#' @param family A [parametric_family].
 #' @return `list(mean = , cov = )`, or `NULL`.
 #' @keywords internal
 induced_gaussian_moments <- new_generic(
@@ -323,7 +323,7 @@ induced_gaussian_moments <- new_generic(
 
 method(
   induced_gaussian_moments,
-  list(mixing_measure, sampling_family)
+  list(mixing_measure, parametric_family)
 ) <- function(mixing, family) {
   NULL
 }

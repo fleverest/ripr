@@ -7,7 +7,7 @@
 score(family, theta, x)
 }
 \arguments{
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{theta}{Parameter vector.}
 

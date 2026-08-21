@@ -44,9 +44,9 @@ as_covariance <- function(sigma, d, what = "sigma") {
 #' Observations are single draws \eqn{X \sim N(\theta, \Sigma)}{X ~ N(theta, sigma)}
 #' with \eqn{\Sigma}{sigma} known, so the parameter is the mean.
 #'
-#' The sample space is continuous, so [support()] errors: pair this family with
-#' [mc_engine()] or [gh_engine()] rather than [exact_engine()]. It is also a
-#' family for which a certified gap bound is unavailable.
+#' The sample space is [real_space()], which cannot be enumerated: pair this
+#' family with [mc_engine()] or [gh_engine()] rather than [exact_engine()]. It
+#' is also a family for which a certified gap bound is unavailable.
 #'
 #' @param dim Integer dimension of the observation.
 #' @param sigma Known covariance matrix, or `NULL` for the identity.
@@ -57,7 +57,7 @@ as_covariance <- function(sigma, d, what = "sigma") {
 #' @export
 gaussian_family <- new_class(
   "gaussian_family",
-  parent = sampling_family,
+  parent = parametric_family,
   properties = list(
     n_dim = class_numeric,
     sigma = class_any,
@@ -74,6 +74,7 @@ gaussian_family <- new_class(
     sigma <- as_covariance(sigma, dim)
     new_object(
       S7_object(),
+      sample_space = real_space(dim),
       n_dim = dim,
       sigma = sigma,
       chol_l = t(chol(sigma)),
@@ -84,22 +85,6 @@ gaussian_family <- new_class(
 
 
 method(param_dim, gaussian_family) <- function(family) as.integer(family@n_dim)
-
-
-#' The sample space is all of `R^d`, so the inherited checks -- numeric, right
-#' shape, no missing values -- are nearly the whole contract. All this adds is
-#' finiteness: an infinite outcome has zero density under every parameter, so a
-#' likelihood ratio there is `0 / 0`, and a `NaN` is a worse answer than a
-#' complaint.
-#' @keywords internal
-#' @noRd
-method(as_outcomes, gaussian_family) <- function(family, x) {
-  x <- check_outcome_shape(x, outcome_dim(family))
-  if (any(!is.finite(x))) {
-    stop("Gaussian outcomes must be finite.", call. = FALSE)
-  }
-  x
-}
 
 
 method(compile_loglik, gaussian_family) <- function(family, x) {

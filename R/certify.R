@@ -145,7 +145,7 @@ check_bound_result <- function(results, method_name, n_subnulls) {
 bernstein_bound <- function(x, family, subnulls, control) {
   check_bernstein_size(family@n_trials, family@k, control$max_coefficients)
 
-  outcomes <- support(family)
+  outcomes <- enumerate_space(family@sample_space)
   values <- x(outcomes)
   if (any(!is.finite(values))) {
     # If the random variable is not bounded, the expectation is not well-defined
@@ -228,14 +228,14 @@ unimplemented_message <- function(family, subnull) {
 #' @keywords internal
 #' @noRd
 expectation_objective <- function(family, values) {
-  loglik <- compile_loglik(family, support(family))
+  loglik <- compile_loglik(family, enumerate_space(family@sample_space))
   objective(
     value = function(theta) {
       sum(exp(as.vector(loglik(matrix(theta, ncol = 1L)))) * values)
     },
     grad = function(theta) {
       weight <- exp(as.vector(loglik(matrix(theta, ncol = 1L)))) * values
-      as.vector(crossprod(score(family, theta, support(family)), weight))
+      as.vector(crossprod(score(family, theta, enumerate_space(family@sample_space)), weight))
     },
     value_batch = function(theta_mat) {
       as.vector(crossprod(exp(loglik(theta_mat)), values))
@@ -278,7 +278,7 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
   }
 
   family <- null@family
-  values <- x(support(family))
+  values <- x(enumerate_space(family@sample_space))
   obj <- expectation_objective(family, values)
 
   found <- lapply(

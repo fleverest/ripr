@@ -11,28 +11,9 @@ log_multinom_coef <- function(x, n) {
 }
 
 
-#' Enumerate every count vector with `K` categories summing to `n`
-#'
-#' Stars and bars: each count vector is a choice of `K - 1` bar positions among
-#' `n + K - 1` slots, so enumeration costs `O(M * K)`.
-#'
-#' @param n Total trials.
-#' @param k Number of categories.
-#' @return `(M, K)` integer matrix, `M = choose(n + K - 1, K - 1)`.
-#' @keywords internal
-#' @noRd
-enumerate_counts <- function(n, k) {
-  if (k == 1L) {
-    return(matrix(as.integer(n), nrow = 1L))
-  }
-  bars <- utils::combn(n + k - 1L, k - 1L)
-  t(diff(rbind(0L, bars, n + k)) - 1L)
-}
-
-
 #' Multinomial sampling family
 #'
-#' The `n`-trial, `K`-category multinomial. The support enumeration and its log
+#' The `n`-trial, `K`-category multinomial over [count_space()]. Its log
 #' multinomial coefficients are built once at construction and stored as plain
 #' data rather than closures, so a serialised family carries no environment.
 #'
@@ -44,67 +25,24 @@ enumerate_counts <- function(n, k) {
 #' @export
 multinomial_family <- new_class(
   "multinomial_family",
-  parent = sampling_family,
+  parent = parametric_family,
   properties = list(
     n_trials = class_numeric,
-    k = class_numeric,
-    outcomes = class_any,
-    log_coef = class_numeric
+    k = class_numeric
   ),
   constructor = function(n_trials, k) {
-    n_trials <- as.integer(n_trials)
-    k <- as.integer(k)
-    stopifnot(
-      "`n_trials` must be a single non-negative integer" = length(n_trials) ==
-        1L &&
-        !is.na(n_trials) &&
-        n_trials >= 0L,
-      "`k` must be a single integer >= 1" = length(k) == 1L &&
-        !is.na(k) &&
-        k >= 1L
-    )
-    outcomes <- enumerate_counts(n_trials, k)
+    space <- count_space(n = n_trials, k = k)
     new_object(
       S7_object(),
-      n_trials = n_trials,
-      k = k,
-      outcomes = outcomes,
-      log_coef = log_multinom_coef(outcomes, n_trials)
+      sample_space = space,
+      n_trials = space@n,
+      k = space@k
     )
   }
 )
 
 
 method(param_dim, multinomial_family) <- function(family) as.integer(family@k)
-
-
-method(as_outcomes, multinomial_family) <- function(family, x) {
-  x <- check_outcome_shape(x, outcome_dim(family))
-  if (any(x < 0) || any(x != trunc(x))) {
-    stop(
-      "multinomial outcomes must be non-negative whole numbers.",
-      call. = FALSE
-    )
-  }
-  totals <- rowSums(x)
-  if (any(totals != family@n_trials)) {
-    stop(
-      "multinomial outcomes must sum to `n_trials` (",
-      family@n_trials,
-      "); got ",
-      paste(unique(totals[totals != family@n_trials]), collapse = ", "),
-      ".",
-      call. = FALSE
-    )
-  }
-  x
-}
-
-
-method(support, multinomial_family) <- function(family) family@outcomes
-
-
-method(is_finite_support, multinomial_family) <- function(family) TRUE
 
 
 method(compile_loglik, multinomial_family) <- function(family, x) {

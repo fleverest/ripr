@@ -19,9 +19,9 @@ Observations are single draws \eqn{X \sim N(\theta, \Sigma)}{X ~ N(theta, sigma)
 with \eqn{\Sigma}{sigma} known, so the parameter is the mean.
 }
 \details{
-The sample space is continuous, so \code{\link[=support]{support()}} errors: pair this family with
-\code{\link[=mc_engine]{mc_engine()}} or \code{\link[=gh_engine]{gh_engine()}} rather than \code{\link[=exact_engine]{exact_engine()}}. It is also a
-family for which a certified gap bound is unavailable.
+The sample space is \code{\link[=real_space]{real_space()}}, which cannot be enumerated: pair this
+family with \code{\link[=mc_engine]{mc_engine()}} or \code{\link[=gh_engine]{gh_engine()}} rather than \code{\link[=exact_engine]{exact_engine()}}. It
+is also a family for which a certified gap bound is unavailable.
 }
 \examples{
 gaussian_family(dim = 2L)

@@ -360,7 +360,7 @@ test_that("the returned mixture is a distribution", {
   expect_true(S7_inherits(fit$P_star, mixture))
   expect_equal(sum(weights(fit$W0)), 1, tolerance = 1e-12)
   expect_equal(
-    sum(exp(dist_log_density(fit$P_star, support(fit$P_star@family)))),
+    sum(exp(dist_log_density(fit$P_star, enumerate_space(fit$P_star@family@sample_space)))),
     1,
     tolerance = 1e-10
   )

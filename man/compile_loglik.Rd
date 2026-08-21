@@ -7,7 +7,7 @@
 compile_loglik(family, x)
 }
 \arguments{
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 
 \item{x}{\verb{(M, K)} matrix of outcomes, where \code{M} is the number of outcomes and
 \code{K} the dimension of the sample space.}
@@ -18,14 +18,15 @@ returning the \verb{(M, C)} matrix of log densities at \code{x}.
 }
 \description{
 The single density method a family must implement; \code{\link[=log_density_batch]{log_density_batch()}} and
-\code{\link[=log_density]{log_density()}} are thin wrappers over it. Returns a function of \code{theta_mat}
-alone.
+\code{\link[=log_density]{log_density()}} are thin wrappers over it. Returns a function of \code{theta_mat}.
 }
 \details{
-Compiling lets a family precompute whatever depends on \code{x} alone, which pays
-off because the outcomes stay fixed for a whole fit while \code{theta} moves
-thousands of times. Closing over \code{x} rather than taking a cache argument also
-means precomputed constants cannot be paired with the wrong outcomes.
+Compiling lets a family precompute whatever depends on \code{x} alone, which we
+require because the our optimiser fixes the outcomes (either enumerating the
+entire sample space or fixing monte carlo draws at the start) and evaluates
+likelihoods for many different parameter values. Closing over \code{x} rather than
+taking a cache argument means precomputed constants cannot be paired with the
+wrong outcomes.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

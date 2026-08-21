@@ -10,7 +10,7 @@ dist_family(dist)
 \item{dist}{An \link{outcome_distribution}.}
 }
 \value{
-A \link{sampling_family}, or \code{NULL}.
+A \link{parametric_family}, or \code{NULL}.
 }
 \description{
 Returns \code{NULL} when there is none. \eqn{Q}{Q} is fixed a priori and need not

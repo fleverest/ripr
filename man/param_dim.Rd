@@ -7,7 +7,7 @@
 param_dim(family)
 }
 \arguments{
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 }
 \value{
 Integer parameter dimension.

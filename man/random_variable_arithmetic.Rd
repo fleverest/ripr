@@ -93,7 +93,7 @@ it was written.
 }
 \examples{
 fam <- gaussian_family(dim = 1)
-X <- random_variable(\(x) dnorm(x, 1), family = fam)
+X <- random_variable(\(x) dnorm(x, 1), sample_space = fam@sample_space)
 Y <- 2 * X + 3
 Y(as.matrix(0:2))
 Z <- X / X

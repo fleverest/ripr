@@ -9,7 +9,7 @@ induced_gaussian_moments(mixing, family)
 \arguments{
 \item{mixing}{A \link{mixing_measure}.}
 
-\item{family}{A \link{sampling_family}.}
+\item{family}{A \link{parametric_family}.}
 }
 \value{
 \code{list(mean = , cov = )}, or \code{NULL}.

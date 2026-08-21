@@ -23,6 +23,10 @@ NULL
 #' @param family The [sampling_family] the nodes live over.
 #' @param deterministic Is the rule free of sampling error?
 #' @return A `quadrature`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' resolve_engine(exact_engine(), Q, fam)
 #' @export
 quadrature <- new_class(
   "quadrature",
@@ -51,6 +55,10 @@ quadrature <- new_class(
 #' Number of quadrature nodes
 #' @param engine A [quadrature].
 #' @return Integer.
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' n_nodes(resolve_engine(exact_engine(), Q, fam))
 #' @export
 n_nodes <- function(engine) nrow(engine@nodes)
 
@@ -62,6 +70,11 @@ n_nodes <- function(engine) nrow(engine@nodes)
 #' bias rather than variance, so [expect_se()] does not describe it.
 #' @param engine A [quadrature].
 #' @return `TRUE` or `FALSE`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' deterministic(resolve_engine(exact_engine(), Q, fam))
+#' deterministic(resolve_engine(mc_engine(100L), Q, fam))
 #' @export
 deterministic <- function(engine) isTRUE(engine@deterministic)
 
@@ -77,6 +90,12 @@ deterministic <- function(engine) isTRUE(engine@deterministic)
 #' environment.
 #' @param engine A [quadrature].
 #' @return A function of `theta_mat`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' engine <- resolve_engine(exact_engine(), Q, fam)
+#' ll <- compile_engine(engine)
+#' ll(cbind(c(0.5, 0.5), c(0.2, 0.8)))
 #' @export
 compile_engine <- function(engine) {
   compile_loglik(engine@family, engine@nodes)
@@ -91,6 +110,11 @@ compile_engine <- function(engine) {
 #' @param engine A [quadrature].
 #' @param v Length-`M` numeric vector of integrand values at the nodes.
 #' @return Numeric scalar.
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' engine <- resolve_engine(exact_engine(), Q, fam)
+#' expect_q(engine, engine@nodes[, 1])
 #' @export
 expect_q <- function(engine, v) {
   sum(exp(engine@log_w) * v)
@@ -106,6 +130,11 @@ expect_q <- function(engine, v) {
 #' @param engine A [quadrature].
 #' @param log_v Length-`M` numeric vector of log integrand values at the nodes.
 #' @return Numeric scalar.
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' engine <- resolve_engine(exact_engine(), Q, fam)
+#' log_expect_q(engine, log(engine@nodes[, 1] + 1))
 #' @export
 log_expect_q <- function(engine, log_v) {
   logsumexp_weighted(log_v, engine@log_w)
@@ -120,6 +149,12 @@ log_expect_q <- function(engine, log_v) {
 #' @param engine A [quadrature].
 #' @param v Length-`M` numeric vector of integrand values at the nodes.
 #' @return Numeric scalar.
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' engine <- resolve_engine(mc_engine(200L), Q, fam)
+#' expect_se(engine, engine@nodes[, 1])
 #' @export
 expect_se <- function(engine, v) {
   if (deterministic(engine)) {
@@ -151,6 +186,10 @@ new_engine_spec <- function(fn) {
 #' They contribute nothing, and keeping them would put `-Inf` in `log_q`, where
 #' the `0 * -Inf` in the objective becomes `NaN`.
 #' @return An engine spec for [resolve_engine()].
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' resolve_engine(exact_engine(), Q, fam)
 #' @export
 exact_engine <- function() {
   new_engine_spec(function(alternative, family) {
@@ -176,6 +215,11 @@ exact_engine <- function() {
 #' certification obtains a sample independent of the fit.
 #' @param n_draws Number of draws.
 #' @return An engine spec for [resolve_engine()].
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' resolve_engine(mc_engine(200L), Q, fam)
 #' @export
 mc_engine <- function(n_draws) {
   n_draws <- as.integer(n_draws)
@@ -208,6 +252,10 @@ mc_engine <- function(n_draws) {
 #' @param family A [sampling_family].
 #' @param tol Tolerance on the weight sum.
 #' @return A [quadrature].
+#' @examples
+#' fam <- multinomial_family(n_trials = 3L, k = 2L)
+#' Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+#' resolve_engine(exact_engine(), Q, fam)
 #' @export
 resolve_engine <- function(spec, alternative, family, tol = 1e-8) {
   if (!inherits(spec, "ripr_engine_spec")) {
@@ -336,6 +384,10 @@ gauss_hermite <- function(n) {
 #' @return An engine spec for [resolve_engine()].
 #' @references
 #'   \insertRef{GolubWelsch1969}{ripr}
+#' @examples
+#' fam <- gaussian_family(dim = 2L)
+#' Q <- mixture(point_mixing(c(0, 0)), fam)
+#' resolve_engine(gh_engine(n_nodes = 10L), Q, fam)
 #' @export
 gh_engine <- function(n_nodes, max_nodes = 1e6) {
   n_nodes <- as.integer(n_nodes)

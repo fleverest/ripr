@@ -221,6 +221,13 @@ mixture_likelihood <- function(dist, label = NULL) {
 #' @param e1,e2 A [random_variable] or a single number, at least one of them a
 #'   random variable.
 #' @return A [random_variable].
+#' @examples
+#' fam <- gaussian_family(dim = 1)
+#' X <- random_variable(\(x) dnorm(x, 1), family = fam)
+#' Y <- 2 * X + 3
+#' Y(as.matrix(0:2))
+#' Z <- X / X
+#' Z(as.matrix(0:2))
 #' @name random_variable_arithmetic
 NULL
 

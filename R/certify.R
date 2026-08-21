@@ -260,6 +260,17 @@ expectation_objective <- function(family, values) {
 #' @param n_seeds,n_restarts Resolution of the search.
 #' @return A list with `sup_lb` and the `theta` attaining it.
 #' @seealso [certify()]
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
+#' sup_lb(X, plurality)
 #' @export
 sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
   if (!S7_inherits(x, random_variable)) {
@@ -340,6 +351,18 @@ node_table <- function(result, subnull) {
 #'   certificate itself in the `"certificate"` attribute and the per-iteration
 #'   bound in `"trace"`.
 #' @seealso [certify()]
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
+#' nodes <- certify_trace(X, plurality, tol = 1e-6)
+#' nrow(nodes)
 #' @export
 certify_trace <- function(
   x,
@@ -409,6 +432,18 @@ certify_trace <- function(
 #' @seealso [sup_lb()]
 #' @references
 #' \insertAllCited{}
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
+#' cert <- certify(X, plurality, tol = 1e-6)
+#' c(upper = cert$sup_ub, attained = cert$sup_lb)
 #' @export
 certify <- function(
   x,

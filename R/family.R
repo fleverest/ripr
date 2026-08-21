@@ -5,6 +5,10 @@
 #' Families supply a compiled log-likelihood, the score, a sampler, and support
 #' enumeration (for finite families).
 #'
+#' @examples
+#' # `sampling_family` is abstract; families subclass it, e.g.
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' S7::S7_inherits(fam, sampling_family)
 #' @export
 sampling_family <- new_class("sampling_family", abstract = TRUE)
 
@@ -12,6 +16,8 @@ sampling_family <- new_class("sampling_family", abstract = TRUE)
 #' Dimension of the parameter vector
 #' @param family A [sampling_family].
 #' @return Integer parameter dimension.
+#' @examples
+#' param_dim(multinomial_family(n_trials = 4L, k = 3L))
 #' @export
 param_dim <- new_generic("param_dim", "family", function(family) {
   S7::S7_dispatch()
@@ -34,6 +40,11 @@ param_dim <- new_generic("param_dim", "family", function(family) {
 #'   `K` the dimension of the sample space.
 #' @return A function of `theta_mat`, a `(d, C)` matrix of parameter columns,
 #'   returning the `(M, C)` matrix of log densities at `x`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
+#' ll <- compile_loglik(fam, x)
+#' ll(cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)))
 #' @export
 compile_loglik <- new_generic("compile_loglik", "family", function(family, x) {
   S7::S7_dispatch()
@@ -50,6 +61,10 @@ compile_loglik <- new_generic("compile_loglik", "family", function(family, x) {
 #'   used for every column.
 #' @param x `(M, K)` matrix of outcomes.
 #' @return `(M, C)` matrix of log densities.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
+#' log_density_batch(fam, cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)), x)
 #' @export
 log_density_batch <- function(family, theta_mat, x) {
   compile_loglik(family, x)(theta_mat)
@@ -62,6 +77,9 @@ log_density_batch <- function(family, theta_mat, x) {
 #' @param theta Parameter vector of length [param_dim()].
 #' @param x `(M, K)` matrix of outcomes, or a length-`K` vector for one outcome.
 #' @return Length-`M` numeric vector.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' log_density(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
 #' @export
 log_density <- function(family, theta, x) {
   as.vector(log_density_batch(family, matrix(theta, ncol = 1L), x))
@@ -78,6 +96,9 @@ log_density <- function(family, theta, x) {
 #' @param theta Parameter vector.
 #' @param x `(M, K)` matrix of outcomes.
 #' @return `(M, d)` matrix.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' score(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
 #' @export
 score <- new_generic("score", "family", function(family, theta, x) {
   S7::S7_dispatch()
@@ -91,6 +112,10 @@ score <- new_generic("score", "family", function(family, theta, x) {
 #' @param theta Parameter vector.
 #' @param n_obs Number of draws.
 #' @return `(n_obs, k)` numeric matrix.
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' draw(fam, c(0.5, 0.3, 0.2), n_obs = 5L)
 #' @export
 draw <- new_generic("draw", "family", function(family, theta, n_obs) {
   S7::S7_dispatch()
@@ -103,6 +128,8 @@ draw <- new_generic("draw", "family", function(family, theta, n_obs) {
 #' undefined for them, not merely slow.
 #' @param family A [sampling_family].
 #' @return `(M, K)` matrix of outcomes.
+#' @examples
+#' support(multinomial_family(n_trials = 3L, k = 2L))
 #' @export
 support <- new_generic("support", "family", function(family) S7::S7_dispatch())
 
@@ -122,6 +149,8 @@ method(support, sampling_family) <- function(family) {
 #' Distinct from [param_dim()] in principle, though equal for every family here.
 #' @param family A [sampling_family].
 #' @return Integer.
+#' @examples
+#' outcome_dim(multinomial_family(n_trials = 4L, k = 3L))
 #' @export
 outcome_dim <- new_generic("outcome_dim", "family", function(family) {
   S7::S7_dispatch()
@@ -140,6 +169,9 @@ method(outcome_dim, sampling_family) <- function(family) param_dim(family)
 #' @param family A [sampling_family].
 #' @param x A length-`d` vector or `(n, d)` matrix.
 #' @return `(n, d)` numeric matrix.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' as_outcomes(fam, c(2L, 1L, 1L))
 #' @export
 as_outcomes <- new_generic("as_outcomes", "family", function(family, x) {
   S7::S7_dispatch()
@@ -196,6 +228,9 @@ method(as_outcomes, sampling_family) <- function(family, x) {
 #' Does this family have a finite, enumerable sample space?
 #' @param family A [sampling_family].
 #' @return `TRUE` or `FALSE`.
+#' @examples
+#' is_finite_support(multinomial_family(n_trials = 4L, k = 3L))
+#' is_finite_support(gaussian_family(dim = 1L))
 #' @export
 is_finite_support <- new_generic(
   "is_finite_support",

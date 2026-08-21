@@ -39,6 +39,8 @@ enumerate_counts <- function(n, k) {
 #' @param n_trials Integer. Trials per observation.
 #' @param k Integer. Number of categories.
 #' @return A `multinomial_family`.
+#' @examples
+#' multinomial_family(n_trials = 20L, k = 3L)
 #' @export
 multinomial_family <- new_class(
   "multinomial_family",

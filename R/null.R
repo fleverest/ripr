@@ -16,6 +16,11 @@ NULL
 #' A subnull owns its geometry -- membership, projection, and a [chart()] giving
 #' unconstrained coordinates -- and nothing else. The oracle is written once
 #' against the chart, so a new subnull type needs no optimisation code.
+#' @examples
+#' # `subnull` is abstract; simplex_null(), halfspace_null() and
+#' # singleton_null() subclass it, e.g.
+#' s <- simplex_null(vertices = diag(3))
+#' S7::S7_inherits(s, subnull)
 #' @export
 subnull <- new_class("subnull", abstract = TRUE)
 
@@ -42,6 +47,11 @@ subnull <- new_class("subnull", abstract = TRUE)
 #'   \item{`seed(n)`}{`(n_par, n)` random coordinates for a multi-start search,
 #'   drawn to suit the subnull's own geometry.}
 #' }
+#' @examples
+#' s <- simplex_null(vertices = diag(3))
+#' ch <- chart(s)
+#' ch$n_par
+#' ch$to_theta(c(0, 0))
 #' @export
 chart <- new_generic("chart", "subnull", function(subnull) S7::S7_dispatch())
 
@@ -51,6 +61,10 @@ chart <- new_generic("chart", "subnull", function(subnull) S7::S7_dispatch())
 #' @param theta Parameter vector.
 #' @param tol Tolerance.
 #' @return `TRUE` or `FALSE`.
+#' @examples
+#' s <- simplex_null(vertices = diag(3))
+#' contains(s, c(1 / 3, 1 / 3, 1 / 3))
+#' contains(s, c(2, -1, 0))
 #' @export
 contains <- new_generic(
   "contains",
@@ -66,6 +80,9 @@ contains <- new_generic(
 #' @param subnull A [subnull].
 #' @param theta Parameter vector.
 #' @return A parameter vector in the subnull.
+#' @examples
+#' s <- simplex_null(vertices = diag(3))
+#' project(s, c(2, -1, 0))
 #' @export
 project <- new_generic(
   "project",
@@ -80,6 +97,9 @@ project <- new_generic(
 #' @param subnull A [subnull].
 #' @param ref Reference parameter vector.
 #' @return A parameter vector in the subnull.
+#' @examples
+#' s <- simplex_null(vertices = diag(3))
+#' init_point(s, c(1, 0, 0))
 #' @export
 init_point <- new_generic(
   "init_point",
@@ -99,6 +119,13 @@ method(init_point, subnull) <- function(subnull, ref) project(subnull, ref)
 #'   values. Used to score the seed grid; defaults to applying `value` per
 #'   column, which is correct but slower.
 #' @return A list to pass to [maximise_over()].
+#' @examples
+#' obj <- objective(
+#'   value = function(theta) -sum((theta - c(0.2, 0.3, 0.5))^2),
+#'   grad = function(theta) -2 * (theta - c(0.2, 0.3, 0.5))
+#' )
+#' s <- simplex_null(vertices = diag(3))
+#' maximise_over(s, obj)
 #' @export
 objective <- function(value, grad, value_batch = NULL) {
   if (is.null(value_batch)) {
@@ -133,6 +160,13 @@ objective <- function(value, grad, value_batch = NULL) {
 #' @param n_seeds Random seeds drawn from the chart.
 #' @param n_restarts How many of the best seeds to refine.
 #' @return `list(theta = , value = )` with `theta` in the subnull.
+#' @examples
+#' s <- simplex_null(vertices = diag(3))
+#' obj <- objective(
+#'   value = function(theta) -sum((theta - c(0.2, 0.3, 0.5))^2),
+#'   grad = function(theta) -2 * (theta - c(0.2, 0.3, 0.5))
+#' )
+#' maximise_over(s, obj, n_seeds = 50L, n_restarts = 5L)
 #' @export
 maximise_over <- function(
   subnull,
@@ -280,6 +314,9 @@ sigmoid <- function(s) 1 / (1 + exp(-s))
 #'   \insertRef{DuchiShalevShwartz2008}{ripr}
 #'
 #'   \insertRef{ODonoghueCandes2015}{ripr}
+#' @examples
+#' # The 2-simplex in R^3, e.g. the full multinomial parameter space:
+#' simplex_null(vertices = diag(3))
 #' @export
 simplex_null <- new_class(
   "simplex_null",
@@ -413,6 +450,9 @@ method(contains, simplex_null) <- function(subnull, theta, tol = 1e-8) {
 #' @param normal Normal vector `a`; must be non-zero.
 #' @param offset Offset `b`.
 #' @return A `halfspace_null`.
+#' @examples
+#' # `{theta : theta_1 <= theta_2}`
+#' halfspace_null(normal = c(1, -1), offset = 0)
 #' @export
 halfspace_null <- new_class(
   "halfspace_null",
@@ -510,12 +550,14 @@ method(contains, halfspace_null) <- function(subnull, theta, tol = 1e-8) {
 
 #' A single parameter point
 #'
-#' The degenerate convex set \eqn{\{\theta^*\}}{{theta*}}. Its role is to let a
-#' likelihood ratio state the null it is valid for: \eqn{Q / P}{Q / P} is an
-#' e-variable for \eqn{\{P\}}{{P}} and generally for nothing larger.
+#' The degenerate convex set \eqn{\{\theta\}}{{theta}}. Its role is to let a
+#' likelihood ratio state the null it is valid for: \eqn{Q / P_\theta}{Q / P_theta}
+#' is an e-variable for \eqn{\{P_\theta\}}{{P_theta}}.
 #'
 #' @param theta The parameter vector.
 #' @return A `singleton_null`.
+#' @examples
+#' singleton_null(theta = c(0.5, 0.3, 0.2))
 #' @export
 singleton_null <- new_class(
   "singleton_null",
@@ -554,6 +596,16 @@ method(contains, singleton_null) <- function(subnull, theta, tol = 1e-8) {
 #' @param family A [sampling_family].
 #' @param subnulls A non-empty list of [subnull] objects.
 #' @return A `null_model`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' # The plurality null
+#' null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
 #' @export
 null_model <- new_class(
   "null_model",
@@ -574,15 +626,30 @@ null_model <- new_class(
 #' Number of convex pieces in a null
 #' @param null A [null_model].
 #' @return Integer.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' n_subnulls(plurality)
 #' @export
 n_subnulls <- function(null) length(null@subnulls)
 
 
-#' Does any subnull contain this parameter?
+#' Does any subnull contain this parameter value?
 #' @param null A [null_model].
 #' @param theta Parameter vector.
 #' @param tol Tolerance.
 #' @return `TRUE` or `FALSE`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' null <- null_model(fam, list(halfspace_null(c(1, -1, 0))))
+#' in_null(null, c(0.2, 0.5, 0.3))
+#' in_null(null, c(0.6, 0.2, 0.2))
 #' @export
 in_null <- function(null, theta, tol = 1e-8) {
   any(vapply(null@subnulls, \(s) contains(s, theta, tol), logical(1)))

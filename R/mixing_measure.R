@@ -3,6 +3,10 @@
 #' Two branches: a [mixing_measure] over a family's *parameter* space, and an
 #' [outcome_distribution] over its *sample* space. A [mixture()] bridges them.
 #' The `distribution` class has no interface of its own.
+#' @examples
+#' # `distribution` is abstract; [mixing_measure] and [outcome_distribution]
+#' # subclass it, e.g.
+#' S7::S7_inherits(point_mixing(theta_star = c(0.5, 0.5)), distribution)
 #' @export
 distribution <- new_class("distribution", abstract = TRUE)
 
@@ -18,6 +22,10 @@ distribution <- new_class("distribution", abstract = TRUE)
 #' \eqn{W}{W} is the `mixing_measure`, \eqn{P_W}{P_W} is the [mixture].
 #' @references
 #'   \insertRef{Lindsay1995}{ripr}
+#' @examples
+#' # `mixing_measure` is abstract; [point_mixing()] and [finite_mixing()]
+#' # subclass it, e.g.
+#' S7::S7_inherits(point_mixing(theta_star = c(0.5, 0.5)), mixing_measure)
 #' @export
 mixing_measure <- new_class(
   "mixing_measure",
@@ -31,6 +39,8 @@ mixing_measure <- new_class(
 #' Its induced [mixture] is the family at `theta_star`.
 #' @param theta_star Numeric parameter vector.
 #' @return A `point_mixing`.
+#' @examples
+#' point_mixing(theta_star = c(0.4, 0.35, 0.25))
 #' @export
 point_mixing <- new_class(
   "point_mixing",
@@ -47,6 +57,11 @@ point_mixing <- new_class(
 #' @param components `(K, C)` numeric matrix, one parameter vector per column.
 #' @param weights Length-`C` numeric vector summing to 1.
 #' @return A `finite_mixing`.
+#' @examples
+#' finite_mixing(
+#'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+#'   weights = c(0.5, 0.5)
+#' )
 #' @export
 finite_mixing <- new_class(
   "finite_mixing",
@@ -73,6 +88,9 @@ finite_mixing <- new_class(
 #' Number of atoms in a mixing measure
 #' @param x A [mixing_measure].
 #' @return Integer.
+#' @examples
+#' n_atoms(point_mixing(theta_star = c(0.5, 0.5)))
+#' n_atoms(finite_mixing(components = cbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
 #' @export
 n_atoms <- new_generic("n_atoms", "x", function(x) S7::S7_dispatch())
 
@@ -86,6 +104,8 @@ method(n_atoms, finite_mixing) <- function(x) ncol(x@components)
 #' Parameter atoms of a mixing measure
 #' @param x A [mixing_measure].
 #' @return `(K, C)` numeric matrix.
+#' @examples
+#' atoms(finite_mixing(components = cbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
 #' @export
 atoms <- new_generic("atoms", "x", function(x) S7::S7_dispatch())
 
@@ -124,6 +144,12 @@ method(weights, finite_mixing) <- function(object, ...) object@weights
 #' @param x A [finite_mixing].
 #' @param threshold Atoms with weight `<= threshold` are dropped.
 #' @return A [finite_mixing] over the survivors.
+#' @examples
+#' w <- finite_mixing(
+#'   components = cbind(c(0.6, 0.4), c(0.2, 0.8), c(0.5, 0.5)),
+#'   weights = c(0.98, 0.01, 0.01)
+#' )
+#' prune(w, threshold = 0.05)
 #' @export
 prune <- new_generic("prune", "x", function(x, threshold = 1e-8) {
   S7::S7_dispatch()
@@ -156,6 +182,12 @@ method(prune, finite_mixing) <- function(x, threshold = 1e-8) {
 #' starting point for the RIPr optimiser.
 #' @param x A [mixing_measure].
 #' @return Numeric vector of length [param_dim()].
+#' @examples
+#' w <- finite_mixing(
+#'   components = cbind(c(0.6, 0.4), c(0.2, 0.8)),
+#'   weights = c(0.3, 0.7)
+#' )
+#' mode_parameter(w)
 #' @export
 mode_parameter <- new_generic("mode_parameter", "x", \(x) S7::S7_dispatch())
 

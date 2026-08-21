@@ -24,6 +24,18 @@ NULL
 #' @param snapshots List of recorded mixtures.
 #' @param iters Named integer counts of steps taken, one name per verb.
 #' @return A `ripr_state`.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality)
+#' state
 #' @export
 ripr_state <- new_class(
   "ripr_state",
@@ -70,6 +82,17 @@ ripr_state <- new_class(
 #' [flat_subnull()] to recover which block a column came from.
 #' @param state A [ripr_state].
 #' @return `(d, C)` numeric matrix.
+#' @examples
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality)
+#' flat_atoms(state)
 #' @export
 flat_atoms <- function(state) {
   keep <- block_sizes(state) > 0L
@@ -82,12 +105,36 @@ flat_atoms <- function(state) {
 #' All weights as one vector, aligned with [flat_atoms()]
 #' @param state A [ripr_state].
 #' @return Numeric vector summing to 1.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality)
+#' flat_weights(state)
 #' @export
 flat_weights <- function(state) unlist(state@weights, use.names = FALSE)
 
 #' Which subnull each column of [flat_atoms()] belongs to
 #' @param state A [ripr_state].
 #' @return Integer vector.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality)
+#' flat_subnull(state)
 #' @export
 flat_subnull <- function(state) {
   rep(seq_along(state@atoms), block_sizes(state))

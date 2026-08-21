@@ -51,6 +51,9 @@ as_covariance <- function(sigma, d, what = "sigma") {
 #' @param dim Integer dimension of the observation.
 #' @param sigma Known covariance matrix, or `NULL` for the identity.
 #' @return A `gaussian_family`.
+#' @examples
+#' gaussian_family(dim = 2L)
+#' gaussian_family(dim = 2L, sigma = diag(c(1, 4)))
 #' @export
 gaussian_family <- new_class(
   "gaussian_family",
@@ -142,6 +145,10 @@ method(draw, gaussian_family) <- function(family, theta, n_obs) {
 #' @param prior_mean Numeric prior mean vector.
 #' @param prior_cov Prior covariance, symmetric positive definite.
 #' @return A `gaussian_mixing`.
+#' @examples
+#' fam <- gaussian_family(dim = 2L)
+#' prior <- gaussian_mixing(prior_mean = c(0, 0), prior_cov = diag(2))
+#' dist_log_density(mixture(prior, fam), c(0.5, 0.5))
 #' @export
 gaussian_mixing <- new_class(
   "gaussian_mixing",

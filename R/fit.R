@@ -30,6 +30,17 @@ NULL
 #' @param weights Optional list matching `atoms`; defaults to uniform.
 #' @param control From [ripr_control()].
 #' @return A [ripr_state] with no iterations run.
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' ripr_init(Q, plurality)
 #' @export
 ripr_init <- function(
   alternative,
@@ -116,6 +127,19 @@ ripr_init <- function(
 #'
 #' @param tol Threshold.
 #' @return A function of a [ripr_state] returning `TRUE` or `FALSE`.
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality) |> fw_step(times = 25L, until = gap_below(1e-2))
+#' gap_below(1e-2)(state)
 #' @name predicates
 NULL
 
@@ -208,6 +232,19 @@ run_steps <- function(state, times, until, counter, phase, advance) {
 #' @param until Optional predicate; see [predicates].
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
+#' state@trace$kl
 #' @export
 fw_step <- function(
   state,
@@ -266,6 +303,19 @@ fw_step <- function(
 #'   `FALSE` by default.
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality) |> lb_step(times = 5L)
+#' state@trace$kl
 #' @export
 lb_step <- function(
   state,
@@ -328,14 +378,27 @@ lb_step <- function(
 #' EM sweep
 #'
 #' Each sweep updates every weight, then moves every atom within its own
-#' subnull. The support neither grows nor shrinks: only an oracle can add an
-#' atom to the mixture.
+#' subnull. The support neither grows nor shrinks: only an oracle method such as
+#' [fw_step()] or [lb_step()] can add an atom to the mixture.
 #'
 #' @inheritParams fw_step
 #' @param record_gap Sweep the Frank--Wolfe oracle to record a gap. Off by
 #'   default, since it costs a full oracle sweep per row.
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality) |> fw_step(times = 3L) |> em_step(times = 10L)
+#' state@trace$kl
 #' @export
 em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
   run_steps(state, times, until, "em", "em", function(state, ld) {
@@ -361,8 +424,8 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)} with the atoms
 #' held fixed: the exact M-step for the weights, guaranteed monotone in KL.
 #' Iterated to convergence this is the corrective half of fully-corrective
-#' Frank--Wolfe, so `fw_step(1) |> weight_step(500)` is one FCFW iteration.
-#' Note however that `lb_step(1) |> weight_step(500)` is not one Li--Barron
+#' Frank--Wolfe, so `fw_step(1) |> weight_step(big_num)` is one FCFW iteration.
+#' Note however that `lb_step(1) |> weight_step(big_num)` is not one Li--Barron
 #' step with fully corrective weights incorporated as the inner optimisation.
 #'
 #' `until = support_gap_below(tol)` is the natural stopping rule, and is what
@@ -372,6 +435,21 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' @inheritParams em_step
 #' @return The updated [ripr_state].
 #' @seealso [predicates]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality) |>
+#'   fw_step(times = 5L) |>
+#'   weight_step(times = 20L, until = support_gap_below(1e-6))
+#' state@trace$kl
 #' @export
 weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
   run_steps(state, times, until, "weight", "weight", function(state, ld) {
@@ -459,6 +537,22 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'   `subnull`, `trace` and `snapshots`.
 #' @references
 #'   \insertRef{FercoqGramfortSalmon2015}{ripr}
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_null(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_null(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
+#' fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+#' fit$kl
+#' fit$gap_fit
+#' fit$gap_final
 #' @export
 ripr_finish <- function(
   state,

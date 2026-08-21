@@ -6,10 +6,12 @@
 `ripr` computes reverse information projections onto nulls that take the
 form of a union of convex parts, and then proves an upper bound on the
 expectation over the null of whatever random variable you get. The
-projection is fitted via Li–Barron, Frank–Wolfe and/or EM. Bounds on the
-null expectation are proved by a branch and bound algorithm (currently
-only for multinomial via the Bernstein enclosure). At the end, you get a
-random variable that is genuinely an e-variable for the respective null.
+projection is fitted via Li–Barron ([Li and Barron
+1999](#ref-LiBarron1999)), Frank–Wolfe ([Jaggi 2013](#ref-Jaggi2013))
+and/or EM. Bounds on the null expectation are proved by a branch and
+bound algorithm (currently only for multinomial via the Bernstein
+enclosure). At the end, you get a random variable that is genuinely an
+e-variable for the respective null.
 
 The idea it rests on is simpler than the reverse information projection
 itself. For any non-negative, bounded random variable `X`, and `b` is
@@ -353,8 +355,69 @@ certify(Y, null)
 
 ## References
 
-Larsson, Ramdas & Ruf (2025), *The numeraire e-variable*; Grunwald, de
-Heide & Koolen (2024), *Safe testing*; Leroy (2012) for the
-branch-and-bound scheme; Garloff (1986) for the range enclosure;
-Prautzsch, Boehm & Paluszny, *Bezier and B-Spline Techniques*, chapters
-10–11.
+`ripr` targets the growth-rate optimal e-variable of safe testing
+([Grünwald et al. 2024](#ref-GrunwaldDeHeideKoolen2024)), approximating
+its reverse information projection via the numeraire characterisation of
+Larsson et al. ([2025](#ref-LarssonRamdasRuf2025)). Certified bounds use
+the branch-and-bound scheme of Leroy ([2012](#ref-Leroy2012)), the
+simplicial Bernstein range enclosure of Garloff
+([1985](#ref-Garloff1986)), and the subdivision techniques of Prautzsch
+et al. ([2002](#ref-PrautzschBoehmPaluszny2002)) (chapters 10–11).
+
+<div id="refs" class="references csl-bib-body hanging-indent">
+
+<div id="ref-Garloff1986" class="csl-entry">
+
+Garloff, Jürgen. 1985. “Convergent Bounds for the Range of Multivariate
+Polynomials.” *International Symposium on Interval Mathematics*, 37–56.
+
+</div>
+
+<div id="ref-GrunwaldDeHeideKoolen2024" class="csl-entry">
+
+Grünwald, Peter, Rianne de Heide, and Wouter Koolen. 2024. “Safe
+Testing.” *Journal of the Royal Statistical Society Series B:
+Statistical Methodology* 86 (5): 1091–128.
+
+</div>
+
+<div id="ref-Jaggi2013" class="csl-entry">
+
+Jaggi, Martin. 2013. “Revisiting Frank-Wolfe: Projection-Free Sparse
+Convex Optimization.” *International Conference on Machine Learning*,
+427–35.
+
+</div>
+
+<div id="ref-LarssonRamdasRuf2025" class="csl-entry">
+
+Larsson, Martin, Aaditya Ramdas, and Johannes Ruf. 2025. “The Numeraire
+e-Variable and Reverse Information Projection.” *The Annals of
+Statistics* 53 (3): 1015–43. <https://doi.org/10.1214/24-AOS2487>.
+
+</div>
+
+<div id="ref-Leroy2012" class="csl-entry">
+
+Leroy, Richard. 2012. “Convergence Under Subdivision and Complexity of
+Polynomial Minimization in the Simplicial Bernstein Basis.” *Reliable
+Computing* 17: 11–21.
+
+</div>
+
+<div id="ref-LiBarron1999" class="csl-entry">
+
+Li, Jonathan, and Andrew Barron. 1999. “Mixture Density Estimation.”
+*Advances in Neural Information Processing Systems* 12.
+
+</div>
+
+<div id="ref-PrautzschBoehmPaluszny2002" class="csl-entry">
+
+Prautzsch, Hartmut, Wolfgang Boehm, and Marco Paluszny. 2002. *Bézier
+and b-Spline Techniques*. Vol. 6. Springer.
+<https://doi.org/10.1007/978-3-662-04919-8>.
+
+</div>
+
+</div>

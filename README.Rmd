@@ -1,5 +1,7 @@
 ---
 output: github_document
+bibliography: inst/REFERENCES.bib
+link-citations: true
 ---
 
 <!-- README.md is generated from README.Rmd. Edit the .Rmd and run devtools::build_readme(). -->
@@ -84,7 +86,7 @@ plot_null <- function(
 # ripr
 
 `ripr` computes reverse information projections onto nulls that take the form of a union of convex parts, and then proves an upper bound on the expectation over the null of whatever random variable you get.
-The projection is fitted via Li--Barron, Frank--Wolfe and/or EM.
+The projection is fitted via Li--Barron [@LiBarron1999], Frank--Wolfe [@Jaggi2013] and/or EM.
 Bounds on the null expectation are proved by a branch and bound algorithm (currently only for multinomial via the Bernstein enclosure).
 At the end, you get a random variable that is genuinely an e-variable for the respective null.
 
@@ -382,10 +384,7 @@ certify(Y, null)
 ```
 
 
-
 ## References
 
-Larsson, Ramdas & Ruf (2025), *The numeraire e-variable*; Grunwald, de Heide &
-Koolen (2024), *Safe testing*; Leroy (2012) for the branch-and-bound scheme;
-Garloff (1986) for the range enclosure; Prautzsch, Boehm & Paluszny,
-*Bezier and B-Spline Techniques*, chapters 10--11.
+`ripr` targets the growth-rate optimal e-variable of safe testing [@GrunwaldDeHeideKoolen2024], approximating its reverse information projection via the numeraire characterisation of @LarssonRamdasRuf2025.
+Certified bounds use the branch-and-bound scheme of @Leroy2012, the simplicial Bernstein range enclosure of @Garloff1986, and the subdivision techniques of @PrautzschBoehmPaluszny2002 (chapters 10--11).

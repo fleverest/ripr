@@ -1,0 +1,414 @@
+---
+title: "Getting Started with ripr"
+output: rmarkdown::html_vignette
+bibliography: ../inst/REFERENCES.bib
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{Getting Started with ripr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 4.5,
+  fig.height = 4,
+  out.width = "60%",
+  fig.align = "center",
+  dev = "svg"
+)
+```
+
+```{r helpers, include = FALSE}
+tri_xy <- function(theta) {
+  rbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0)) %*% as.matrix(theta)
+}
+
+plot_null <- function(
+  null,
+  points = NULL,
+  weights = NULL,
+  main = NULL,
+  fill = "#c96f5b",
+  bg = c("#2c6f9b", "white"),
+  alpha = 0.55
+) {
+  corners <- tri_xy(diag(3))
+  op <- par(mar = c(0.5, 0.5, if (is.null(main)) 0.5 else 2, 0.5))
+  on.exit(par(op), add = TRUE)
+  plot.new()
+  plot.window(c(-0.05, 1.05), c(-0.05, 0.92), asp = 1)
+  for (s in null@subnulls) {
+    xy <- tri_xy(s@vertices)
+    polygon(
+      xy[1, ],
+      xy[2, ],
+      col = adjustcolor(fill, 0.45),
+      border = fill,
+      lwd = 1.5
+    )
+  }
+  polygon(corners[1, ], corners[2, ], border = "grey50")
+  text(
+    corners[1, ],
+    corners[2, ],
+    c(1, 2, 3),
+    pos = c(3, 1, 1),
+    cex = 0.8,
+    col = "grey40"
+  )
+  if (!is.null(points)) {
+    groups <- if (is.list(points)) points else list(points)
+    sizes <- if (is.list(weights)) weights else list(weights)
+    all_w <- unlist(sizes)
+    for (g in seq_along(groups)) {
+      xy <- tri_xy(groups[[g]])
+      w <- sizes[[min(g, length(sizes))]]
+      cex <- if (is.null(w)) 1.2 else pmax(0.35, 1.7 * sqrt(w / max(all_w)))
+      points(
+        xy[1, ],
+        xy[2, ],
+        pch = 21,
+        bg = adjustcolor(bg[[(g - 1L) %% length(bg) + 1L]], alpha),
+        col = "grey15",
+        cex = cex,
+        lwd = 1.1
+      )
+    }
+  }
+  if (!is.null(main)) {
+    title(main, font.main = 1, cex.main = 1)
+  }
+  invisible(NULL)
+}
+```
+
+```{r library, message = FALSE}
+library(ripr)
+```
+
+## Introduction
+
+`ripr` computes reverse information projections onto nulls that take the form
+of a union of convex parts, and then proves an upper bound on the expectation
+over the null of whatever random variable you hand it.
+The package targets the growth-rate optimal e-variable of safe testing
+[@GrunwaldDeHeideKoolen2024], approximating the reverse information
+projection (RIPr) of a fixed alternative `Q` onto a composite null `H0`.
+
+The idea it rests on is simpler than the projection itself. For any
+non-negative, bounded random variable `X`, if `b` is any number at least
+`sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at
+most one -- that is, `E = X / b` is an e-variable. Nothing here requires `X`
+to be the true minimiser of KL divergence.
+
+**This means the projection need not be fit exactly:** any approximation can
+be used, so long as the resulting likelihood ratio is corrected against a
+*proven* bound to yield a valid e-variable. The quality of the approximation
+determines only how much e-power survives the correction. That splits a
+hard, non-convex optimisation problem into an easy one (approximate) and a
+proof (bound), and this split is what `ripr` facilitates: fitting is handled
+by a Frank--Wolfe [@Jaggi2013] and EM hybrid over mixing measures, and
+certification by a branch-and-bound algorithm (currently implemented for
+multinomial families via the Bernstein enclosure).
+
+This vignette walks through both halves on a worked example, then shows what
+happens when the fit is deliberately bad, and finally contrasts a proven
+bound against an uncertified search.
+
+## A first null: the plurality null
+
+Take a three-category multinomial distribution (`n = 20`) and the plurality
+null: candidate 1 does not win outright,
+`H0 = union_j {theta : theta_1 <= theta_j}`.
+This null is a union of convex parts -- one region where
+`theta_1 <= theta_2` and another where `theta_1 <= theta_3` -- and each part
+is a simplex, so the plurality null is a single `null_model` holding two
+`simplex_null` subnulls.
+
+```{r problem}
+K <- 3L
+n <- 20L
+family <- multinomial_family(n_trials = n, k = K)
+
+plurality <- null_model(
+  family,
+  lapply(2:K, function(j) {
+    # The two sub-simplices: one for each subnull.
+    vertices <- diag(K)
+    vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+    simplex_null(vertices = vertices)
+  })
+)
+```
+
+We nominate a discrete mixture-multinomial distribution as the alternative.
+Here the mixing measure is a single dirac at `q = (0.40, 0.35, 0.25)`,
+yielding a simple `Multinomial(20, q)` alternative.
+
+```{r alternative}
+W1 <- finite_mixing(
+  components = cbind(c(0.40, 0.35, 0.25)),
+  weights = c(1)
+)
+Q <- mixture(W1, family)
+```
+
+```{r plot-plurality, echo = FALSE, fig.cap = "Plurality null, with the support of the alternative mixing distribution W1."}
+plot_null(plurality, points = W1@components, weights = W1@weights / 4, bg = "white")
+```
+
+The two subnulls overlap, and the alternative sits in the cap above them,
+where candidate 1 leads.
+
+## Fitting the projection
+
+The fitting procedure is a sequence of steps: `fw_step()` for Frank--Wolfe
+updates and `em_step()` for EM (also `lb_step()` for Li--Barron
+[@LiBarron1999], though it is not generally recommended -- see
+`?oracles`). There is no fixed pipeline; which algorithm runs is decided by
+which verbs are called, and in what order. Here we run 40 steps of
+Frank--Wolfe, then use `ripr_finish()` to solve the weights and drop any
+low-mass atoms.
+
+```{r fit}
+set.seed(1)
+state <- ripr_init(Q, plurality)
+state <- fw_step(state, times = 40L, until = gap_below(1e-10))
+fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+
+c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
+```
+
+```{r plot-plurality-fit, echo = FALSE, fig.cap = "Plurality null, with the support of W1 (alternative) and W0 (null, fitted)."}
+plot_null(
+  plurality,
+  points = list(fit$W0@components, W1@components),
+  weights = list(fit$W0@weights, W1@weights / 4)
+)
+```
+
+The fit attains a KL divergence (from `Q`) of approximately
+`r round(fit$kl, 4)`. The `gap` quantity is a Frank--Wolfe duality gap:
+at its true value it bounds the expectation of `Q / P*` over the null by
+`1 + gap`. The `gap` recorded *during* a fit (`state@trace$gap`, or
+`fit$gap_fit`) is only an estimate, though -- it is not itself an upper
+bound, so it cannot be used directly to certify an e-value. `fit$gap_final`,
+requested here via `record_gap = TRUE`, is a fresh sweep over the *returned*
+mixture, and is what we compare against the true certified bound below.
+
+## From a fit to an e-variable
+
+With a fitted projection in hand, we can construct a `random_variable` that
+computes the mixture likelihood ratio `Q / P*` -- our candidate e-variable:
+
+```{r ratio}
+X <- mixture_likelihood(Q, label = "Q") /
+  mixture_likelihood(fit$P_star, label = "P*")
+X
+```
+
+`random_variable`s are callable: they map elements of the sample space to
+their realisation.
+
+```{r rv_outcome}
+outcomes <- rbind(
+  c(10L, 10L, 0L),
+  c(8L, 7L, 5L)
+)
+X(outcomes)
+```
+
+`certify()` proves an upper bound on the null expectation of `X`. It returns
+the proven upper bound alongside the largest value its internal search
+actually attained; the two bracket the true supremum, which is generally
+unknown.
+
+```{r certify}
+cert <- certify(X, plurality, tol = 1e-9)
+c(
+  upper = cert$sup_ub,
+  attained = cert$sup_lb,
+  width = cert$sup_ub - cert$sup_lb
+)
+```
+
+The bound lands just above one: it is exactly `1 + gap`, where `gap` is the
+*true* Frank--Wolfe duality gap that the fit stopped on.
+
+```{r identity}
+c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
+```
+
+The rescaled random variable `E = X / cert$sup_ub` is then a genuine
+e-variable for `plurality`:
+
+```{r evariable}
+E <- X / cert$sup_ub
+print(E)
+print(E(outcomes))
+```
+
+## The correction doesn't need a good fit
+
+The whole point of splitting fitting from certification is that validity
+does not depend on the quality of the fit. To demonstrate, replace the
+projection with something that is not the RIPr at all -- a uniform point
+mass -- and certify the resulting ratio:
+
+```{r bad-fit}
+bad <- mixture(point_mixing(rep(1 / K, K)), family)
+X_bad <- mixture_likelihood(Q, label = "Q") /
+  mixture_likelihood(bad, label = "P0")
+cert_bad <- certify(X_bad, plurality, tol = 1e-9)
+
+c(good = cert$sup_ub, bad = cert_bad$sup_ub)
+```
+
+Both rescale to valid e-variables. What differentiates them is e-power --
+the log-growth, or expected log e-value under the alternative, that
+compounds over a sequential procedure:
+
+```{r growth}
+growth <- function(E, Q) {
+  outcomes <- support(E@family)
+  e_values <- E(outcomes)
+  Q_expectation <- dist_log_density(Q, outcomes) |>
+    exp() %*%
+    log(e_values)
+  c(Q_expectation) # return as scalar
+}
+
+E_gr <- growth(E, Q)
+
+c(good = E_gr, bad = growth(X_bad / cert_bad$sup_ub, Q))
+```
+
+A negative growth rate means evidence is lost on average even when the
+alternative is true -- useless, but not invalid. **Validity is free from the
+certification and correction procedure; fitting a good approximation is what
+buys e-power.**
+
+When `P*` is the true RIPr of `Q` onto the null, the attained KL divergence
+`KL(Q || P*)` is precisely the growth rate of the resulting e-variable. For
+any fitted `P` the KL divergence sits above that optimum, so `fit$kl` upper
+bounds the optimal growth rate. The true optimum therefore lies somewhere
+between the growth this fit achieved and `fit$kl`:
+
+```{r growth-kl-gap}
+c(
+  lower = E_gr,
+  upper = fit$kl,
+  width = fit$kl - E_gr
+)
+```
+
+## A second worked example: composing step verbs
+
+Because `fw_step()`, `lb_step()`, `em_step()` and `weight_step()` are
+independent verbs rather than a fixed pipeline, they compose freely. Here we
+demonstrate a null where candidate 1, 2 and 3 all fail to reach a majority
+(`H0: theta_1, theta_2, theta_3 <= 1/2`, the medial triangle), fit with a
+loop that interleaves Frank--Wolfe and EM steps, and nominate an alternative
+with one dirac per section, equally weighted.
+
+```{r medial}
+medial <- null_model(
+  family,
+  list(simplex_null(
+    vertices = cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
+  ))
+)
+
+W_maj <- finite_mixing(
+  components = cbind(
+    c(0.6, 0.2, 0.2),
+    c(0.2, 0.6, 0.2),
+    c(0.2, 0.2, 0.6)
+  ),
+  weights = c(1 / 3, 1 / 3, 1 / 3)
+)
+Q_maj <- mixture(W_maj, family)
+```
+
+```{r plot-medial-null, echo = FALSE, fig.cap = "Medial-triangle null, with the support of W_maj."}
+plot_null(medial, points = W_maj@components, weights = W_maj@weights / 4, bg = "white")
+```
+
+```{r medial-alternative}
+hybrid_step <- function(state, times) {
+  for (iter in seq_len(times)) {
+    state <- state |> fw_step() |> em_step()
+  }
+  state
+}
+
+set.seed(2)
+fit_medial <- ripr_init(Q_maj, medial) |>
+  hybrid_step(times = 40L) |>
+  ripr_finish(reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+X_medial <- mixture_likelihood(Q_maj, label = "Q") /
+  mixture_likelihood(fit_medial$P_star, label = "P*")
+
+c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
+```
+
+```{r plot-medial-fit, echo = FALSE, fig.cap = "Medial-triangle null, with the support of W_maj and W0 (fitted)."}
+plot_null(
+  medial,
+  points = list(fit_medial$W0@components, W_maj@components),
+  weights = list(fit_medial$W0@weights, W_maj@weights / 4)
+)
+```
+
+## Searching vs. proving
+
+`sup_lb()` hunts for the largest null expectation by multi-start gradient
+ascent. It is much cheaper than proving a bound, and it works on families
+and geometries that have no implemented bounding procedure -- but it is
+**not** a certificate. It reports a *lower* bound on the supremum: something
+larger may sit somewhere gradient ascent could not reach.
+
+```{r sup-lb}
+c(searched = sup_lb(X, plurality)$sup_lb, certified = cert$sup_ub)
+```
+
+Where no bounding method has been implemented for a given combination of
+family and subnull geometry, `certify()` refuses outright, rather than
+silently returning something unproven:
+
+```{r refuse, error = TRUE}
+gaussian <- gaussian_family(dim = 2L)
+null <- null_model(
+  gaussian,
+  list(halfspace_null(normal = c(1, -1), offset = 0))
+)
+Y <- mixture_likelihood(mixture(point_mixing(c(0, 0)), gaussian))
+certify(Y, null)
+```
+
+`sup_lb()` still works here, since it needs no bounding method -- only a
+search.
+
+## Where to go next
+
+The function reference lists every exported function and S7 class, with a
+runnable example on each. A few starting points if you're extending rather
+than just using the package:
+
+- `?sampling_family` and its generics (`param_dim()`, `compile_loglik()`,
+  `score()`, `draw()`, `support()`) describe the interface a new observation
+  model must implement.
+- `?subnull` and its generics (`chart()`, `contains()`, `project()`) describe
+  the interface a new convex geometry must implement; `?simplex_null` and
+  `?halfspace_null` are the two built-in examples.
+- `?quadrature`, `?exact_engine`, `?mc_engine` and `?gh_engine` describe how
+  expectations under the alternative are approximated, and how to add a new
+  rule.
+- `?oracles` explains the Frank--Wolfe and Li--Barron oracles that
+  `fw_step()` and `lb_step()` are built on, and when to prefer one over the
+  other.
+
+## References

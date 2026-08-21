@@ -30,7 +30,10 @@ Imports:
     stats,
     utils
 Suggests:
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Encoding: UTF-8
 Language: en-GB
 Roxygen: list(markdown = TRUE)

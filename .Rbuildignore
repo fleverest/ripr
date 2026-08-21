@@ -5,5 +5,7 @@
 ^LICENSE\.md$
 ^README\.Rmd$
 ^\.github$
-figures/
 .devcontainer/
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

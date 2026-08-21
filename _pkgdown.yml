@@ -1,0 +1,119 @@
+url: https://fleverest.github.io/ripr/
+
+template:
+  bootstrap: 5
+
+reference:
+- title: Observation models
+  desc: >
+    A `sampling_family` owns the model `p_theta(x)`: a compiled log-likelihood,
+    score, sampler and (for finite families) support enumeration.
+  contents:
+  - sampling_family
+  - multinomial_family
+  - gaussian_family
+  - param_dim
+  - compile_loglik
+  - log_density
+  - log_density_batch
+  - score
+  - draw
+  - support
+  - outcome_dim
+  - as_outcomes
+  - is_finite_support
+
+- title: Null hypotheses
+  desc: >
+    A null is a finite union of convex `subnull` pieces. Each subnull owns
+    its own geometry: membership, projection, and an unconstrained chart.
+  contents:
+  - subnull
+  - simplex_null
+  - halfspace_null
+  - singleton_null
+  - null_model
+  - chart
+  - contains
+  - project
+  - init_point
+  - objective
+  - maximise_over
+  - n_subnulls
+  - in_null
+
+- title: Mixing measures and mixtures
+  desc: >
+    A `mixing_measure` is a law over a family's parameter space; paired with
+    a family via `mixture()` it induces a law over outcomes.
+  contents:
+  - distribution
+  - mixing_measure
+  - point_mixing
+  - finite_mixing
+  - gaussian_mixing
+  - n_atoms
+  - atoms
+  - weights.mixing_measure
+  - prune
+  - mode_parameter
+  - outcome_distribution
+  - dist_log_density
+  - dist_draw
+  - dist_family
+  - mixture
+
+- title: Random variables
+  desc: >
+    Callable variables on a sample space, with arithmetic for building
+    likelihood ratios.
+  contents:
+  - random_variable
+  - mixture_likelihood
+  - random_variable_arithmetic
+
+- title: Quadrature engines
+  desc: >
+    Expectations under the alternative are approximated by a `quadrature`
+    rule: exact enumeration, Monte Carlo, or Gauss-Hermite.
+  contents:
+  - quadrature
+  - n_nodes
+  - deterministic
+  - compile_engine
+  - expect_q
+  - log_expect_q
+  - expect_se
+  - exact_engine
+  - mc_engine
+  - gh_engine
+  - resolve_engine
+
+- title: Fitting the RIPr
+  desc: >
+    `ripr_init()` builds a starting state; the step verbs advance it by
+    Frank--Wolfe, Li--Barron and/or EM; `ripr_finish()` turns it into a
+    mixture.
+  contents:
+  - ripr_control
+  - ripr_state
+  - ripr_init
+  - oracles
+  - fw_step
+  - lb_step
+  - em_step
+  - weight_step
+  - predicates
+  - ripr_finish
+  - flat_atoms
+  - flat_weights
+  - flat_subnull
+
+- title: Certification
+  desc: >
+    Proving (or searching for) an upper bound on the null expectation of a
+    random variable, to correct a fitted ratio into a genuine e-variable.
+  contents:
+  - certify
+  - certify_trace
+  - sup_lb

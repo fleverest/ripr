@@ -76,7 +76,7 @@ Q <- mixture(W1, family)
 
 <div class="figure" style="text-align: center">
 
-<img src="figures/README-plot-plurality-1.svg" alt="Plurality null, with the support of the alternative mixing distribution W1." width="60%" />
+<img src="man/figures/README-plot-plurality-1.svg" alt="Plurality null, with the support of the alternative mixing distribution W1." width="60%" />
 <p class="caption">
 
 Plurality null, with the support of the alternative mixing distribution
@@ -106,7 +106,7 @@ c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
 
 <div class="figure" style="text-align: center">
 
-<img src="figures/README-plot-plurality-fit-1.svg" alt="Plurality null, with the support of the mixing distributions W1 (alternative) and W0 (null, fitted)." width="60%" />
+<img src="man/figures/README-plot-plurality-fit-1.svg" alt="Plurality null, with the support of the mixing distributions W1 (alternative) and W0 (null, fitted)." width="60%" />
 <p class="caption">
 
 Plurality null, with the support of the mixing distributions W1
@@ -277,7 +277,7 @@ Q_maj <- mixture(W_maj, family)
 
 <div class="figure" style="text-align: center">
 
-<img src="figures/README-plot-medial-null-1.svg" alt="Medial-triangle null, with the support of W_maj." width="60%" />
+<img src="man/figures/README-plot-medial-null-1.svg" alt="Medial-triangle null, with the support of W_maj." width="60%" />
 <p class="caption">
 
 Medial-triangle null, with the support of W_maj.
@@ -314,7 +314,7 @@ c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 
 <div class="figure" style="text-align: center">
 
-<img src="figures/README-plot-medial-fit-1.svg" alt="Medial-triangle null, with the support of W_maj and W0 (fitted)." width="60%" />
+<img src="man/figures/README-plot-medial-fit-1.svg" alt="Medial-triangle null, with the support of W_maj and W0 (fitted)." width="60%" />
 <p class="caption">
 
 Medial-triangle null, with the support of W_maj and W0 (fitted).

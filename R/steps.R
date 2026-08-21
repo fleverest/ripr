@@ -733,16 +733,26 @@ em_atom_step <- function(state, ld, wt) {
   moved <- vapply(
     seq_len(ncol(atoms_flat)),
     function(c_i) {
-      w_c <- wt[, c_i]
+      # Only nodes this atom is responsible for. A node it gives zero
+      # probability to has both zero responsibility and `-Inf` log density, and
+      # `0 * -Inf` is `NaN` rather than the 0 the term is worth under the usual
+      # `0 log 0 = 0` convention. Dropping those nodes changes no value, since
+      # responsibilities are held fixed through the M-step, and keeps the
+      # objective finite for any family whose support moves with the parameter,
+      # where the density is `-Inf` over a region of the parameter space rather
+      # than at an isolated boundary point.
+      keep <- wt[, c_i] > 0
+      w_c <- wt[keep, c_i]
+      nodes_c <- engine@nodes[keep, , drop = FALSE]
       obj <- objective(
         value = function(theta) {
-          sum(w_c * as.vector(ld(matrix(theta, ncol = 1L))))
+          sum(w_c * as.vector(ld(matrix(theta, ncol = 1L)))[keep])
         },
         grad = function(theta) {
-          as.vector(crossprod(score(family, theta, engine@nodes), w_c))
+          as.vector(crossprod(score(family, theta, nodes_c), w_c))
         },
         value_batch = function(theta_mat) {
-          as.vector(crossprod(ld(theta_mat), w_c))
+          as.vector(crossprod(ld(theta_mat)[keep, , drop = FALSE], w_c))
         }
       )
       maximise_over(

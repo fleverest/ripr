@@ -153,7 +153,7 @@ W1 <- finite_mixing(
   components = cbind(c(0.40, 0.35, 0.25)),
   weights = c(1)
 )
-Q <- mixture(W1, family)
+Q <- family(W1)
 ```
 
 ```{r plot-plurality, echo = FALSE, fig.cap = "Plurality null, with the support of the alternative mixing distribution W1."}
@@ -205,8 +205,8 @@ With a fitted projection in hand, we can construct a `random_variable` that
 computes the mixture likelihood ratio `Q / P*` -- our candidate e-variable:
 
 ```{r ratio}
-X <- mixture_likelihood(Q, label = "Q") /
-  mixture_likelihood(fit$P_star, label = "P*")
+X <- likelihood(Q, label = "Q") /
+  likelihood(fit$P_star, label = "P*")
 X
 ```
 
@@ -259,9 +259,9 @@ projection with something that is not the RIPr at all -- a uniform point
 mass -- and certify the resulting ratio:
 
 ```{r bad-fit}
-bad <- mixture(point_mixing(rep(1 / K, K)), family)
-X_bad <- mixture_likelihood(Q, label = "Q") /
-  mixture_likelihood(bad, label = "P0")
+bad <- family(rep(1 / K, K))
+X_bad <- likelihood(Q, label = "Q") /
+  likelihood(bad, label = "P0")
 cert_bad <- certify(X_bad, plurality, tol = 1e-9)
 
 c(good = cert$sup_ub, bad = cert_bad$sup_ub)
@@ -275,7 +275,7 @@ compounds over a sequential procedure:
 growth <- function(E, Q) {
   outcomes <- enumerate_space(E@sample_space)
   e_values <- E(outcomes)
-  Q_expectation <- dist_log_density(Q, outcomes) |>
+  Q_expectation <- log_density(Q, outcomes) |>
     exp() %*%
     log(e_values)
   c(Q_expectation) # return as scalar
@@ -330,7 +330,7 @@ W_maj <- finite_mixing(
   ),
   weights = c(1 / 3, 1 / 3, 1 / 3)
 )
-Q_maj <- mixture(W_maj, family)
+Q_maj <- family(W_maj)
 ```
 
 ```{r plot-medial-null, echo = FALSE, fig.cap = "Medial-triangle null, with the support of W_maj."}
@@ -349,8 +349,8 @@ set.seed(2)
 fit_medial <- ripr_init(Q_maj, medial) |>
   hybrid_step(times = 40L) |>
   ripr_finish(reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
-X_medial <- mixture_likelihood(Q_maj, label = "Q") /
-  mixture_likelihood(fit_medial$P_star, label = "P*")
+X_medial <- likelihood(Q_maj, label = "Q") /
+  likelihood(fit_medial$P_star, label = "P*")
 
 c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 ```
@@ -385,7 +385,7 @@ null <- null_model(
   gaussian,
   list(halfspace_region(normal = c(1, -1), offset = 0))
 )
-Y <- mixture_likelihood(mixture(point_mixing(c(0, 0)), gaussian))
+Y <- likelihood(gaussian(c(0, 0)))
 certify(Y, null)
 ```
 
@@ -398,9 +398,10 @@ The function reference lists every exported function and S7 class, with a
 runnable example on each. A few starting points if you're extending rather
 than just using the package:
 
-- `?parametric_family` and its generics (`compile_loglik()`, `score()`,
-  `draw()`) describe the interface a new observation model must implement.
-  `?sample_space` and `?parameter_space` describe the two sets it maps between.
+- `?parametric_family` describes the interface a new observation model must
+  implement: `compile_loglik()`, `score()` and `kernel_draw()`. `?sample_space`
+  and `?parameter_space` describe the two sets it maps between, and
+  `?distribution` the laws `fam(theta)` returns.
 - `?parameter_space` and its generics (`chart()`, `contains()`, `project()`)
   describe the interface a new convex geometry must implement; `?simplex_region`
   and `?halfspace_region` are the two built-in examples.

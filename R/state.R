@@ -1,4 +1,4 @@
-#' @include null.R quadrature.R mixture.R
+#' @include null.R quadrature.R distribution.R
 NULL
 
 # The state representation of the ripr optimiser: the class, the conversions between
@@ -33,7 +33,7 @@ NULL
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality)
 #' state
 #' @export
@@ -42,7 +42,7 @@ ripr_state <- new_class(
   properties = list(
     atoms = class_list,
     weights = class_list,
-    alternative = outcome_distribution,
+    alternative = distribution,
     null = null_model,
     engine = quadrature,
     control = class_list,
@@ -91,7 +91,7 @@ ripr_state <- new_class(
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality)
 #' flat_atoms(state)
 #' @export
@@ -115,7 +115,7 @@ flat_atoms <- function(state) {
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality)
 #' flat_weights(state)
 #' @export
@@ -133,7 +133,7 @@ flat_weights <- function(state) unlist(state@weights, use.names = FALSE)
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality)
 #' flat_subnull(state)
 #' @export

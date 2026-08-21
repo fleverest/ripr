@@ -1,25 +1,20 @@
-#' Probability distribution (abstract root)
-#'
-#' Two branches: a [mixing_measure] over a family's *parameter* space, and an
-#' [outcome_distribution] over its *sample* space. A [mixture()] bridges them.
-#' The `distribution` class has no interface of its own.
-#' @examples
-#' # `distribution` is abstract; [mixing_measure] and [outcome_distribution]
-#' # subclass it, e.g.
-#' S7::S7_inherits(point_mixing(theta_star = c(0.5, 0.5)), distribution)
-#' @export
-distribution <- new_class("distribution", abstract = TRUE)
-
+#' @include parameter_space.R
+NULL
 
 #' Mixing measure over a family's parameter space
 #'
-#' A law \eqn{W}{W} over the parameter set of a [parametric_family]: a point mass
+#' A law \eqn{W}{W} over a family's [parameter_space]: a point mass
 #' ([point_mixing()]) or a finite weighted set of atoms ([finite_mixing()]).
-#' Paired with a family via [mixture()] it induces the law \eqn{P_W}{P_W} over
-#' outcomes.
+#' Pushed through a family's kernel it induces the law \eqn{P_W}{P_W} over
+#' outcomes; see [induced_distribution()].
 #'
-#' The mixing-measure/mixture distinction follows the mixture-model literature:
-#' \eqn{W}{W} is the `mixing_measure`, \eqn{P_W}{P_W} is the [mixture].
+#' This is the parameter-side counterpart of [distribution], which is a law over
+#' a [sample_space]. The two are peers rather than branches of a common type:
+#' a mixing measure has atoms and weights but no density, and an outcome law has
+#' a density but no atoms, so there is no interface they share.
+#'
+#' The naming follows the mixture-model literature: \eqn{W}{W} is the
+#' `mixing_measure`, \eqn{P_W}{P_W} is the mixture it induces.
 #' @references
 #'   \insertRef{Lindsay1995}{ripr}
 #' @examples
@@ -27,16 +22,12 @@ distribution <- new_class("distribution", abstract = TRUE)
 #' # subclass it, e.g.
 #' S7::S7_inherits(point_mixing(theta_star = c(0.5, 0.5)), mixing_measure)
 #' @export
-mixing_measure <- new_class(
-  "mixing_measure",
-  parent = distribution,
-  abstract = TRUE
-)
+mixing_measure <- new_class("mixing_measure", abstract = TRUE)
 
 
 #' Point mixing measure: a mass at a single parameter
 #'
-#' Its induced [mixture] is the family at `theta_star`.
+#' Its induced distribution is the family at `theta_star`.
 #' @param theta_star Numeric parameter vector.
 #' @return A `point_mixing`.
 #' @examples

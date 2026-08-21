@@ -2,32 +2,61 @@
 % Please edit documentation in R/family.R
 \name{parametric_family}
 \alias{parametric_family}
+\alias{print,ripr::parametric_family-method}
+\alias{format,ripr::parametric_family-method}
 \title{Parametric families}
 \usage{
-parametric_family(
-  sample_space = sample_space(),
-  parameter_space = parameter_space()
-)
+parametric_family(sample_space, parameter_space)
 }
 \arguments{
 \item{sample_space}{The \link{sample_space} that outcomes belong to.}
 
 \item{parameter_space}{The \link{parameter_space} that parameters belong to.}
 }
+\value{
+A callable \code{parametric_family}.
+}
 \description{
 A \code{parametric_family} defines the model \eqn{p_\theta(x)}{p_theta(x)}. It has
 no knowledge of null hypotheses, alternatives, or any optimisation procedure.
 Families provide a log-likelihood compiler, score functions and a sampler.
+
+\code{format()} gives the two spaces on one line, without the class
+banner \code{print()} adds.
+
+Both are needed rather than inherited: the parent is \code{class_function}, so
+the defaults reach \code{deparse()} and print the shared closure plus an
+attribute dump.
 }
 \details{
 A family is the pair of a \link{parameter_space} \eqn{\Theta}{Theta} and the map
 \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
 \link{sample_space}; the two spaces are what the family carries, and everything
 else it offers is a way of navigating that map.
+
+Families are callable, which is that map written down: \code{fam(theta)} is the
+\link{distribution} \eqn{p_\theta}{p_theta}. A kernel extends canonically from
+points to measures, so \code{fam(W)} for a \link{mixing_measure} is the same map and
+gives the induced \eqn{P_W}{P_W}. \code{\link[=induced_distribution]{induced_distribution()}} is the same thing
+spelled out, for when that reads better.
+
+Not marked abstract, because S7 forbids that alongside a \code{class_function}
+parent -- abstract classes must have abstract parents. It is one in every
+other sense: it supplies no \code{\link[=compile_loglik]{compile_loglik()}} method, so constructing it
+directly gives a family with no kernel, which errors on first use exactly as
+any other incomplete family does.
 }
 \examples{
-# `parametric_family` is abstract; families subclass it, e.g.
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 S7::S7_inherits(fam, parametric_family)
+
+# The map theta -> p_theta, and its extension to mixing measures.
+fam(c(0.5, 0.3, 0.2))
+fam(finite_mixing(
+  components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+  weights = c(0.5, 0.5)
+))
+
+# Properties and other generics are unaffected by being callable.
 enumerate_space(fam@sample_space)
 }

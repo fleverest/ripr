@@ -87,9 +87,13 @@ test_that("weights dispatches on mixing measures without breaking stats", {
 
 
 test_that("the class hierarchy is as declared", {
+  # A mixing measure is a law over the parameter space and a `distribution` is
+  # a law over the sample space. They are peers, not branches of a shared root:
+  # a mixing measure has atoms and no density, an outcome law the reverse, so
+  # there is no interface for a common supertype to carry.
   f <- finite_mixing(components = cbind(c(0.5, 0.5)), weights = 1)
   expect_true(S7_inherits(f, mixing_measure))
-  expect_true(S7_inherits(f, distribution))
+  expect_false(S7_inherits(f, distribution))
   expect_true(S7_inherits(point_mixing(theta_star = c(1)), mixing_measure))
 })
 

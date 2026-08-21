@@ -11,7 +11,7 @@
 
 plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   fam <- multinomial_family(n_trials = 12, k = k)
-  Q <- mixture(point_mixing(theta_star = q), fam)
+  Q <- induced_distribution(fam, point_mixing(theta_star = q))
   subnulls <- lapply(2:k, function(j) {
     basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
       replace(numeric(k), i, 1)
@@ -31,7 +31,7 @@ plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
 # so this is the one problem here with a known answer.
 binomial <- function(p = 0.75, ...) {
   fam <- multinomial_family(n_trials = 10, k = 2)
-  Q <- mixture(point_mixing(theta_star = c(p, 1 - p)), fam)
+  Q <- induced_distribution(fam, point_mixing(theta_star = c(p, 1 - p)))
   ripr_init(
     Q,
     null_model(fam, list(simplex_region(vertices = cbind(c(0, 1), c(0.5, 0.5))))),
@@ -84,7 +84,7 @@ test_that("initialisation does not depend on the engine's randomness", {
   # nodes, so a stochastic engine must not make the starting mixture depend on
   # the seed.
   fam <- multinomial_family(n_trials = 12, k = 4)
-  Q <- mixture(point_mixing(c(0.42, 0.31, 0.16, 0.11)), fam)
+  Q <- induced_distribution(fam, point_mixing(c(0.42, 0.31, 0.16, 0.11)))
   sub <- list(simplex_region(
     vertices = cbind(
       c(0, 1, 0, 0),
@@ -357,10 +357,10 @@ test_that("prune keeps, drops, or errors", {
 test_that("the returned mixture is a distribution", {
   fit <- ripr_finish(fw_step(plurality(), 4L))
   expect_true(S7_inherits(fit$W0, finite_mixing))
-  expect_true(S7_inherits(fit$P_star, mixture))
+  expect_true(S7_inherits(fit$P_star, induced_distribution))
   expect_equal(sum(weights(fit$W0)), 1, tolerance = 1e-12)
   expect_equal(
-    sum(exp(dist_log_density(fit$P_star, enumerate_space(fit$P_star@family@sample_space)))),
+    sum(exp(log_density(fit$P_star, enumerate_space(fit$P_star@family@sample_space)))),
     1,
     tolerance = 1e-10
   )

@@ -21,7 +21,7 @@ instance, integrates a log ratio.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))
 engine <- resolve_engine(exact_engine(), Q, fam)
 expect_q(engine, engine@nodes[, 1])
 }

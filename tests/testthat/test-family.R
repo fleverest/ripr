@@ -31,20 +31,20 @@ test_that("the multinomial pmf sums to 1 over its support", {
     c(0.7, 0.2, 0.1),
     c(0.5, 0.5, 0) # a boundary parameter: log(0) = -Inf in the kernel
   )) {
-    expect_equal(sum(exp(log_density(fam, theta, x))), 1, tolerance = 1e-12)
+    expect_equal(sum(exp(kernel_loglik(fam, theta, x))), 1, tolerance = 1e-12)
   }
 })
 
 test_that("a boundary parameter gives -Inf, not NaN, off its face", {
   fam <- multinomial_family(n_trials = 4, k = 3)
-  ld <- log_density(fam, c(0.5, 0.5, 0), enumerate_space(fam@sample_space))
+  ld <- kernel_loglik(fam, c(0.5, 0.5, 0), enumerate_space(fam@sample_space))
   expect_false(anyNA(ld))
   dead <- enumerate_space(fam@sample_space)[, 3] > 0 # positive count in the zero-probability category
   expect_true(all(ld[dead] == -Inf))
   expect_true(all(is.finite(ld[!dead])))
 })
 
-test_that("log_density_batch column c equals log_density of column c", {
+test_that("kernel_loglik_batch column c equals kernel_loglik of column c", {
   fam <- multinomial_family(n_trials = 6, k = 4)
   x <- enumerate_space(fam@sample_space)
   theta_mat <- cbind(
@@ -52,15 +52,15 @@ test_that("log_density_batch column c equals log_density of column c", {
     c(0.7, 0.1, 0.1, 0.1),
     c(0.4, 0.3, 0.2, 0.1)
   )
-  batched <- log_density_batch(fam, theta_mat, x)
+  batched <- kernel_loglik_batch(fam, theta_mat, x)
   for (i in seq_len(ncol(theta_mat))) {
-    expect_equal(batched[, i], log_density(fam, theta_mat[, i], x))
+    expect_equal(batched[, i], kernel_loglik(fam, theta_mat[, i], x))
   }
 })
 
-test_that("log_density accepts a bare vector as one outcome", {
+test_that("kernel_loglik accepts a bare vector as one outcome", {
   fam <- multinomial_family(n_trials = 10, k = 2)
-  expect_length(log_density(fam, c(0.5, 0.5), c(8, 2)), 1L)
+  expect_length(kernel_loglik(fam, c(0.5, 0.5), c(8, 2)), 1L)
 })
 
 # --- Compiled log-likelihood --------------------------------------------------
@@ -76,7 +76,7 @@ test_that("a compiled evaluator matches the one-off wrapper", {
     c(0.7, 0.1, 0.1, 0.1),
     c(0.5, 0.5, 0, 0) # boundary column: -Inf enters the kernel
   )
-  expect_equal(ld(theta_mat), log_density_batch(fam, theta_mat, x))
+  expect_equal(ld(theta_mat), kernel_loglik_batch(fam, theta_mat, x))
 })
 
 test_that("a compiled evaluator is reusable across different theta", {
@@ -90,7 +90,7 @@ test_that("a compiled evaluator is reusable across different theta", {
   )) {
     expect_equal(
       as.vector(ld(matrix(theta, ncol = 1L))),
-      log_density(fam, theta, x)
+      kernel_loglik(fam, theta, x)
     )
   }
 })
@@ -116,18 +116,18 @@ test_that("compiling against a subset of outcomes evaluates on that subset", {
   theta <- c(0.5, 0.3, 0.2)
   expect_equal(
     as.vector(ld(matrix(theta, ncol = 1L))),
-    log_density(fam, theta, nodes)
+    kernel_loglik(fam, theta, nodes)
   )
 })
 
 test_that("compiling works for repeated outcomes, as Monte Carlo draws give", {
   fam <- multinomial_family(n_trials = 4, k = 2)
   set.seed(7)
-  nodes <- draw(fam, c(0.6, 0.4), 50L)
+  nodes <- kernel_draw(fam, c(0.6, 0.4), 50L)
   ld <- compile_loglik(fam, nodes)
   expect_equal(
     as.vector(ld(matrix(c(0.5, 0.5), ncol = 1L))),
-    log_density(fam, c(0.5, 0.5), nodes)
+    kernel_loglik(fam, c(0.5, 0.5), nodes)
   )
 })
 
@@ -150,7 +150,7 @@ test_that("a family with no compile_loglik method errors", {
 
 # --- Score --------------------------------------------------------------------
 
-test_that("Mnom score matches a central finite difference of log_density", {
+test_that("Mnom score matches a central finite difference of kernel_loglik", {
   # Differentiated along simplex-tangent directions, since theta must stay on
   # the simplex. The score is returned in raw coordinates, so the directional
   # derivative is what lines up.
@@ -161,8 +161,8 @@ test_that("Mnom score matches a central finite difference of log_density", {
   eps <- 1e-6
 
   for (dir in list(c(1, -1, 0), c(0, 1, -1), c(1, 0, -1))) {
-    fd <- (log_density(fam, theta + eps * dir, x) -
-      log_density(fam, theta - eps * dir, x)) /
+    fd <- (kernel_loglik(fam, theta + eps * dir, x) -
+      kernel_loglik(fam, theta - eps * dir, x)) /
       (2 * eps)
     expect_equal(as.vector(s %*% dir), fd, tolerance = 1e-5)
   }
@@ -190,7 +190,7 @@ test_that("draw returns the right shape and respects the trial total", {
   for (n_trials in c(1, 25, 50)) {
     for (k in 1:5) {
       fam <- multinomial_family(n_trials = n_trials, k = k)
-      d <- draw(fam, seq_len(k) / sum(seq_len(k)), n)
+      d <- kernel_draw(fam, seq_len(k) / sum(seq_len(k)), n)
       expect_equal(dim(d), c(n, k))
       expect_true(all(rowSums(d) == n_trials))
     }

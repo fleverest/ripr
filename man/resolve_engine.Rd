@@ -9,7 +9,7 @@ resolve_engine(spec, alternative, family, tol = 1e-08)
 \arguments{
 \item{spec}{An engine spec, e.g. from \code{\link[=exact_engine]{exact_engine()}} or \code{\link[=mc_engine]{mc_engine()}}.}
 
-\item{alternative}{The alternative \eqn{Q}{Q}, an \link{outcome_distribution}.}
+\item{alternative}{The alternative \eqn{Q}{Q}, an \link{distribution}.}
 
 \item{family}{A \link{parametric_family}.}
 
@@ -27,6 +27,6 @@ be wrong.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))
 resolve_engine(exact_engine(), Q, fam)
 }

@@ -7,7 +7,7 @@
 ripr_state(
   atoms = list(),
   weights = list(),
-  alternative = outcome_distribution(),
+  alternative = distribution(),
   null = null_model(),
   engine = quadrature(),
   control = list(),
@@ -55,7 +55,7 @@ plurality <- null_model(
     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
-Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality)
 state
 }

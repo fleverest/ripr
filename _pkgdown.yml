@@ -26,10 +26,10 @@ reference:
   - multinomial_family
   - gaussian_family
   - compile_loglik
-  - log_density
-  - log_density_batch
+  - kernel_loglik
+  - kernel_loglik_batch
   - score
-  - draw
+  - kernel_draw
 
 - title: Parameter spaces
   desc: >
@@ -56,12 +56,17 @@ reference:
   - n_subnulls
   - in_null
 
-- title: Mixing measures and mixtures
+- title: Distributions
   desc: >
-    A `mixing_measure` is a law over a family's parameter space; paired with
-    a family via `mixture()` it induces a law over outcomes.
+    A `distribution` is a law over a sample space, and a `mixing_measure` is a
+    law over a parameter space. Pushing the latter through a family's kernel
+    induces the former.
   contents:
   - distribution
+  - log_density
+  - draw
+  - family.distribution
+  - induced_distribution
   - mixing_measure
   - point_mixing
   - finite_mixing
@@ -71,11 +76,6 @@ reference:
   - weights.mixing_measure
   - prune
   - mode_parameter
-  - outcome_distribution
-  - dist_log_density
-  - dist_draw
-  - dist_family
-  - mixture
 
 - title: Random variables
   desc: >
@@ -83,7 +83,7 @@ reference:
     likelihood ratios.
   contents:
   - random_variable
-  - mixture_likelihood
+  - likelihood
   - random_variable_arithmetic
 
 - title: Quadrature engines
@@ -107,7 +107,7 @@ reference:
   desc: >
     `ripr_init()` builds a starting state; the step verbs advance it by
     Frank--Wolfe, Li--Barron and/or EM; `ripr_finish()` turns it into a
-    mixture.
+    distribution.
   contents:
   - ripr_control
   - ripr_state

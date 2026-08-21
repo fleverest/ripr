@@ -1,4 +1,4 @@
-#' @include family.R mixing_measure.R mixture.R quadrature.R
+#' @include family.R mixing_measure.R distribution.R quadrature.R
 NULL
 
 #' Log multinomial coefficient `log(n! / prod x_j!)` per count vector
@@ -33,7 +33,7 @@ multinomial_family <- new_class(
   constructor = function(n_trials, k) {
     space <- count_space(n = n_trials, k = k)
     new_object(
-      S7_object(),
+      at_theta,
       sample_space = space,
       # The full k-simplex, spanned by its vertices {e_1, ..., e_k}.
       parameter_space = simplex_region(vertices = diag(space@k)),
@@ -61,6 +61,6 @@ method(score, multinomial_family) <- function(family, theta, x) {
 }
 
 
-method(draw, multinomial_family) <- function(family, theta, n_obs) {
+method(kernel_draw, multinomial_family) <- function(family, theta, n_obs) {
   t(stats::rmultinom(n_obs, size = family@n_trials, prob = theta))
 }

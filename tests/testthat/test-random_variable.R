@@ -15,8 +15,8 @@ fixture <- function(n = 8L, k = 3L) {
   list(
     family = fam,
     space = fam@sample_space,
-    Q = mixture(point_mixing(theta), fam),
-    P = mixture(point_mixing(rep(1 / k, k)), fam)
+    Q = induced_distribution(fam, point_mixing(theta)),
+    P = induced_distribution(fam, point_mixing(rep(1 / k, k)))
   )
 }
 
@@ -68,22 +68,22 @@ test_that("the wrapped function is never handed unchecked input", {
 test_that("a likelihood is the density, and a ratio is a quotient of two", {
   # There is no ratio class: `Q / P` is ordinary arithmetic on two likelihoods.
   f <- fixture()
-  L <- mixture_likelihood(f$Q)
+  L <- likelihood(f$Q)
   x <- rbind(c(4, 2, 2), c(8, 0, 0))
-  expect_equal(L(x), exp(dist_log_density(f$Q, x)))
+  expect_equal(L(x), exp(log_density(f$Q, x)))
 
-  R <- mixture_likelihood(f$Q) / mixture_likelihood(f$P)
-  expect_equal(R(x), exp(dist_log_density(f$Q, x) - dist_log_density(f$P, x)))
+  R <- likelihood(f$Q) / likelihood(f$P)
+  expect_equal(R(x), exp(log_density(f$Q, x) - log_density(f$P, x)))
 })
 
 test_that("a ratio integrates to 1 against its own denominator", {
   # `E_P[Q/P] = 1` is the one value known in closed form without integrating
   # anything, so it catches a mis-signed or mis-weighted density.
   f <- fixture()
-  R <- mixture_likelihood(f$Q) / mixture_likelihood(f$P)
+  R <- likelihood(f$Q) / likelihood(f$P)
   outcomes <- enumerate_space(f$family@sample_space)
   expect_equal(
-    sum(exp(dist_log_density(f$P, outcomes)) * R(outcomes)),
+    sum(exp(log_density(f$P, outcomes)) * R(outcomes)),
     1,
     tolerance = 1e-12
   )
@@ -94,8 +94,8 @@ test_that("infinite values are allowed", {
   # numerator does not, and that is reachable: a mixture with an atom at a
   # simplex vertex gives zero probability to almost every outcome.
   f <- fixture()
-  vertex <- mixture(point_mixing(c(1, 0, 0)), f$family)
-  R <- mixture_likelihood(f$Q) / mixture_likelihood(vertex)
+  vertex <- induced_distribution(f$family, point_mixing(c(1, 0, 0)))
+  R <- likelihood(f$Q) / likelihood(vertex)
   expect_true(is.infinite(R(c(4, 2, 2))))
   expect_true(R(c(8, 0, 0)) < Inf)
 })
@@ -104,7 +104,7 @@ test_that("infinite values are allowed", {
 
 test_that("input must have the right shape", {
   f <- fixture()
-  R <- mixture_likelihood(f$Q)
+  R <- likelihood(f$Q)
   expect_match(error_message(R(c(4, 4))), "length-3 vector")
   expect_match(error_message(R(c(2, 2, 2, 2))), "length-3 vector")
   expect_match(error_message(R(matrix(1, nrow = 2L, ncol = 4L))), "3 columns")
@@ -112,7 +112,7 @@ test_that("input must have the right shape", {
 
 test_that("input must be numeric and present", {
   f <- fixture()
-  R <- mixture_likelihood(f$Q)
+  R <- likelihood(f$Q)
   expect_match(error_message(R(c("a", "b", "c"))), "outcomes must be numeric")
   expect_match(error_message(R(c(4, NA, 4))), "outcomes must not be missing")
   expect_match(error_message(R(c(4, NaN, 4))), "outcomes must not be missing")
@@ -122,7 +122,7 @@ test_that("count outcomes must be counts summing to the total", {
   # The shape check alone would let through a vector of the right length that
   # is not a point of the sample space at all.
   f <- fixture()
-  R <- mixture_likelihood(f$Q)
+  R <- likelihood(f$Q)
   expect_match(error_message(R(c(4, 2, 1))), "summing to 8", fixed = TRUE)
   expect_match(error_message(R(c(9, -1, 0))), "non-negative whole numbers")
   expect_match(error_message(R(c(4.5, 2, 1.5))), "non-negative whole numbers")
@@ -133,7 +133,7 @@ test_that("Gaussian outcomes may be anything finite", {
   # The sample space is all of R^d, so only finiteness is added: an infinite
   # outcome has zero density under every parameter, making a ratio there 0 / 0.
   fam <- gaussian_family(dim = 2L)
-  L <- mixture_likelihood(mixture(point_mixing(c(0.5, 0.5)), fam))
+  L <- likelihood(induced_distribution(fam, point_mixing(c(0.5, 0.5))))
   expect_silent(L(c(-3, 40)))
   expect_match(error_message(L(c(Inf, 0))), "finite")
   expect_match(error_message(L(1)), "length-2 vector")
@@ -143,8 +143,8 @@ test_that("Gaussian outcomes may be anything finite", {
 
 test_that("each operator does what it says, either way round", {
   f <- fixture()
-  X <- mixture_likelihood(f$Q)
-  Y <- mixture_likelihood(f$P)
+  X <- likelihood(f$Q)
+  Y <- likelihood(f$P)
   x <- rbind(c(4, 2, 2), c(8, 0, 0), c(0, 4, 4))
 
   expect_equal((X + Y)(x), X(x) + Y(x))
@@ -164,7 +164,7 @@ test_that("each operator does what it says, either way round", {
 
 test_that("results are random variables, and compose", {
   f <- fixture()
-  R <- mixture_likelihood(f$Q) / mixture_likelihood(f$P)
+  R <- likelihood(f$Q) / likelihood(f$P)
   x <- rbind(c(4, 2, 2), c(8, 0, 0))
   expect_true(S7_inherits(R / 2, random_variable))
   expect_equal(((R / 2 + 1) * 3)(x), (R(x) / 2 + 1) * 3)
@@ -174,22 +174,22 @@ test_that("a derived variable still checks its input", {
   # Validation is not something the outermost variable does on everyone's
   # behalf; each operand checks, so any variable is sound on its own.
   f <- fixture()
-  R <- mixture_likelihood(f$Q) / 2
+  R <- likelihood(f$Q) / 2
   expect_error(R(c(4, 2, 1)), "summing to 8")
 })
 
 test_that("variables on different sample spaces cannot be combined", {
   # Checked when written, not when evaluated, so the error names the line that
   # made the mistake.
-  a <- mixture_likelihood(fixture(k = 3L)$Q)
-  b <- mixture_likelihood(fixture(k = 4L)$Q)
+  a <- likelihood(fixture(k = 3L)$Q)
+  b <- likelihood(fixture(k = 4L)$Q)
   expect_error(a + b, "different sample spaces")
   expect_error(a / b, "different sample spaces")
 })
 
 test_that("only a single number may be combined with a variable", {
   f <- fixture()
-  X <- mixture_likelihood(f$Q)
+  X <- likelihood(f$Q)
   expect_error(X * c(1, 2), "single number")
 })
 
@@ -198,8 +198,8 @@ test_that("only a single number may be combined with a variable", {
 test_that("a leaf prints its label", {
   f <- fixture()
   Q <- f$Q
-  expect_match(rv_expression(mixture_likelihood(Q)), "^Q$")
-  expect_match(rv_expression(mixture_likelihood(Q, label = "alt")), "^alt$")
+  expect_match(rv_expression(likelihood(Q)), "^Q$")
+  expect_match(rv_expression(likelihood(Q, label = "alt")), "^alt$")
   expect_match(
     rv_expression(random_variable(function(x) x[, 1L], f$space)),
     "rv"
@@ -211,22 +211,22 @@ test_that("an unlabelled call records how it was written, warts and all", {
   # helper labels itself with the helper's argument name. Cosmetic, and why
   # `label` exists.
   f <- fixture()
-  helper <- function(d) mixture_likelihood(d)
+  helper <- function(d) likelihood(d)
   expect_match(rv_expression(helper(f$Q)), "^d$")
 })
 
 test_that("a label must be a single string or NULL", {
   f <- fixture()
-  expect_error(mixture_likelihood(f$Q, label = c("a", "b")), "single string")
-  expect_error(mixture_likelihood(f$Q, label = NA_character_), "single string")
-  expect_error(mixture_likelihood(f$Q, label = 3), "single string")
+  expect_error(likelihood(f$Q, label = c("a", "b")), "single string")
+  expect_error(likelihood(f$Q, label = NA_character_), "single string")
+  expect_error(likelihood(f$Q, label = 3), "single string")
 })
 
 test_that("arithmetic prints as the expression that built it", {
   f <- fixture()
   Q <- f$Q
   P <- f$P
-  R <- mixture_likelihood(Q) / mixture_likelihood(P)
+  R <- likelihood(Q) / likelihood(P)
   expect_equal(rv_expression(R), "Q / P")
   expect_equal(rv_expression(R / 1.5), "Q / P / 1.5")
   expect_equal(rv_expression(R + R), "Q / P + Q / P")
@@ -238,7 +238,7 @@ test_that("brackets appear only where they change the reading", {
   f <- fixture()
   Q <- f$Q
   P <- f$P
-  R <- mixture_likelihood(Q) / mixture_likelihood(P)
+  R <- likelihood(Q) / likelihood(P)
   expect_equal(rv_expression(2 / R), "2 / (Q / P)")
   expect_equal(rv_expression((R + 1) * 3), "(Q / P + 1) * 3")
   expect_equal(rv_expression(R - R / 2), "Q / P - Q / P / 2")
@@ -247,33 +247,33 @@ test_that("brackets appear only where they change the reading", {
 
 test_that("the expression tree records the operands", {
   f <- fixture()
-  R <- mixture_likelihood(f$Q) / 2
+  R <- likelihood(f$Q) / 2
   expect_identical(R@op, "/")
   expect_length(R@operands, 2L)
   expect_true(S7_inherits(R@operands[[1L]], random_variable))
   expect_equal(R@operands[[2L]], 2)
-  expect_true(is.na(mixture_likelihood(f$Q)@op))
+  expect_true(is.na(likelihood(f$Q)@op))
 })
 
 test_that("a long label is shortened", {
   f <- fixture()
-  long <- mixture_likelihood(mixture(point_mixing(c(0.5, 0.3, 0.2)), f$family))
+  long <- likelihood(induced_distribution(f$family, point_mixing(c(0.5, 0.3, 0.2))))
   expect_true(nchar(rv_expression(long)) <= 24L)
   expect_match(rv_expression(long), "\\.\\.\\.$")
 })
 
 test_that("printing returns the variable invisibly", {
   f <- fixture()
-  R <- mixture_likelihood(f$Q)
+  R <- likelihood(f$Q)
   expect_silent(invisible(capture.output(out <- print(R))))
   expect_true(S7_inherits(out, random_variable))
 })
 
 test_that("format() gives the expression, and does not error", {
   family <- multinomial_family(n_trials = 4L, k = 3L)
-  Q <- mixture(point_mixing(c(0.5, 0.3, 0.2)), family)
-  x <- mixture_likelihood(Q, label = "Q")
-  p <- mixture_likelihood(Q, label = "P*")
+  Q <- induced_distribution(family, point_mixing(c(0.5, 0.3, 0.2)))
+  x <- likelihood(Q, label = "Q")
+  p <- likelihood(Q, label = "P*")
 
   expect_identical(format(x), "Q")
   expect_identical(format(x / p), "Q / P*")

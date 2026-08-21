@@ -1,4 +1,4 @@
-#' @include family.R mixing_measure.R mixture.R quadrature.R
+#' @include family.R mixing_measure.R distribution.R quadrature.R
 NULL
 
 
@@ -73,7 +73,7 @@ gaussian_family <- new_class(
     )
     sigma <- as_covariance(sigma, dim)
     new_object(
-      S7_object(),
+      at_theta,
       sample_space = real_space(dim),
       parameter_space = real_region(dim),
       n_dim = dim,
@@ -111,7 +111,7 @@ method(score, gaussian_family) <- function(family, theta, x) {
 }
 
 
-method(draw, gaussian_family) <- function(family, theta, n_obs) {
+method(kernel_draw, gaussian_family) <- function(family, theta, n_obs) {
   d <- as.integer(family@n_dim)
   z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
   t(family@chol_l %*% z + theta)
@@ -131,7 +131,7 @@ method(draw, gaussian_family) <- function(family, theta, n_obs) {
 #' @examples
 #' fam <- gaussian_family(dim = 2L)
 #' prior <- gaussian_mixing(prior_mean = c(0, 0), prior_cov = diag(2))
-#' dist_log_density(mixture(prior, fam), c(0.5, 0.5))
+#' log_density(fam(prior), c(0.5, 0.5))
 #' @export
 gaussian_mixing <- new_class(
   "gaussian_mixing",

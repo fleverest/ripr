@@ -1,4 +1,4 @@
-#' @include sample_space.R mixture.R
+#' @include sample_space.R distribution.R
 NULL
 
 # Random variables on a sample space, and arithmetic over them.
@@ -31,8 +31,10 @@ NULL
 #'   given, since the expression is then built from the operands.
 #' @param op The operator that produced this variable, or `NA` for a leaf. Set
 #'   by [random_variable_arithmetic]; there is rarely a reason to pass it.
+#' @param operands The operands `op` combined, or an empty list for a leaf. Set
+#'   alongside `op`, and used only for printing.
 #' @return A callable `random_variable`.
-#' @seealso [mixture_likelihood()], [random_variable_arithmetic]
+#' @seealso [likelihood()], [random_variable_arithmetic]
 #' @examples
 #' X <- random_variable(\(x) dnorm(x, 1), sample_space = real_space(1))
 #' X(as.matrix(0:2))
@@ -83,7 +85,7 @@ random_variable <- new_class(
 
 #' Shorten a label that came from deparsing an inline argument
 #'
-#' `mixture_likelihood(Q)` gives a short label, but an expression written in
+#' `likelihood(Q)` gives a short label, but an expression written in
 #' place gives back the whole expression, which swamps the printed line.
 #' @keywords internal
 #' @noRd
@@ -133,18 +135,8 @@ rv_expression <- function(x) {
 }
 
 
-#' A short description of a sample space
-#' @keywords internal
-#' @noRd
-space_label <- function(space) {
-  name <- attr(S7_class(space), "name")
-  sprintf("%s, dimension %d", name, space_dim(space))
-}
-
-
-#' @param x A [random_variable].
-#' @param ... Ignored.
 #' @rdname random_variable
+#' @usage NULL
 #' @export
 method(print, random_variable) <- function(x, ...) {
   cat("<random_variable>", format(x), "\n")
@@ -161,19 +153,20 @@ method(print, random_variable) <- function(x, ...) {
 #' `format()` on non-`random_variable` operands, which is how `X / 4.27`
 #' renders its divisor, so the generic has to work on these too.
 #' @rdname random_variable
+#' @usage NULL
 #' @export
 method(format, random_variable) <- function(x, ...) rv_expression(x)
 
 
-# --- Mixture Likelihood RV ----------------------------------------------------
+# --- Likelihood RV ------------------------------------------------------------
 
-#' The mixture likelihood, as a random variable
+#' The likelihood of a distribution, as a random variable
 #'
-#' For a mixing measure W, \eqn{X(x) = P_W(x)}{X(x) = P_W(x)}. A likelihood
-#' ratio can be defines as a quotient of two such random variables.
-#' @param dist An [outcome_distribution].
+#' \eqn{X(x) = P(x)}{X(x) = P(x)}. A likelihood ratio is then a quotient of two
+#' of these: `likelihood(Q) / likelihood(P_star)`.
+#' @param dist A [distribution].
 #' @param label How to name it when printing. `NULL` takes how the argument was
-#'   written, so `mixture_likelihood(Q)` prints as `Q`. This degenerates when
+#'   written, so `likelihood(Q)` prints as `Q`. This degenerates when
 #'   the call is behind a helper or inside a loop, since it records how the
 #'   variable was written rather than what it is. Name it yourself if that
 #'   matters to you.
@@ -181,10 +174,10 @@ method(format, random_variable) <- function(x, ...) rv_expression(x)
 #' @seealso [random_variable_arithmetic]
 #' @examples
 #' fam <- gaussian_family(dim = 2)
-#' Q <- mixture_likelihood(mixture(point_mixing(c(0.5, 0.5)), fam))
+#' Q <- likelihood(induced_distribution(fam, point_mixing(c(0.5, 0.5))))
 #' Q(c(2,2))
 #' @export
-mixture_likelihood <- function(dist, label = NULL) {
+likelihood <- function(dist, label = NULL) {
   if (is.null(label)) {
     label <- deparse1(substitute(dist))
   }
@@ -193,8 +186,8 @@ mixture_likelihood <- function(dist, label = NULL) {
   }
   force(dist)
   random_variable(
-    function(x) exp(dist_log_density(dist, x)),
-    sample_space = dist@family@sample_space,
+    function(x) exp(log_density(dist, x)),
+    sample_space = dist@sample_space,
     label = label
   )
 }
@@ -300,53 +293,65 @@ combine_rv <- function(e1, e2, op, symbol) {
 
 
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`+`, list(random_variable, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `+`, "+")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`+`, list(random_variable, class_numeric)) <- function(e1, e2) {
   combine_rv(e1, e2, `+`, "+")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`+`, list(class_numeric, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `+`, "+")
 }
 
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`-`, list(random_variable, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `-`, "-")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`-`, list(random_variable, class_numeric)) <- function(e1, e2) {
   combine_rv(e1, e2, `-`, "-")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`-`, list(class_numeric, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `-`, "-")
 }
 
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`*`, list(random_variable, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `*`, "*")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`*`, list(random_variable, class_numeric)) <- function(e1, e2) {
   combine_rv(e1, e2, `*`, "*")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`*`, list(class_numeric, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `*`, "*")
 }
 
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`/`, list(random_variable, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `/`, "/")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`/`, list(random_variable, class_numeric)) <- function(e1, e2) {
   combine_rv(e1, e2, `/`, "/")
 }
 #' @rdname random_variable_arithmetic
+#' @usage NULL
 method(`/`, list(class_numeric, random_variable)) <- function(e1, e2) {
   combine_rv(e1, e2, `/`, "/")
 }

@@ -71,7 +71,7 @@ W1 <- finite_mixing(
   ),
   weights = c(1)
 )
-Q <- mixture(W1, family)
+Q <- family(W1)
 ```
 
 <div class="figure" style="text-align: center">
@@ -127,8 +127,8 @@ computes the mixture likelihood ratio `Q / P*`, i.e. our candidate
 e-variable:
 
 ``` r
-X <- mixture_likelihood(Q, label = "Q") /
-  mixture_likelihood(fit$P_star, label = "P*")
+X <- likelihood(Q, label = "Q") /
+  likelihood(fit$P_star, label = "P*")
 X
 #> <random_variable> Q / P* 
 #>   on count_space, dimension 3
@@ -189,9 +189,9 @@ Replace the projection with something that is not the RIPr at all and
 certify the resulting ratio:
 
 ``` r
-bad <- mixture(point_mixing(rep(1 / K, K)), family)
-X_bad <- mixture_likelihood(Q, label = "Q") /
-  mixture_likelihood(bad, label = "P0")
+bad <- family(rep(1 / K, K))
+X_bad <- likelihood(Q, label = "Q") /
+  likelihood(bad, label = "P0")
 cert_bad <- certify(X_bad, plurality, tol = 1e-9)
 
 c(good = cert$sup_ub, bad = cert_bad$sup_ub)
@@ -208,7 +208,7 @@ procedure. We could measure growth as follows.
 growth <- function(E, Q) {
   outcomes <- enumerate_space(E@sample_space)
   e_values <- E(outcomes)
-  Q_expectation <- dist_log_density(Q, outcomes) |>
+  Q_expectation <- log_density(Q, outcomes) |>
     exp() %*%
     log(e_values)
   c(Q_expectation) # return as scalar
@@ -272,7 +272,7 @@ W_maj <- finite_mixing(
   ),
   weights = c(1 / 3, 1 / 3, 1 / 3)
 )
-Q_maj <- mixture(W_maj, family)
+Q_maj <- family(W_maj)
 ```
 
 <div class="figure" style="text-align: center">
@@ -304,8 +304,8 @@ fit_medial <- ripr_init(Q_maj, medial) |>
     identify = TRUE,
     record_gap = TRUE
   )
-X_medial <- mixture_likelihood(Q_maj, label = "Q") /
-  mixture_likelihood(fit_medial$P_star, label = "P*")
+X_medial <- likelihood(Q_maj, label = "Q") /
+  likelihood(fit_medial$P_star, label = "P*")
 
 c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 #>        kl     upper 
@@ -345,7 +345,7 @@ null <- null_model(
   gaussian,
   list(halfspace_region(normal = c(1, -1), offset = 0))
 )
-Y <- mixture_likelihood(mixture(point_mixing(c(0, 0)), gaussian))
+Y <- likelihood(gaussian(c(0, 0)))
 certify(Y, null)
 #> Error:
 #> ! Cannot certify:

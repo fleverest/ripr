@@ -17,8 +17,8 @@ A function of \code{theta_mat}, a \verb{(d, C)} matrix of parameter columns,
 returning the \verb{(M, C)} matrix of log densities at \code{x}.
 }
 \description{
-The single density method a family must implement; \code{\link[=log_density_batch]{log_density_batch()}} and
-\code{\link[=log_density]{log_density()}} are thin wrappers over it. Returns a function of \code{theta_mat}.
+The single density method a family must implement; \code{\link[=kernel_loglik_batch]{kernel_loglik_batch()}} and
+\code{\link[=kernel_loglik]{kernel_loglik()}} are thin wrappers over it. Returns a function of \code{theta_mat}.
 }
 \details{
 Compiling lets a family precompute whatever depends on \code{x} alone, which we

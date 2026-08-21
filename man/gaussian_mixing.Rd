@@ -23,5 +23,5 @@ integration is needed to evaluate it.
 \examples{
 fam <- gaussian_family(dim = 2L)
 prior <- gaussian_mixing(prior_mean = c(0, 0), prior_cov = diag(2))
-dist_log_density(mixture(prior, fam), c(0.5, 0.5))
+log_density(fam(prior), c(0.5, 0.5))
 }

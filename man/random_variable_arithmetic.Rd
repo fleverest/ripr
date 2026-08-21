@@ -31,43 +31,6 @@
 \alias{/,integer,ripr::random_variable-method}
 \alias{/,double,ripr::random_variable-method}
 \title{Arithmetic on random variables and scalars}
-\usage{
-## S7 method for classes <ripr::random_variable>, <ripr::random_variable>
-e1 + e2
-
-## S7 method for classes <ripr::random_variable>, <integer>/<double>
-e1 + e2
-
-## S7 method for classes <integer>/<double>, <ripr::random_variable>
-e1 + e2
-
-## S7 method for classes <ripr::random_variable>, <ripr::random_variable>
-e1 - e2
-
-## S7 method for classes <ripr::random_variable>, <integer>/<double>
-e1 - e2
-
-## S7 method for classes <integer>/<double>, <ripr::random_variable>
-e1 - e2
-
-## S7 method for classes <ripr::random_variable>, <ripr::random_variable>
-e1 * e2
-
-## S7 method for classes <ripr::random_variable>, <integer>/<double>
-e1 * e2
-
-## S7 method for classes <integer>/<double>, <ripr::random_variable>
-e1 * e2
-
-## S7 method for classes <ripr::random_variable>, <ripr::random_variable>
-e1 / e2
-
-## S7 method for classes <ripr::random_variable>, <integer>/<double>
-e1 / e2
-
-## S7 method for classes <integer>/<double>, <ripr::random_variable>
-e1 / e2
-}
 \arguments{
 \item{e1, e2}{A \link{random_variable} or a single number, at least one of them a
 random variable.}

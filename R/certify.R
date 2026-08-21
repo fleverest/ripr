@@ -269,7 +269,7 @@ expectation_objective <- function(family, values) {
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
+#' X <- likelihood(fam(c(0.4, 0.35, 0.25)))
 #' sup_lb(X, plurality)
 #' @export
 sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
@@ -360,7 +360,7 @@ node_table <- function(result, subnull) {
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
+#' X <- likelihood(fam(c(0.4, 0.35, 0.25)))
 #' nodes <- certify_trace(X, plurality, tol = 1e-6)
 #' nrow(nodes)
 #' @export
@@ -441,7 +441,7 @@ certify_trace <- function(
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' X <- mixture_likelihood(mixture(point_mixing(c(0.4, 0.35, 0.25)), fam))
+#' X <- likelihood(fam(c(0.4, 0.35, 0.25)))
 #' cert <- certify(X, plurality, tol = 1e-6)
 #' c(upper = cert$sup_ub, attained = cert$sup_lb)
 #' @export

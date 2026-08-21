@@ -19,7 +19,7 @@ bias rather than variance, so \code{\link[=expect_se]{expect_se()}} does not des
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- mixture(point_mixing(c(0.5, 0.5)), fam)
+Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))
 deterministic(resolve_engine(exact_engine(), Q, fam))
 deterministic(resolve_engine(mc_engine(100L), Q, fam))
 }

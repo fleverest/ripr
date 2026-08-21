@@ -7,7 +7,7 @@
 gaussian_moments(dist)
 }
 \arguments{
-\item{dist}{An \link{outcome_distribution}.}
+\item{dist}{An \link{distribution}.}
 }
 \value{
 \code{list(mean = , cov = )}, or \code{NULL}.

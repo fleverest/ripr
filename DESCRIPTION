@@ -47,7 +47,7 @@ Collate:
     'family.R'
     'null.R'
     'mixing_measure.R'
-    'mixture.R'
+    'distribution.R'
     'random_variable.R'
     'certify.R'
     'ripr-package.R'

@@ -10,7 +10,7 @@
 
 plurality <- function(n = 12, k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   fam <- multinomial_family(n_trials = n, k = k)
-  Q <- mixture(point_mixing(theta_star = q), fam)
+  Q <- induced_distribution(fam, point_mixing(theta_star = q))
   subnulls <- lapply(2:k, function(j) {
     basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
       replace(numeric(k), i, 1)

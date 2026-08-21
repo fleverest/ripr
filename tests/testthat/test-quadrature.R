@@ -9,7 +9,7 @@ q_binomial <- function(n = 10, p = 0.75) {
   fam <- multinomial_family(n_trials = n, k = 2)
   list(
     family = fam,
-    Q = mixture(point_mixing(theta_star = c(p, 1 - p)), fam)
+    Q = induced_distribution(fam, point_mixing(theta_star = c(p, 1 - p)))
   )
 }
 
@@ -50,7 +50,7 @@ test_that("resolve_engine errors when the weights do not sum to one", {
       quadrature(
         nodes = enumerate_space(family@sample_space),
         log_w = log(rep(1 / 3, nrow(enumerate_space(family@sample_space)))),
-        log_q = dist_log_density(alternative, enumerate_space(family@sample_space)),
+        log_q = log_density(alternative, enumerate_space(family@sample_space)),
         family = family,
         deterministic = TRUE
       )
@@ -77,7 +77,7 @@ test_that("the exact engine drops nodes carrying no Q mass", {
   # A degenerate Q puts zero mass on most of the support. Those nodes must be
   # screened out, or `log_q - log_p_W` gives 0 * -Inf = NaN downstream.
   fam <- multinomial_family(n_trials = 4, k = 2)
-  Q <- mixture(point_mixing(theta_star = c(1, 0)), fam)
+  Q <- induced_distribution(fam, point_mixing(theta_star = c(1, 0)))
   eng <- resolve_engine(exact_engine(), Q, fam)
 
   expect_equal(n_nodes(eng), 1L)
@@ -88,11 +88,11 @@ test_that("the exact engine drops nodes carrying no Q mass", {
 
 test_that("the exact engine refuses a family with no enumerable support", {
   toy <- new_class("toy_family", parent = parametric_family)
-  direct <- new_class("direct_law", parent = outcome_distribution)
+  direct <- new_class("direct_law", parent = distribution)
   expect_error(
     resolve_engine(
       exact_engine(),
-      direct(),
+      direct(sample_space = real_space(1L)),
       toy(sample_space = real_space(1L), parameter_space = real_region(1L))
     ),
     "cannot be enumerated"
@@ -222,7 +222,7 @@ test_that("compile_engine evaluates the family at the engine's own nodes", {
   eng <- resolve_engine(exact_engine(), s$Q, s$family)
   ld <- compile_engine(eng)
   theta_mat <- cbind(c(0.5, 0.5), c(0.25, 0.75))
-  expect_equal(ld(theta_mat), log_density_batch(s$family, theta_mat, eng@nodes))
+  expect_equal(ld(theta_mat), kernel_loglik_batch(s$family, theta_mat, eng@nodes))
 })
 
 test_that("compile_engine is consistent across repeated compilations", {
@@ -271,7 +271,7 @@ q_gaussian <- function(d = 1, mean = NULL, sigma = NULL) {
   if (is.null(mean)) {
     mean <- rep(0, d)
   }
-  list(family = fam, Q = mixture(point_mixing(theta_star = mean), fam))
+  list(family = fam, Q = induced_distribution(fam, point_mixing(theta_star = mean)))
 }
 
 test_that("Gauss-Hermite weights sum to one", {
@@ -348,7 +348,7 @@ test_that("Gauss-Hermite refuses a grid larger than max_nodes", {
 
 test_that("Gauss-Hermite works for a Gaussian-prior alternative", {
   fam <- gaussian_family(dim = 1, sigma = matrix(1))
-  Q <- mixture(gaussian_mixing(prior_mean = 0.5, prior_cov = matrix(2)), fam)
+  Q <- induced_distribution(fam, gaussian_mixing(prior_mean = 0.5, prior_cov = matrix(2)))
   eng <- resolve_engine(gh_engine(25L), Q, fam)
   # The induced mixture is N(0.5, 1 + 2), so its variance is 3.
   x <- eng@nodes[, 1]

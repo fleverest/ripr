@@ -13,12 +13,6 @@ random_variable(
   op = NA_character_,
   operands = list()
 )
-
-## S7 method for class <ripr::random_variable>
-print(x, ...)
-
-## S7 method for class <ripr::random_variable>
-format(x, ...)
 }
 \arguments{
 \item{f}{The mapping that defines the random variable, accepting an \verb{(n, d)}
@@ -32,9 +26,8 @@ given, since the expression is then built from the operands.}
 \item{op}{The operator that produced this variable, or \code{NA} for a leaf. Set
 by \link{random_variable_arithmetic}; there is rarely a reason to pass it.}
 
-\item{x}{A \link{random_variable}.}
-
-\item{...}{Ignored.}
+\item{operands}{The operands \code{op} combined, or an empty list for a leaf. Set
+alongside \code{op}, and used only for printing.}
 }
 \value{
 A callable \code{random_variable}.
@@ -63,5 +56,5 @@ X <- random_variable(\(x) dnorm(x, 1), sample_space = real_space(1))
 X(as.matrix(0:2))
 }
 \seealso{
-\code{\link[=mixture_likelihood]{mixture_likelihood()}}, \link{random_variable_arithmetic}
+\code{\link[=likelihood]{likelihood()}}, \link{random_variable_arithmetic}
 }

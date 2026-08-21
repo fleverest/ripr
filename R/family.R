@@ -11,28 +11,103 @@ NULL
 #' \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
 #' [sample_space]; the two spaces are what the family carries, and everything
 #' else it offers is a way of navigating that map.
+#'
+#' Families are callable, which is that map written down: `fam(theta)` is the
+#' [distribution] \eqn{p_\theta}{p_theta}. A kernel extends canonically from
+#' points to measures, so `fam(W)` for a [mixing_measure] is the same map and
+#' gives the induced \eqn{P_W}{P_W}. [induced_distribution()] is the same thing
+#' spelled out, for when that reads better.
+#'
+#' Not marked abstract, because S7 forbids that alongside a `class_function`
+#' parent -- abstract classes must have abstract parents. It is one in every
+#' other sense: it supplies no [compile_loglik()] method, so constructing it
+#' directly gives a family with no kernel, which errors on first use exactly as
+#' any other incomplete family does.
+#'
 #' @param sample_space The [sample_space] that outcomes belong to.
 #' @param parameter_space The [parameter_space] that parameters belong to.
+#' @return A callable `parametric_family`.
 #' @examples
-#' # `parametric_family` is abstract; families subclass it, e.g.
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' S7::S7_inherits(fam, parametric_family)
+#'
+#' # The map theta -> p_theta, and its extension to mixing measures.
+#' fam(c(0.5, 0.3, 0.2))
+#' fam(finite_mixing(
+#'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+#'   weights = c(0.5, 0.5)
+#' ))
+#'
+#' # Properties and other generics are unaffected by being callable.
 #' enumerate_space(fam@sample_space)
 #' @export
 parametric_family <- new_class(
   "parametric_family",
-  abstract = TRUE,
+  parent = class_function,
   properties = list(
     sample_space = sample_space,
     parameter_space = parameter_space
-  )
+  ),
+  constructor = function(sample_space, parameter_space) {
+    new_object(
+      at_theta,
+      sample_space = sample_space,
+      parameter_space = parameter_space
+    )
+  }
 )
+
+
+#' The map `theta -> p_theta`, shared by every family
+#'
+#' Defined once at namespace level and never inside a constructor. A closure
+#' built per family would capture that constructor's frame, and the family's
+#' own properties with it: on a family with a 20k-row property that is roughly
+#' twice the serialised size, for a copy nothing reads.
+#'
+#' `sys.function()` recovers the family being called, with its S7 attributes
+#' intact, so the closure captures nothing at all.
+#' @keywords internal
+#' @noRd
+at_theta <- function(at) {
+  induced_distribution(sys.function(), at)
+}
+
+
+#' @rdname parametric_family
+#' @usage NULL
+#' @export
+method(print, parametric_family) <- function(x, ...) {
+  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("  parameters ", space_label(x@parameter_space), "\n", sep = "")
+  cat("  outcomes   ", space_label(x@sample_space), "\n", sep = "")
+  invisible(x)
+}
+
+
+#' @description `format()` gives the two spaces on one line, without the class
+#'   banner `print()` adds.
+#'
+#' Both are needed rather than inherited: the parent is `class_function`, so
+#' the defaults reach `deparse()` and print the shared closure plus an
+#' attribute dump.
+#' @rdname parametric_family
+#' @usage NULL
+#' @export
+method(format, parametric_family) <- function(x, ...) {
+  sprintf(
+    "%s: %s -> %s",
+    attr(S7_class(x), "name"),
+    attr(S7_class(x@parameter_space), "name"),
+    attr(S7_class(x@sample_space), "name")
+  )
+}
 
 
 #' Compile the log-likelihood function for a fixed set of outcomes
 #'
-#' The single density method a family must implement; [log_density_batch()] and
-#' [log_density()] are thin wrappers over it. Returns a function of `theta_mat`.
+#' The single density method a family must implement; [kernel_loglik_batch()] and
+#' [kernel_loglik()] are thin wrappers over it. Returns a function of `theta_mat`.
 #'
 #' Compiling lets a family precompute whatever depends on `x` alone, which we
 #' require because the our optimiser fixes the outcomes (either enumerating the
@@ -69,9 +144,9 @@ compile_loglik <- new_generic("compile_loglik", "family", function(family, x) {
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
-#' log_density_batch(fam, cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)), x)
+#' kernel_loglik_batch(fam, cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)), x)
 #' @export
-log_density_batch <- function(family, theta_mat, x) {
+kernel_loglik_batch <- function(family, theta_mat, x) {
   compile_loglik(family, x)(theta_mat)
 }
 
@@ -83,14 +158,14 @@ log_density_batch <- function(family, theta_mat, x) {
 #' @return Length-`M` numeric vector.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' log_density(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
+#' kernel_loglik(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
 #' @export
-log_density <- function(family, theta, x) {
-  as.vector(log_density_batch(family, matrix(theta, ncol = 1L), x))
+kernel_loglik <- function(family, theta, x) {
+  as.vector(kernel_loglik_batch(family, matrix(theta, ncol = 1L), x))
 }
 
 
-#' Score `d log p_theta(x) / d theta`
+#' Score `d log P_theta(x) / d theta`
 #'
 #' Per-outcome contributions in the family's own parameter coordinates, with no
 #' constraint projection applied. Applying the Jacobian of a parametrisation
@@ -108,7 +183,7 @@ score <- new_generic("score", "family", function(family, theta, x) {
 })
 
 
-#' Draw observations from `p_theta`
+#' Draw observations from `P_theta`
 #' @param family A [parametric_family].
 #' @param theta Parameter vector.
 #' @param n_obs Number of draws.
@@ -116,11 +191,15 @@ score <- new_generic("score", "family", function(family, theta, x) {
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' draw(fam, c(0.5, 0.3, 0.2), n_obs = 5L)
+#' kernel_draw(fam, c(0.5, 0.3, 0.2), n_obs = 5L)
 #' @export
-draw <- new_generic("draw", "family", function(family, theta, n_obs) {
-  S7::S7_dispatch()
-})
+kernel_draw <- new_generic(
+  "kernel_draw",
+  "family",
+  function(family, theta, n_obs) {
+    S7::S7_dispatch()
+  }
+)
 
 
 #' A reference point for the parameter space.

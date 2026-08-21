@@ -34,7 +34,7 @@ reports \code{0} and says nothing about accuracy. Raise \code{n_nodes} and compa
 }
 \examples{
 fam <- gaussian_family(dim = 2L)
-Q <- mixture(point_mixing(c(0, 0)), fam)
+Q <- induced_distribution(fam, point_mixing(c(0, 0)))
 resolve_engine(gh_engine(n_nodes = 10L), Q, fam)
 }
 \references{

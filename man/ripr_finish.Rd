@@ -33,7 +33,7 @@ filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
 \item{max_rounds}{Cap on refinement rounds.}
 }
 \value{
-A list with \code{W0} (a \link{finite_mixing}), \code{P_star} (a \link{mixture}), \code{kl} of
+A list with \code{W0} (a \link{finite_mixing}), \code{P_star} (a \link{induced_distribution}), \code{kl} of
 the returned mixture, \code{gap_fit} (the last Frank--Wolfe gap recorded during
 fitting, \code{NA} if none was), \code{gap_final} (a fresh Frank--Wolfe gap over the
 returned mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms},
@@ -87,7 +87,7 @@ plurality <- null_model(
     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
-Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 fit$kl

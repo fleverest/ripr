@@ -2,7 +2,7 @@
 % Please edit documentation in R/family.R
 \name{score}
 \alias{score}
-\title{Score \verb{d log p_theta(x) / d theta}}
+\title{Score \verb{d log P_theta(x) / d theta}}
 \usage{
 score(family, theta, x)
 }

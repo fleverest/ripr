@@ -44,7 +44,7 @@ facet_grid_max <- function(family, values, vertices, m = 60L) {
   theta <- weights %*% t(vertices)
   outcomes <- enumerate_space(family@sample_space)
   max(as.vector(crossprod(
-    exp(log_density_batch(family, t(theta), outcomes)),
+    exp(kernel_loglik_batch(family, t(theta), outcomes)),
     values
   )))
 }
@@ -123,7 +123,7 @@ test_that("dividing by the bound gives an e-variable", {
   # E_theta[e] for theta supplied as columns.
   expectations <- function(theta) {
     as.vector(crossprod(
-      exp(log_density_batch(family, theta, outcomes)),
+      exp(kernel_loglik_batch(family, theta, outcomes)),
       e_vals
     ))
   }
@@ -229,7 +229,7 @@ test_that("the certified bound is a bound on the expectation itself", {
     weights <- matrix(stats::rgamma(3L * 300L, shape = 1), nrow = 3L)
     theta <- s@vertices %*% div_by_col(weights, colSums(weights))
     expectations <- as.vector(
-      crossprod(exp(log_density_batch(family, theta, outcomes)), values)
+      crossprod(exp(kernel_loglik_batch(family, theta, outcomes)), values)
     )
     expect_lte(max(expectations), res$sup_ub)
   }
@@ -615,7 +615,7 @@ test_that("sup_lb() reports a value the objective actually attains", {
   # E_theta[X] for theta supplied as columns.
   expectations <- function(theta) {
     as.vector(crossprod(
-      exp(log_density_batch(family, theta, outcomes)),
+      exp(kernel_loglik_batch(family, theta, outcomes)),
       values
     ))
   }

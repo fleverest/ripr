@@ -20,7 +20,7 @@ NULL
 
 #' Begin a RIPr fit
 #'
-#' @param alternative The alternative \eqn{Q}{Q}, an [outcome_distribution].
+#' @param alternative The alternative \eqn{Q}{Q}, an [distribution].
 #' @param null A [null_model].
 #' @param engine An engine spec, e.g. [exact_engine()].
 #' @param atoms Optional list of `(d, n_i)` matrices, one per subnull. `NULL`
@@ -39,7 +39,7 @@ NULL
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' ripr_init(Q, plurality)
 #' @export
 ripr_init <- function(
@@ -56,7 +56,7 @@ ripr_init <- function(
     # The alternative's modal parameter when there is one: the projection lands
     # near where W_1 puts its mass, which is where the RIPr will be. Falls back
     # to the family's canonical point, since Q need not be a mixture at all.
-    ref <- if (S7_inherits(alternative, mixture)) {
+    ref <- if (S7_inherits(alternative, induced_distribution)) {
       mode_parameter(alternative@mixing)
     } else {
       reference_parameter(null@family)
@@ -137,7 +137,7 @@ ripr_init <- function(
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 25L, until = gap_below(1e-2))
 #' gap_below(1e-2)(state)
 #' @name predicates
@@ -242,7 +242,7 @@ run_steps <- function(state, times, until, counter, phase, advance) {
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 #' state@trace$kl
 #' @export
@@ -313,7 +313,7 @@ fw_step <- function(
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> lb_step(times = 5L)
 #' state@trace$kl
 #' @export
@@ -396,7 +396,7 @@ lb_step <- function(
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 3L) |> em_step(times = 10L)
 #' state@trace$kl
 #' @export
@@ -445,7 +445,7 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |>
 #'   fw_step(times = 5L) |>
 #'   weight_step(times = 20L, until = support_gap_below(1e-6))
@@ -530,7 +530,7 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
 #' @param tol,max_iter Passed to the weight solve.
 #' @param max_rounds Cap on refinement rounds.
-#' @return A list with `W0` (a [finite_mixing]), `P_star` (a [mixture]), `kl` of
+#' @return A list with `W0` (a [finite_mixing]), `P_star` (a [induced_distribution]), `kl` of
 #'   the returned mixture, `gap_fit` (the last Frank--Wolfe gap recorded during
 #'   fitting, `NA` if none was), `gap_final` (a fresh Frank--Wolfe gap over the
 #'   returned mixture, `NA` unless `record_gap = TRUE`), `rounds`, `atoms`,
@@ -547,7 +547,7 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
-#' Q <- mixture(point_mixing(c(0.4, 0.35, 0.25)), fam)
+#' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 #' fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 #' fit$kl
@@ -620,7 +620,7 @@ ripr_finish <- function(
 
   list(
     W0 = mixing,
-    P_star = mixture(mixing, engine@family),
+    P_star = induced_distribution(engine@family, mixing),
     # Of what is being returned, not of the state it came from: refining and
     # pruning both change the mixture.
     kl = expect_q(engine, engine@log_q - log_p),

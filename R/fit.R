@@ -528,13 +528,13 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'   default.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the *returned* mixture,
 #'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
-#'   Turn it on to measure what refining and pruning did to the gap: `gap_fit`
-#'   alone cannot show that, as it describes the state on the way in.
 #' @param tol,max_iter Passed to the weight solve.
 #' @param max_rounds Cap on refinement rounds.
 #' @return A list with `W0` (a [finite_mixing]), `P_star` (a [mixture]), `kl` of
-#'   the returned mixture, `gap_fit`, `gap_final`, `rounds`, `atoms`, `weights`,
-#'   `subnull`, `trace` and `snapshots`.
+#'   the returned mixture, `gap_fit` (the last Frank--Wolfe gap recorded during
+#'   fitting, `NA` if none was), `gap_final` (a fresh Frank--Wolfe gap over the
+#'   returned mixture, `NA` unless `record_gap = TRUE`), `rounds`, `atoms`,
+#'   `weights`, `subnull`, `trace` and `snapshots`.
 #' @references
 #'   \insertRef{FercoqGramfortSalmon2015}{ripr}
 #' @examples

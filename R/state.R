@@ -83,6 +83,7 @@ ripr_state <- new_class(
 #' @param state A [ripr_state].
 #' @return `(d, C)` numeric matrix.
 #' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' plurality <- null_model(
 #'   fam,
 #'   list(

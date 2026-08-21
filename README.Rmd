@@ -14,62 +14,6 @@ knitr::opts_chunk$set(
 )
 ```
 
-# ripr
-
-`ripr` computes reverse information projections onto nulls that take the form of a union of convex parts, and then proves an upper bound on the expectation over the null of whatever random variable you get.
-The projection is fitted via Li--Barron, Frank-–Wolfe and/or EM.
-Bounds on the null expectation are proved by a branch and bound algorithm (currently only for multinomial via the Bernstein enclosure).
-At the end, you get a random variable that is genuinely an e-variable for the respective null.
-
-The idea it rests on is simpler than the reverse information projection itself. For any non-negative, bounded random variable `X`, and `b` is any number at least `sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at most one; i.e. `E = X / b` is an e-variable.
-Nothing requires `X` to be the true minimiser of KL divergence.
-**This means that we need not fit the projection exactly:** any approximation can be used so long as we correct the resulting likelihood ratio to yield a valid e-variable, and the quality of the approximation determines only how much e-power survives the correction.
-That splits a hard, non-convex optimisation problem into an easy one (approximate) and a proof (bound), and it this is what `ripr` facilitates.
-
-
-## Installation
-
-```{r install, eval = FALSE}
-# install.packages("remotes")
-remotes::install_github("fleverest/ripr")
-```
-
-## Approximate, then correct
-
-Take a three-category multinomial distribution (with `n = 20`) and the plurality null: candidate 1 does not win outright, `H0 = union_j {theta : theta_1 <= theta_j}`.
-This null can be written as a union of convex parts; one region where `theta_1 <= theta_2` and another where `theta_1 <= theta_3`.
-Each part (or sub-null) is a simplex, so we represent the plurality null as a single `null_model` holding two `simplex_null` subnulls.
-
-```{r problem, message = FALSE}
-library(ripr)
-
-K <- 3L
-n <- 20L
-family <- multinomial_family(n_trials = n, k = K)
-
-plurality <- null_model(
-  family,
-  lapply(2:K, function(j) {
-    # The two sub-simplices: one for each subnull.
-    vertices <- diag(K)
-    vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
-    simplex_null(vertices = vertices)
-  })
-)
-```
-
-We nominate a discrete mixture-multinomial distribution, in this case the mixing measure is just a single dirac at `q = (0.40, 0.35, 0.25)`, yielding a simple `Multinomial(20, q)` alternative.
-
-```{r alternative}
-W1 <- finite_mixing(
-  components = cbind(
-    c(0.40, 0.35, 0.25)
-  ),
-  weights = c(1)
-)
-Q <- mixture(W1, family)
-```
-
 ```{r helpers, include = FALSE}
 tri_xy <- function(theta) {
   rbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0)) %*% as.matrix(theta)
@@ -135,6 +79,62 @@ plot_null <- function(
   }
   invisible(NULL)
 }
+```
+
+# ripr
+
+`ripr` computes reverse information projections onto nulls that take the form of a union of convex parts, and then proves an upper bound on the expectation over the null of whatever random variable you get.
+The projection is fitted via Li--Barron, Frank-–Wolfe and/or EM.
+Bounds on the null expectation are proved by a branch and bound algorithm (currently only for multinomial via the Bernstein enclosure).
+At the end, you get a random variable that is genuinely an e-variable for the respective null.
+
+The idea it rests on is simpler than the reverse information projection itself. For any non-negative, bounded random variable `X`, and `b` is any number at least `sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at most one; i.e. `E = X / b` is an e-variable.
+Nothing requires `X` to be the true minimiser of KL divergence.
+**This means that we need not fit the projection exactly:** any approximation can be used so long as we correct the resulting likelihood ratio to yield a valid e-variable, and the quality of the approximation determines only how much e-power survives the correction.
+That splits a hard, non-convex optimisation problem into an easy one (approximate) and a proof (bound), and it this is what `ripr` facilitates.
+
+
+## Installation
+
+```{r install, eval = FALSE}
+# install.packages("remotes")
+remotes::install_github("fleverest/ripr")
+```
+
+## Approximate, then correct
+
+Take a three-category multinomial distribution (with `n = 20`) and the plurality null: candidate 1 does not win outright, `H0 = union_j {theta : theta_1 <= theta_j}`.
+This null can be written as a union of convex parts; one region where `theta_1 <= theta_2` and another where `theta_1 <= theta_3`.
+Each part (or sub-null) is a simplex, so we represent the plurality null as a single `null_model` holding two `simplex_null` subnulls.
+
+```{r problem, message = FALSE}
+library(ripr)
+
+K <- 3L
+n <- 20L
+family <- multinomial_family(n_trials = n, k = K)
+
+plurality <- null_model(
+  family,
+  lapply(2:K, function(j) {
+    # The two sub-simplices: one for each subnull.
+    vertices <- diag(K)
+    vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+    simplex_null(vertices = vertices)
+  })
+)
+```
+
+We nominate a discrete mixture-multinomial distribution, in this case the mixing measure is just a single dirac at `q = (0.40, 0.35, 0.25)`, yielding a simple `Multinomial(20, q)` alternative.
+
+```{r alternative}
+W1 <- finite_mixing(
+  components = cbind(
+    c(0.40, 0.35, 0.25)
+  ),
+  weights = c(1)
+)
+Q <- mixture(W1, family)
 ```
 
 ```{r plot-plurality}

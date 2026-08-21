@@ -72,14 +72,18 @@ export(support_gap_below)
 export(weight_step)
 import(S7)
 importFrom(Rdpack,reprompt)
-importFrom(matrixStats,colLogSumExps)
-importFrom(matrixStats,logSumExp)
-importFrom(matrixStats,rowLogSumExps)
-importFrom(stats,optim)
-importFrom(stats,optimise)
-importFrom(stats,rgamma)
-importFrom(stats,rmultinom)
-importFrom(stats,rnorm)
-importFrom(stats,sd)
-importFrom(stats,weights)
+importFrom(matrixStats,
+  colLogSumExps,
+  logSumExp,
+  rowLogSumExps
+)
+importFrom(stats,
+  optim,
+  optimise,
+  rgamma,
+  rmultinom,
+  rnorm,
+  sd,
+  weights
+)
 importFrom(utils,combn)

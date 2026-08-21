@@ -1,7 +1,4 @@
 .Rproj.user
 *.Rcheck
 *.tar.gz
-
-# pre-rewrite sources; delete once the port is done
-graveyard/
-golden_fixtures/
+.devcontainer

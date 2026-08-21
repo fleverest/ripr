@@ -100,7 +100,7 @@ fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
 #>           kl          gap        atoms 
-#>  0.028247525  0.000134244 30.000000000
+#> 2.824753e-02 1.342443e-04 3.000000e+01
 ```
 
 <div class="figure" style="text-align: center">
@@ -142,7 +142,7 @@ outcomes <- rbind(
   c(8L, 7L, 5L)
 )
 X(outcomes)
-#> [1] 0.8470669 1.0779196
+#> [1] 0.8470669 1.0779197
 ```
 
 Finally, we may use `certify()` to prove an upper bound on the null
@@ -158,7 +158,7 @@ c(
   width = cert$sup_ub - cert$sup_lb
 )
 #>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 5.277803e-10
+#> 1.000134e+00 1.000134e+00 5.237499e-10
 ```
 
 The bound lands just above one: it precisely bounds `1 + gap`, with
@@ -167,7 +167,7 @@ The bound lands just above one: it precisely bounds `1 + gap`, with
 ``` r
 c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
 #> bound_minus_one      fitted_gap 
-#>    0.0001342445    0.0001342440
+#>    0.0001342448    0.0001342443
 ```
 
 The re-scaled random variable `E = X / cert$sup_ub` is then a genuine
@@ -244,7 +244,7 @@ c(
   width = fit$kl - E_gr
 )
 #>        lower        upper        width 
-#> 0.0281132895 0.0282475250 0.0001342355
+#> 0.0281132895 0.0282475252 0.0001342358
 ```
 
 ## A different multinomial null
@@ -308,7 +308,7 @@ X_medial <- mixture_likelihood(Q_maj, label = "Q") /
 
 c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 #>        kl     upper 
-#> 0.3845766 1.0007048
+#> 0.3845769 1.0008959
 ```
 
 <div class="figure" style="text-align: center">

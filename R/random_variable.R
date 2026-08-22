@@ -257,9 +257,9 @@ shared_space <- function(e1, e2) {
 #' it keeps every variable independently valid rather than trusting a caller.
 #' @keywords internal
 #' @noRd
-combine_rv <- function(e1, e2, op, symbol) {
+combine_rv <- function(e1, e2, symbol) {
   space <- shared_space(e1, e2)
-  force(op)
+  op <- get(symbol, envir = baseenv())
   left <- if (S7_inherits(e1, random_variable)) e1 else NULL
   right <- if (S7_inherits(e2, random_variable)) e2 else NULL
   const_left <- if (is.null(left)) as.numeric(e1) else NULL
@@ -295,63 +295,63 @@ combine_rv <- function(e1, e2, op, symbol) {
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`+`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `+`, "+")
+  combine_rv(e1, e2, "+")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`+`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, `+`, "+")
+  combine_rv(e1, e2, "+")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`+`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `+`, "+")
+  combine_rv(e1, e2, "+")
 }
 
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`-`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `-`, "-")
+  combine_rv(e1, e2, "-")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`-`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, `-`, "-")
+  combine_rv(e1, e2, "-")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`-`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `-`, "-")
+  combine_rv(e1, e2, "-")
 }
 
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`*`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `*`, "*")
+  combine_rv(e1, e2, "*")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`*`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, `*`, "*")
+  combine_rv(e1, e2, "*")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`*`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `*`, "*")
+  combine_rv(e1, e2, "*")
 }
 
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`/`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `/`, "/")
+  combine_rv(e1, e2, "/")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`/`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, `/`, "/")
+  combine_rv(e1, e2, "/")
 }
 #' @rdname random_variable_arithmetic
 #' @usage NULL
 method(`/`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, `/`, "/")
+  combine_rv(e1, e2, "/")
 }

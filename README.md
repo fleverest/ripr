@@ -65,13 +65,7 @@ the mixing measure is just a single dirac at `q = (0.40, 0.35, 0.25)`,
 yielding a simple `Multinomial(20, q)` alternative.
 
 ``` r
-W1 <- finite_mixing(
-  components = cbind(
-    c(0.40, 0.35, 0.25)
-  ),
-  weights = c(1)
-)
-Q <- family(W1)
+Q <- family(c(0.40, 0.35, 0.25))
 ```
 
 <div class="figure" style="text-align: center">
@@ -99,7 +93,7 @@ state <- ripr_init(Q, plurality)
 state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
-c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
+c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #>           kl          gap        atoms 
 #> 2.824753e-02 1.342443e-04 3.000000e+01
 ```

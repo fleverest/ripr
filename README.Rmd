@@ -130,13 +130,7 @@ plurality <- null_model(
 We nominate a discrete mixture-multinomial distribution, in this case the mixing measure is just a single dirac at `q = (0.40, 0.35, 0.25)`, yielding a simple `Multinomial(20, q)` alternative.
 
 ```{r alternative}
-W1 <- finite_mixing(
-  components = cbind(
-    c(0.40, 0.35, 0.25)
-  ),
-  weights = c(1)
-)
-Q <- family(W1)
+Q <- family(c(0.40, 0.35, 0.25))
 ```
 
 ```{r plot-plurality}
@@ -146,10 +140,11 @@ Q <- family(W1)
 #| out.width: "60%"
 #| fig.align: "center" 
 #| fig.cap: Plurality null, with the support of the alternative mixing distribution W1.
+W1 <- Q@mixing
 plot_null(
   plurality,
-  points = W1@components,
-  weights = W1@weights / 4,
+  points = atoms(W1),
+  weights = weights(W1) / 4,
   bg = "white"
 )
 ```
@@ -165,7 +160,7 @@ state <- ripr_init(Q, plurality)
 state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
-c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
+c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 ```
 
 ```{r plot-plurality-fit}
@@ -177,8 +172,8 @@ c(kl = fit$kl, gap = fit$gap_final, atoms = ncol(fit$W0@components))
 #| fig.cap: Plurality null, with the support of the mixing distributions W1 (alternative) and W0 (null, fitted).
 plot_null(
   plurality,
-  points = list(fit$W0@components, W1@components),
-  weights = list(fit$W0@weights, W1@weights / 4)
+  points = list(atoms(fit$W0), atoms(W1)),
+  weights = list(weights(fit$W0), weights(W1) / 4)
 )
 ```
 
@@ -316,8 +311,8 @@ Q_maj <- family(W_maj)
 #| fig.cap: Medial-triangle null, with the support of W_maj.
 plot_null(
   medial,
-  points = W_maj@components,
-  weights = W_maj@weights / 4,
+  points = atoms(W_maj),
+  weights = weights(W_maj) / 4,
   bg = "white"
 )
 ```
@@ -355,8 +350,8 @@ c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 #| fig.cap: Medial-triangle null, with the support of W_maj and W0 (fitted).
 plot_null(
   medial,
-  points = list(fit_medial$W0@components, W_maj@components),
-  weights = list(fit_medial$W0@weights, W_maj@weights / 4)
+  points = list(atoms(fit_medial$W0), atoms(W_maj)),
+  weights = list(weights(fit_medial$W0), weights(W_maj) / 4)
 )
 ```
 

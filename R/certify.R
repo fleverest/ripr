@@ -235,7 +235,10 @@ expectation_objective <- function(family, values) {
     },
     grad = function(theta) {
       weight <- exp(as.vector(loglik(matrix(theta, ncol = 1L)))) * values
-      as.vector(crossprod(score(family, theta, enumerate_space(family@sample_space)), weight))
+      as.vector(crossprod(
+        score(family, theta, enumerate_space(family@sample_space)),
+        weight
+      ))
     },
     value_batch = function(theta_mat) {
       as.vector(crossprod(exp(loglik(theta_mat)), values))
@@ -313,7 +316,17 @@ node_table <- function(result, subnull) {
     return(NULL)
   }
   field <- function(name, template) {
-    vapply(nodes, function(b) b[[name]] %||% template, template)
+    vapply(
+      nodes,
+      function(b) {
+        if (name %in% names(b)) {
+          b[[name]]
+        } else {
+          template
+        }
+      },
+      template
+    )
   }
   data.frame(
     subnull = as.integer(subnull),

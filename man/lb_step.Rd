@@ -27,8 +27,8 @@ means each is tried and whichever reaches the lowest KL is taken.}
 \item{correct}{Re-solve every weight inside each candidate evaluation, using
 \code{lb_fc_tol} and \code{lb_fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}.}
 
-\item{record_gap}{Also sweep the Frank--Wolfe oracle, purely to record a gap.
-\code{FALSE} by default.}
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the step
+\emph{produced}, filling \code{gap} and \code{gap_theta}. \code{FALSE} by default.}
 
 \item{until}{Optional predicate; see \link{predicates}.}
 }

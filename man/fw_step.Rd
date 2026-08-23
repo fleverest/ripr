@@ -9,6 +9,7 @@ fw_step(
   times = 1L,
   directions = "forward",
   size = c("line-search", "fixed"),
+  record_gap = FALSE,
   until = NULL
 )
 }
@@ -21,6 +22,12 @@ fw_step(
 means each is tried and whichever reaches the lowest KL is taken.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
+
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the step
+\emph{produced}, filling \code{gap} and \code{gap_theta}. Off by default: the sweep costs
+about as much as the step itself. The oracle value the step got for free is
+recorded regardless, in \code{oracle_value} and \code{oracle_theta}, that effectively
+measures the \code{gap} and \code{gap_theta} for the previous iterations.}
 
 \item{until}{Optional predicate; see \link{predicates}.}
 }
@@ -44,6 +51,9 @@ plurality <- null_model(
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 state@trace$kl
+
+# Where each step put its atom.
+do.call(cbind, state@trace$oracle_theta[state@trace$phase == "fw"])
 }
 \seealso{
 \link{oracles}, \link{predicates}

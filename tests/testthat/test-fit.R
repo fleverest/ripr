@@ -198,23 +198,105 @@ test_that("until stops early and times remains a ceiling", {
 })
 
 test_that("gap_below stops on the recorded gap", {
-  st <- fw_step(plurality(), 30L, until = gap_below(0.5))
+  st <- fw_step(plurality(), 30L, record_gap = TRUE, until = gap_below(0.5))
   expect_true(utils::tail(st@trace$gap, 1L) < 0.5)
   expect_true(st@iters[["fw"]] < 30L)
 })
 
 test_that("gap_below refuses a stale gap", {
-  # `em_step` records no gap by default, so after one the last recorded gap
-  # belongs to an earlier iterate. Answering from it would silently describe a
-  # mixture that no longer exists.
+  # No verb records a gap unasked, so the last recorded one belongs to an
+  # earlier iterate. Answering from it would silently describe a mixture that
+  # no longer exists.
   st <- em_step(fw_step(plurality(), 2L), 1L)
   expect_error(gap_below(1e-8)(st), "no gap recorded")
+  expect_error(gap_below(1e-8)(fw_step(plurality(), 2L)), "no gap recorded")
 })
 
 test_that("record_gap makes a gap available to the predicate", {
   st <- em_step(fw_step(plurality(), 2L), 1L, record_gap = TRUE)
   expect_silent(gap_below(1e-8)(st))
   expect_true(!is.na(utils::tail(st@trace$gap, 1L)))
+})
+
+# --- What a trace row measures ------------------------------------------------
+#
+# A row spans a step, so it touches two mixtures. `oracle_value`/`oracle_theta`
+# describe the one it started from; `kl`/`gap`/`gap_theta` the one it produced.
+# Conflating the two makes `kl - log1p(gap)` -- the guaranteed log-growth rate
+# of the resulting e-variable -- a statement about no mixture at all.
+
+test_that("an oracle row's gap measures the mixture the step produced", {
+  st <- fw_step(plurality(), 4L, record_gap = TRUE)
+  tr <- st@trace[st@trace$phase == "fw", ]
+
+  # The pre-step gap is `oracle_value - 1` and is a different number. Equality
+  # would mean `gap` had been copied off the oracle rather than swept after it.
+  expect_false(isTRUE(all.equal(tr$gap, tr$oracle_value - 1)))
+
+  # Swept independently at the mixture the last row produced, it agrees.
+  ld <- compile_engine(st@engine)
+  fresh <- linear_gap(st, log_p_at_nodes(st, ld), ld, flat_atoms(st))
+  expect_equal(utils::tail(tr$gap, 1L), fresh$gap, tolerance = 1e-6)
+})
+
+test_that("an lb row's gap is swept, not carried over from the row before", {
+  # The old pre-step sweep made an `lb` row's gap identical to the previous
+  # row's: it paid for a full oracle sweep to recompute a number already there.
+  st <- em_step(fw_step(plurality(), 2L), 1L, record_gap = TRUE)
+  st <- lb_step(st, 1L, record_gap = TRUE)
+  gaps <- stats::na.omit(st@trace$gap)
+  expect_false(isTRUE(all.equal(gaps[length(gaps)], gaps[length(gaps) - 1L])))
+})
+
+test_that("oracle_theta is the atom the step added", {
+  st <- fw_step(plurality(), 4L)
+  rows <- st@trace[st@trace$phase == "fw" & !is.na(st@trace$subnull), ]
+  expect_true(nrow(rows) > 0L)
+
+  # `subnull` names the block the atom entered, so the atom must be in it. The
+  # atoms have not moved: only an em or weight sweep would shift them.
+  for (i in seq_len(nrow(rows))) {
+    block <- st@atoms[[rows$subnull[i]]]
+    gaps <- sqrt(colSums((block - rows$oracle_theta[[i]])^2))
+    expect_equal(min(gaps), 0, tolerance = 1e-12)
+  }
+})
+
+test_that("an away step records where the oracle looked but adds nothing", {
+  # `oracle_theta` says what the oracle proposed; `subnull` says whether the
+  # step took it. An away step proposes a point and then moves the other way.
+  st <- fw_step(plurality(), 12L, directions = c("forward", "away"))
+  away <- st@trace[!is.na(st@trace$direction) & st@trace$direction == "away", ]
+  skip_if(nrow(away) == 0L, "no away step was taken")
+  expect_true(all(is.na(away$subnull)))
+  expect_true(all(!is.na(away$oracle_theta)))
+})
+
+test_that("theta columns hold the parameter itself, one per row", {
+  st <- em_step(fw_step(plurality(k = 4), 1L, record_gap = TRUE), 1L)
+  tr <- st@trace
+  expect_true(is.list(tr$gap_theta))
+  expect_true(is.list(tr$oracle_theta))
+  expect_identical(length(tr$gap_theta), nrow(tr))
+
+  # Whole parameters, not flattened coordinates: a family free to make the
+  # parameter something other than a length-4 vector needs no schema change.
+  expect_identical(lengths(tr$oracle_theta[tr$phase == "fw"]), 4L)
+
+  # A row that recorded no such point says so the way the rest of the trace
+  # does, so `is.na()` reads these columns like any other.
+  expect_true(all(is.na(tr$gap_theta[tr$phase == "init"])))
+  expect_true(all(is.na(tr$oracle_theta[tr$phase == "em"])))
+  expect_true(all(!is.na(tr$oracle_theta[tr$phase == "fw"])))
+})
+
+test_that("a trace row survives a parameter that is not a vector", {
+  # The list column exists for this: nothing in the trace's type says a
+  # parameter is a numeric vector, so a matrix-valued one records unchanged.
+  st <- fw_step(plurality(), 1L)
+  covariance <- matrix(c(2, 0.5, 0.5, 1), nrow = 2L)
+  st <- record(st, phase = "fw", kl = 1, oracle_theta = covariance)
+  expect_identical(utils::tail(st@trace$oracle_theta, 1L)[[1L]], covariance)
 })
 
 test_that("support_gap_below needs no oracle sweep", {

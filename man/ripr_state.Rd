@@ -29,7 +29,8 @@ ripr_state(
 
 \item{control}{From \code{\link[=ripr_control]{ripr_control()}}.}
 
-\item{trace}{Data frame, one row per recorded event.}
+\item{trace}{Data frame, one row per recorded event. See \link{oracles} for what
+the columns mean and which mixture each of them measures.}
 
 \item{snapshots}{List of recorded mixtures.}
 

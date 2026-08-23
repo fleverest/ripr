@@ -65,7 +65,9 @@ NULL
 #' The implementation of [fw_step()] yields a lower-bound on the gap at no extra
 #' cost, since it approximates the Frank--Wolfe oracle. It is to be treated only
 #' as a lower bound on the true duality gap, since finding the true supremum is
-#' non-convex in general.
+#' non-convex in general. Note that what comes free is the gap of the mixture
+#' the step started *from*, recorded as `oracle_value`; a gap for the mixture it
+#' produced needs `record_gap = TRUE` and a second sweep.
 #'
 #'
 #' The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle [lb_step()] does
@@ -80,9 +82,40 @@ NULL
 #' objective evaluation, so evaluating each candidate may cost a line search
 #' or, with a corrective solve, a full re-optimisation of every weight.
 #' There is no duality result that bounds suboptimality with this oracle, but
-#' we cab estimate the Frank--Wolfe gap via a second optimisation sweep with the
+#' we can estimate the Frank--Wolfe gap via a second optimisation sweep with the
 #' Frank--Wolfe oracle by setting `record_gap = TRUE` in [lb_step()], without
 #' adding the corresponding atom.
+#'
+#' # What a trace row records
+#'
+#' Every verb writes one row per step, and its columns split by which mixture
+#' they measure. The distinction matters because a row spans a step: it starts
+#' at one mixture and ends at another.
+#'
+#' \describe{
+#'   \item{`oracle_value`, `oracle_theta`}{What the oracle found on the way
+#'   *in*, at the mixture the row stepped from. For [fw_step()] that is
+#'   \eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
+#'   maximiser, so `oracle_value - 1` is the pre-step gap for free; for
+#'   [lb_step()] it is the Li--Barron objective, which is not a gap. Either way
+#'   `oracle_theta` is the point the step proposed, so it is where the atom went
+#'   -- when `subnull` is not `NA`, which is how a row says the step actually
+#'   took the candidate rather than moving away.}
+#'   \item{`kl`, `gap`, `gap_theta`}{The mixture the row *produced*. `gap` and
+#'   `gap_theta` need `record_gap = TRUE` and are `NA` otherwise, since the
+#'   sweep is not free.}
+#' }
+#'
+#' Both `theta` columns are list columns holding the family's parameter itself,
+#' so `trace$oracle_theta[[i]]` is the point row `i` proposed, and `is.na()`
+#' finds the rows that recorded none. They are lists rather than matrices so
+#' that a family whose parameter is not a numeric vector still fits.
+#'
+#' Under `record_gap = TRUE` throughout, a row's `gap` is the pre-step gap of
+#' the row after it, up to the random restarts the two searches happen to draw:
+#' both maximise the same oracle over the same mixture. So nothing is lost by
+#' recording post-step, and post-step also gives the *last* iterate a gap --
+#' the one anything downstream certifies against.
 #'
 #' # Which to use
 #'
@@ -137,29 +170,21 @@ linear_oracle <- function(state, log_p, ld) {
 }
 
 
-#' Estimate the Frank--Wolfe duality gap
+#' Estimate the Frank--Wolfe duality gap, and say where it is attained
 #'
-#' Maximises (locally) the linear oracle over the null.
+#' Maximises (locally) the linear oracle over the null. The maximiser is worth
+#' returning alongside the value: it is the point the current mixture fails
+#' hardest to cover, and hence where the next oracle step would put its atom.
 #'
+#' `seeds` is a parameter rather than `flat_atoms(state)` because
+#' [ripr_finish()] sweeps over a mixture whose atoms have already been dropped
+#' or re-solved, so the state no longer holds them.
+#' @return `list(gap, theta, subnull)`.
 #' @keywords internal
 #' @noRd
 linear_gap <- function(state, log_p, ld, seeds) {
-  ctl <- state@control
-  obj <- linear_oracle(state, log_p, ld)
-  values <- vapply(
-    state@null@subnulls,
-    function(s) {
-      maximise_over(
-        s,
-        obj,
-        seeds = seeds,
-        n_seeds = ctl$n_seeds,
-        n_restarts = ctl$n_restarts
-      )$value
-    },
-    numeric(1)
-  )
-  max(values) - 1
+  found <- search_null(state, linear_oracle(state, log_p, ld), seeds = seeds)
+  list(gap = found$value - 1, theta = found$theta, subnull = found$subnull)
 }
 
 #' Directions the Li--Barron inner optimisation may use
@@ -774,13 +799,14 @@ em_atom_step <- function(state, ld, wt) {
 
 #' Search every subnull and keep the best candidate
 #'
-#' Returns the subnull index, its maximiser, and the attained value. `seeds` is
-#' the current atoms: the identity `sum_c w_c G(theta_c) = 1` forces
+#' Returns the subnull index, its maximiser, and the attained value. `seeds`
+#' defaults to the current atoms: the identity `sum_c w_c G(theta_c) = 1` forces
 #' `max_c G(theta_c) >= 1`, so including them stops the search reporting a
-#' maximum below one.
+#' maximum below one. A caller sweeping over a mixture the state no longer holds
+#' passes its own.
 #' @keywords internal
 #' @noRd
-search_null <- function(state, obj) {
+search_null <- function(state, obj, seeds = flat_atoms(state)) {
   ctl <- state@control
   found <- lapply(
     state@null@subnulls,
@@ -788,7 +814,7 @@ search_null <- function(state, obj) {
       maximise_over(
         s,
         obj,
-        seeds = flat_atoms(state),
+        seeds = seeds,
         n_seeds = ctl$n_seeds,
         n_restarts = ctl$n_restarts
       )

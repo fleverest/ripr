@@ -138,7 +138,8 @@ ripr_init <- function(
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
-#' state <- ripr_init(Q, plurality) |> fw_step(times = 25L, until = gap_below(1e-2))
+#' state <- ripr_init(Q, plurality) |>
+#'   fw_step(times = 25L, record_gap = TRUE, until = gap_below(1e-2))
 #' gap_below(1e-2)(state)
 #' @name predicates
 NULL
@@ -166,8 +167,8 @@ gap_below <- function(tol = 1e-8) {
     g <- tr$gap[fresh & !is.na(tr$gap)]
     if (!length(g)) {
       stop(
-        "no gap recorded at the current step. Use `record_gap = TRUE`, or ",
-        "`fw_step()`, which always records one.",
+        "no gap recorded at the current step. Pass `record_gap = TRUE` to the ",
+        "verb that took it.",
         call. = FALSE
       )
     }
@@ -229,6 +230,11 @@ run_steps <- function(state, times, until, counter, phase, advance) {
 #' @param directions Any of `"forward"`, `"pairwise"`, `"away"`. More than one
 #'   means each is tried and whichever reaches the lowest KL is taken.
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
+#'   *produced*, filling `gap` and `gap_theta`. Off by default: the sweep costs
+#'   about as much as the step itself. The oracle value the step got for free is
+#'   recorded regardless, in `oracle_value` and `oracle_theta`, that effectively
+#'   measures the `gap` and `gap_theta` for the previous iterations.
 #' @param until Optional predicate; see [predicates].
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
@@ -245,12 +251,16 @@ run_steps <- function(state, times, until, counter, phase, advance) {
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 #' state@trace$kl
+#'
+#' # Where each step put its atom.
+#' do.call(cbind, state@trace$oracle_theta[state@trace$phase == "fw"])
 #' @export
 fw_step <- function(
   state,
   times = 1L,
   directions = "forward",
   size = c("line-search", "fixed"),
+  record_gap = FALSE,
   until = NULL
 ) {
   directions <- rlang::arg_match(
@@ -275,12 +285,22 @@ fw_step <- function(
       at = insert_index(state, found$subnull)
     )(found$theta)
 
+    stepped <- commit_step(state, found$theta, found$subnull, planned)
+    # `planned$log_p` is already the stepped mixture's density, and
+    # `commit_step()` does not touch the engine, so the sweep needs no
+    # recomputation beyond its own optimisation.
+    swept <- if (record_gap) {
+      linear_gap(stepped, planned$log_p, ld, flat_atoms(stepped))
+    }
+
     list(
-      state = commit_step(state, found$theta, found$subnull, planned),
+      state = stepped,
       row = list(
         kl = planned$kl,
-        gap = found$value - 1,
+        gap = if (is.null(swept)) NA_real_ else swept$gap,
+        gap_theta = swept$theta,
         oracle_value = found$value,
+        oracle_theta = found$theta,
         subnull = if (planned$uses_candidate) found$subnull else NA_integer_,
         step_size = planned$gamma,
         direction = planned$direction
@@ -299,8 +319,8 @@ fw_step <- function(
 #' @inheritParams fw_step
 #' @param correct Re-solve every weight inside each candidate evaluation, using
 #'   `lb_fc_tol` and `lb_fc_max_iter` from [ripr_control()].
-#' @param record_gap Also sweep the Frank--Wolfe oracle, purely to record a gap.
-#'   `FALSE` by default.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
+#'   *produced*, filling `gap` and `gap_theta`. `FALSE` by default.
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
 #' @examples
@@ -356,16 +376,19 @@ lb_step <- function(
       at = insert_index(state, found$subnull)
     )(found$theta)
 
+    stepped <- commit_step(state, found$theta, found$subnull, planned)
+    swept <- if (record_gap) {
+      linear_gap(stepped, planned$log_p, ld, flat_atoms(stepped))
+    }
+
     list(
-      state = commit_step(state, found$theta, found$subnull, planned),
+      state = stepped,
       row = list(
         kl = planned$kl,
-        gap = if (record_gap) {
-          linear_gap(state, log_p, ld, flat_atoms(state))
-        } else {
-          NA_real_
-        },
+        gap = if (is.null(swept)) NA_real_ else swept$gap,
+        gap_theta = swept$theta,
         oracle_value = found$value,
+        oracle_theta = found$theta,
         subnull = if (planned$uses_candidate) found$subnull else NA_integer_,
         step_size = planned$gamma,
         direction = planned$direction
@@ -382,8 +405,9 @@ lb_step <- function(
 #' [fw_step()] or [lb_step()] can add an atom to the mixture.
 #'
 #' @inheritParams fw_step
-#' @param record_gap Sweep the Frank--Wolfe oracle to record a gap. Off by
-#'   default, since it costs a full oracle sweep per row.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the new mixture that the
+#'   sweep *produced*, filling `gap` and `gap_theta`. Off by default, since it
+#'   costs a full oracle sweep per row.
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
 #' @examples
@@ -404,15 +428,15 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
   run_steps(state, times, until, "em", "em", function(state, ld) {
     stepped <- em_sweep(state, ld)
     log_p <- log_p_at_nodes(stepped, ld)
+    swept <- if (record_gap) {
+      linear_gap(stepped, log_p, ld, flat_atoms(stepped))
+    }
     list(
       state = stepped,
       row = list(
         kl = kl_divergence(stepped, log_p = log_p),
-        gap = if (record_gap) {
-          linear_gap(stepped, log_p, ld, flat_atoms(stepped))
-        } else {
-          NA_real_
-        }
+        gap = if (is.null(swept)) NA_real_ else swept$gap,
+        gap_theta = swept$theta
       )
     )
   })
@@ -463,18 +487,20 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
     )
     stepped <- set_weights(state, sweep$weights)
     new_log_p <- log_p_at_nodes(stepped, ld)
+    swept <- if (record_gap) {
+      linear_gap(stepped, new_log_p, ld, flat_atoms(stepped))
+    }
     list(
       state = stepped,
       row = list(
         kl = kl_divergence(stepped, log_p = new_log_p),
         # The residual is the gap over the current support, measured before the
-        # sweep, so it says what this sweep had left to gain.
+        # sweep, so it says what this sweep had left to gain. It is a maximum
+        # over the atoms rather than over the null, so no `oracle_theta` goes
+        # with it -- the location is already in the mixture.
         oracle_value = sweep$residual + 1,
-        gap = if (record_gap) {
-          linear_gap(stepped, new_log_p, ld, flat_atoms(stepped))
-        } else {
-          NA_real_
-        }
+        gap = if (is.null(swept)) NA_real_ else swept$gap,
+        gap_theta = swept$theta
       )
     )
   })
@@ -626,7 +652,7 @@ ripr_finish <- function(
     kl = expect_q(engine, engine@log_q - log_p),
     gap_fit = if (length(gaps)) utils::tail(gaps, 1L) else NA_real_,
     gap_final = if (record_gap) {
-      linear_gap(state, log_p, ld, mixing@components)
+      linear_gap(state, log_p, ld, mixing@components)$gap
     } else {
       NA_real_
     },

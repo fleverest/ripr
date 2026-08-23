@@ -20,7 +20,8 @@ NULL
 #' @param null A [null_model].
 #' @param engine A resolved [quadrature].
 #' @param control From [ripr_control()].
-#' @param trace Data frame, one row per recorded event.
+#' @param trace Data frame, one row per recorded event. See [oracles] for what
+#'   the columns mean and which mixture each of them measures.
 #' @param snapshots List of recorded mixtures.
 #' @param iters Named integer counts of steps taken, one name per verb.
 #' @return A `ripr_state`.
@@ -248,10 +249,26 @@ kl_divergence <- function(state, log_p = NULL, ld = NULL) {
 
 # --- Trace ---------------------------------------------------------------------
 
+#' The columns of a trace, and what each row's numbers describe
+#'
+#' Two families of column, distinguished by which mixture they measure. The
+#' `oracle_*` pair is what the oracle saw on the way *in*, at the mixture the
+#' row stepped from; `kl` and the `gap*` pair describe the mixture the row
+#' produced. A verb that takes no oracle step leaves the first pair `NA`, and
+#' every verb leaves the gap pair `NA` unless asked for it, since it costs a
+#' full sweep.
+#'
+#' The `theta` columns are list columns, one parameter per element, so
+#' `trace$gap_theta[[i]]` is whatever the family's parameter is. A matrix column
+#' would be tighter for the numeric vectors every family currently uses, and
+#' would export to csv, but it fixes the parameter's shape into the trace's
+#' type: a family whose parameter is a matrix -- a covariance, say -- could not
+#' be recorded at all. `NA` marks a row with no such point, matching how the
+#' rest of the trace says "not recorded", so `is.na()` reads them.
 #' @keywords internal
 #' @noRd
 empty_trace <- function() {
-  data.frame(
+  tr <- data.frame(
     fw = integer(0),
     lb = integer(0),
     em = integer(0),
@@ -266,6 +283,32 @@ empty_trace <- function() {
     support_size = integer(0),
     max_weight = numeric(0),
     stringsAsFactors = FALSE
+  )
+  tr$gap_theta <- list()
+  tr$oracle_theta <- list()
+  tr[trace_columns()]
+}
+
+#' Trace columns in print order, each `theta` beside the value it locates
+#' @keywords internal
+#' @noRd
+trace_columns <- function() {
+  c(
+    "fw",
+    "lb",
+    "em",
+    "weight",
+    "phase",
+    "kl",
+    "gap",
+    "gap_theta",
+    "oracle_value",
+    "oracle_theta",
+    "subnull",
+    "step_size",
+    "direction",
+    "support_size",
+    "max_weight"
   )
 }
 
@@ -282,7 +325,9 @@ record <- function(
   phase,
   kl,
   gap = NA_real_,
+  gap_theta = NULL,
   oracle_value = NA_real_,
+  oracle_theta = NULL,
   subnull = NA_integer_,
   step_size = NA_real_,
   direction = NA_character_
@@ -304,9 +349,21 @@ record <- function(
     max_weight = if (length(w)) max(w) else NA_real_,
     stringsAsFactors = FALSE
   )
-  state@trace <- rbind(state@trace, row)
+  row$gap_theta <- theta_cell(gap_theta)
+  row$oracle_theta <- theta_cell(oracle_theta)
+  state@trace <- rbind(state@trace, row[trace_columns()])
 
   state
+}
+
+#' One cell of a `theta` list column, `NA` when there is nothing to say
+#'
+#' The parameter goes in whole and unclassed, so a family free to make it
+#' something other than a numeric vector needs nothing here.
+#' @keywords internal
+#' @noRd
+theta_cell <- function(theta) {
+  list(if (is.null(theta)) NA else theta)
 }
 
 #' Record the whole mixture alongside the trace

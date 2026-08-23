@@ -90,12 +90,12 @@ any low-mass atoms.
 ``` r
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(state, times = 40L, until = gap_below(1e-10))
+state <- fw_step(state, times = 40L, record_gap = TRUE, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #>           kl          gap        atoms 
-#> 2.824753e-02 1.342443e-04 3.000000e+01
+#> 2.824753e-02 1.342454e-04 3.000000e+01
 ```
 
 <div class="figure" style="text-align: center">
@@ -153,7 +153,7 @@ c(
   width = cert$sup_ub - cert$sup_lb
 )
 #>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 5.237499e-10
+#> 1.000134e+00 1.000134e+00 5.608294e-10
 ```
 
 The bound lands just above one: it precisely bounds `1 + gap`, with
@@ -162,7 +162,7 @@ The bound lands just above one: it precisely bounds `1 + gap`, with
 ``` r
 c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
 #> bound_minus_one      fitted_gap 
-#>    0.0001342448    0.0001342443
+#>    0.0001342460    0.0001342454
 ```
 
 The re-scaled random variable `E = X / cert$sup_ub` is then a genuine
@@ -239,7 +239,7 @@ c(
   width = fit$kl - E_gr
 )
 #>        lower        upper        width 
-#> 0.0281132895 0.0282475252 0.0001342358
+#> 0.0281132882 0.0282475251 0.0001342369
 ```
 
 ## A different multinomial null

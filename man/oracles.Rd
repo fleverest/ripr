@@ -33,7 +33,9 @@ result in the convex optimisation literature \insertCite{Jaggi2013}{ripr}.
 The implementation of \code{\link[=fw_step]{fw_step()}} yields a lower-bound on the gap at no extra
 cost, since it approximates the Frank--Wolfe oracle. It is to be treated only
 as a lower bound on the true duality gap, since finding the true supremum is
-non-convex in general.
+non-convex in general. Note that what comes free is the gap of the mixture
+the step started \emph{from}, recorded as \code{oracle_value}; a gap for the mixture it
+produced needs \code{record_gap = TRUE} and a second sweep.
 
 The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle \code{\link[=lb_step]{lb_step()}} does
 not linearise the objective. It asks which atom minimises KL after the weight
@@ -47,10 +49,41 @@ The weight selection may be an inner optimisation nested inside every
 objective evaluation, so evaluating each candidate may cost a line search
 or, with a corrective solve, a full re-optimisation of every weight.
 There is no duality result that bounds suboptimality with this oracle, but
-we cab estimate the Frank--Wolfe gap via a second optimisation sweep with the
+we can estimate the Frank--Wolfe gap via a second optimisation sweep with the
 Frank--Wolfe oracle by setting \code{record_gap = TRUE} in \code{\link[=lb_step]{lb_step()}}, without
 adding the corresponding atom.
 }
+\section{What a trace row records}{
+Every verb writes one row per step, and its columns split by which mixture
+they measure. The distinction matters because a row spans a step: it starts
+at one mixture and ends at another.
+
+\describe{
+\item{\code{oracle_value}, \code{oracle_theta}}{What the oracle found on the way
+\emph{in}, at the mixture the row stepped from. For \code{\link[=fw_step]{fw_step()}} that is
+\eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
+maximiser, so \code{oracle_value - 1} is the pre-step gap for free; for
+\code{\link[=lb_step]{lb_step()}} it is the Li--Barron objective, which is not a gap. Either way
+\code{oracle_theta} is the point the step proposed, so it is where the atom went
+-- when \code{subnull} is not \code{NA}, which is how a row says the step actually
+took the candidate rather than moving away.}
+\item{\code{kl}, \code{gap}, \code{gap_theta}}{The mixture the row \emph{produced}. \code{gap} and
+\code{gap_theta} need \code{record_gap = TRUE} and are \code{NA} otherwise, since the
+sweep is not free.}
+}
+
+Both \code{theta} columns are list columns holding the family's parameter itself,
+so \code{trace$oracle_theta[[i]]} is the point row \code{i} proposed, and \code{is.na()}
+finds the rows that recorded none. They are lists rather than matrices so
+that a family whose parameter is not a numeric vector still fits.
+
+Under \code{record_gap = TRUE} throughout, a row's \code{gap} is the pre-step gap of
+the row after it, up to the random restarts the two searches happen to draw:
+both maximise the same oracle over the same mixture. So nothing is lost by
+recording post-step, and post-step also gives the \emph{last} iterate a gap --
+the one anything downstream certifies against.
+}
+
 \section{Which to use}{
 It is advisable to use \code{\link[=fw_step]{fw_step()}} unless there is a specific reason not to.
 It is cheaper per iteration and has similar if not the same convergence

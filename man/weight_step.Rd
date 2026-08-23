@@ -11,8 +11,9 @@ weight_step(state, times = 1L, record_gap = FALSE, until = NULL)
 
 \item{times}{Steps to take.}
 
-\item{record_gap}{Sweep the Frank--Wolfe oracle to record a gap. Off by
-default, since it costs a full oracle sweep per row.}
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the new mixture that the
+sweep \emph{produced}, filling \code{gap} and \code{gap_theta}. Off by default, since it
+costs a full oracle sweep per row.}
 
 \item{until}{Optional predicate; see \link{predicates}.}
 }

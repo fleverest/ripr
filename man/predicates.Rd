@@ -67,6 +67,7 @@ plurality <- null_model(
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))
-state <- ripr_init(Q, plurality) |> fw_step(times = 25L, until = gap_below(1e-2))
+state <- ripr_init(Q, plurality) |>
+  fw_step(times = 25L, record_gap = TRUE, until = gap_below(1e-2))
 gap_below(1e-2)(state)
 }

@@ -38,6 +38,7 @@ reference:
     membership, projection, and an unconstrained chart to optimise in.
   contents:
   - parameter_space
+  - polytope_region
   - simplex_region
   - halfspace_region
   - point_region
@@ -46,6 +47,7 @@ reference:
   - contains
   - project
   - init_point
+  - pieces
 
 - title: Null hypotheses
   desc: >

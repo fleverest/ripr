@@ -44,7 +44,9 @@ NULL
 #' Currently only multinomial is supported, but this architecture makes it
 #' easier to extend to other families and geometries later.
 #' @return A list of methods, each with `name`, `family`, `region`, `bound_fn`
-#'   and a one-line `description`.
+#'   and a one-line `description`. `region` is a predicate on a
+#'   [parameter_space], not a class: what a bounding method can enclose is not
+#'   always a whole geometry.
 #' @keywords internal
 #' @noRd
 certify_methods <- function() {
@@ -52,12 +54,86 @@ certify_methods <- function() {
     list(
       name = "bernstein",
       family = multinomial_family,
-      region = simplex_region,
+      region = bernstein_compatible,
       bound_fn = bernstein_bound,
       description = paste(
         "Bernstein enclosure for multinomial expectations over simplices"
       )
     )
+  )
+}
+
+
+#' Can the Bernstein enclosure bound an expectation over this region?
+#'
+#' The three conditions `reparametrise_to()` asserts, checked before it is
+#' reached. De Casteljau pushes the degree-`n` basis on the standard simplex
+#' onto the region's vertices, which needs a square, non-singular,
+#' simplex-valued vertex matrix.
+#'
+#' [simplex_region()] guarantees only the non-singular part, because the other
+#' two are not properties of being a simplex: a tetrahedron in `R^3` and a
+#' segment inside the 2-simplex are both simplices, and neither can carry this
+#' enclosure. A lower-dimensional simplex would need a lower-degree lattice,
+#' which is a separate `certify_methods()` entry rather than a loosened
+#' predicate here.
+#' @param space A [parameter_space].
+#' @return `TRUE` or `FALSE`.
+#' @keywords internal
+#' @noRd
+bernstein_compatible <- function(space) {
+  if (!S7_inherits(space, simplex_region)) {
+    return(FALSE)
+  }
+  v <- space@vertices
+  ncol(v) == nrow(v) &&
+    all(v >= -1e-12) &&
+    max(abs(colSums(v) - 1)) < 1e-9
+}
+
+
+#' Why the Bernstein enclosure cannot handle this region, or `NULL` if it can
+#'
+#' Names the condition that fails. Currently only meaningful for a
+#' [simplex_region()]; anything else is already refused by class.
+#' @keywords internal
+#' @noRd
+bernstein_obstruction <- function(space) {
+  if (bernstein_compatible(space)) {
+    return(NULL)
+  }
+  if (!S7_inherits(space, simplex_region)) {
+    return(NULL)
+  }
+  v <- space@vertices
+  # Membership first. The count branch below reads the vertex deficit as a
+  # dimension deficit, which is only true once the vertices are known to share
+  # the hyperplane `sum(theta) == 1`; a tetrahedron in `R^3` has four
+  # affinely independent vertices and is not lower-dimensional at all.
+  if (any(v < -1e-12)) {
+    return(paste0(
+      "its vertices leave the standard simplex: the smallest coordinate is ",
+      format(min(v))
+    ))
+  }
+  sums <- colSums(v)
+  if (max(abs(sums - 1)) >= 1e-9) {
+    return(paste0(
+      "its vertices leave the standard simplex: the coordinates of one sum ",
+      "to ",
+      format(sums[which.max(abs(sums - 1))]),
+      " rather than 1"
+    ))
+  }
+  paste0(
+    "it has ",
+    ncol(v),
+    " vertices in ",
+    nrow(v),
+    " dimensions, so it is a simplex of dimension ",
+    ncol(v) - 1L,
+    " inside a parameter space of dimension ",
+    nrow(v) - 1L
   )
 }
 
@@ -180,8 +256,7 @@ bernstein_bound <- function(x, family, subnulls, control) {
 #' @noRd
 certify_method <- function(family, region) {
   for (method in certify_methods()) {
-    fits <- S7_inherits(family, method$family) &&
-      S7_inherits(region, method$region)
+    fits <- S7_inherits(family, method$family) && method$region(region)
     if (fits) {
       return(method)
     }
@@ -201,10 +276,49 @@ class_name <- function(x) attr(S7_class(x), "name")
 #' Says what is missing rather than what is impossible. Certifying some other
 #' pairing of family and geometry is a matter of deriving and implementing a
 #' bound, not of the thing being unbounded.
+#'
+#' Two different refusals share this function. A [polytope_region()] or a
+#' [halfspace_region()] has no method for its *geometry*, and naming the class
+#' says everything. A [simplex_region()] that the Bernstein enclosure cannot
+#' take is a different matter: the geometry is supported, this particular region
+#' is the wrong shape for it, and naming the class would send the reader looking
+#' for a missing method that is not missing. Those get the failing condition
+#' instead, and a reminder that only certification is affected.
+#'
+#' The second wording is reserved for families some method actually claims. A
+#' region obstruction is not the reason a `gaussian_family` fails to certify,
+#' whatever shape its region happens to be.
 #' @keywords internal
 #' @noRd
 unimplemented_message <- function(family, region) {
   geometry <- class_name(region)
+  # A region obstruction is only the reason when some method claims this
+  # family. Otherwise the family is what is missing, and naming the region's
+  # shape sends the reader after the wrong thing: a `gaussian_family` over a
+  # flat `simplex_region` would be told to fix the region, when a
+  # full-dimensional one would not certify either.
+  claims_family <- any(vapply(
+    certify_methods(),
+    \(m) S7_inherits(family, m$family),
+    logical(1)
+  ))
+  obstruction <- if (claims_family) bernstein_obstruction(region) else NULL
+  if (!is.null(obstruction)) {
+    return(paste0(
+      "The Bernstein enclosure cannot bound ",
+      class_name(family),
+      " expectations over this ",
+      geometry,
+      ", because ",
+      obstruction,
+      ".\n",
+      "The enclosure pushes the Bernstein basis on the standard simplex onto ",
+      "the region's vertices, which needs one vertex per coordinate, all of ",
+      "them in that simplex. Only certification is affected: the region ",
+      "charts, projects and fits like any other, and `sup_lb()` still ",
+      "searches it."
+    ))
+  }
   paste0(
     "No bounding method is implemented for ",
     class_name(family),

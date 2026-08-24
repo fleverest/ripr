@@ -90,7 +90,12 @@ any low-mass atoms.
 ``` r
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(state, times = 40L, record_gap = TRUE, until = gap_below(1e-10))
+state <- fw_step(
+  state,
+  times = 40L,
+  record_gap = TRUE,
+  until = gap_below(1e-10)
+)
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))

@@ -20,8 +20,8 @@ NULL
 #' null geometries that do not permit a [chart()], but these are currently
 #' beyond the scope of this package.
 #' @examples
-#' # `parameter_space` is abstract; simplex_region(), halfspace_region(),
-#' # point_region() and real_region() subclass it, e.g.
+#' # `parameter_space` is abstract; polytope_region(), simplex_region(),
+#' # halfspace_region(), point_region() and real_region() subclass it, e.g.
 #' s <- simplex_region(vertices = diag(3))
 #' S7::S7_inherits(s, parameter_space)
 #' space_dim(s)
@@ -115,6 +115,27 @@ init_point <- new_generic(
 
 
 method(init_point, parameter_space) <- function(space, ref) project(space, ref)
+
+
+#' The convex pieces a space decomposes into for optimisation
+#'
+#' Every space is its own only piece unless it says otherwise. A geometry that
+#' is a union of convex cells (e.g. a triangulated polytope) returns those
+#' cells here. Things that search or enclose then run on each convex piece,
+#' without needing to know which geometry it came from.
+#'
+#' Pieces may overlap. This is fine for our case because a supremum over a
+#' union is a supremum over any cover. Overlaps may cost time but the results
+#' will still be valid.
+#' @param space A [parameter_space].
+#' @return A list of [parameter_space] objects whose union is `space`.
+#' @examples
+#' pieces(simplex_region(vertices = diag(3)))
+#' @export
+pieces <- new_generic("pieces", "space", function(space) S7::S7_dispatch())
+
+
+method(pieces, parameter_space) <- function(space) list(space)
 
 
 #' Bundle an objective for [maximise_over()]
@@ -284,21 +305,39 @@ softplus_inv <- function(t) log(expm1(pmax(t, 1e-12)))
 sigmoid <- function(s) 1 / (1 + exp(-s))
 
 
-# --- Simplex region ----------------------------------------------------------
+# --- Polytope region ---------------------------------------------------------
+
+#' The left pseudo-inverse of a vertex matrix, for barycentric recovery
+#' @keywords internal
+#' @noRd
+vertex_pinv <- function(vertices) {
+  sv <- svd(vertices)
+  keep <- sv$d > max(dim(vertices)) * .Machine$double.eps * max(sv$d)
+  sv$v[, keep, drop = FALSE] %*% (t(sv$u[, keep, drop = FALSE]) / sv$d[keep])
+}
+
 
 #' Convex hull of a set of vertices
 #'
 #' The bounded case: a polytope given by its vertices (a V-representation),
-#' parametrised by convex combinations of them. Every plurality region
+#' parametrised by convex combinations of them.
+#'
+#' For instance, the plurality region in the standard simplex
 #' \eqn{\{\theta : \theta_1 \le \theta_j\}}{{theta : theta_1 <= theta_j}} is of
 #' this form.
 #'
-#' Holding vertices rather than constraints is what makes a certified bound
-#' possible later via de Casteljau subdivision.
+#' Holding vertices rather than constraints is what a certified bound needs: de
+#' Casteljau subdivision works on a vertex set natively. [certify()] takes only
+#' the [simplex_region()] cells described below.
 #'
+#' [simplex_region()] is a special case of [polytope_region()] with affinely
+#' independent vertices, which is what the Bernstein enclosure in [certify()]
+#' needs upstream.
+#'
+#' Use [simplex_region()] when that is what you mean, and use [polytope_region()]
+#' when it is not.
 #' @param vertices `(d, V)` numeric matrix, one vertex per column.
-#' @param pinv Optional precomputed `(V, d)` left pseudo-inverse.
-#' @return A `simplex_region`.
+#' @return A `polytope_region`.
 #' @references
 #'   \insertRef{BeckTeboulle2009}{ripr}
 #'
@@ -306,44 +345,45 @@ sigmoid <- function(s) 1 / (1 + exp(-s))
 #'
 #'   \insertRef{ODonoghueCandes2015}{ripr}
 #' @examples
-#' # The 2-simplex in R^3, e.g. the full multinomial parameter space:
-#' simplex_region(vertices = diag(3))
+#' # A square in R^2
+#' polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
 #' @export
-simplex_region <- new_class(
-  "simplex_region",
+polytope_region <- new_class(
+  "polytope_region",
   parent = parameter_space,
   properties = list(
-    vertices = class_any,
-    n_vertices = class_numeric,
+    vertices = new_property(
+      class_any,
+      setter = function(self, value) {
+        if (!is.matrix(value) || ncol(value) == 0L) {
+          stop(
+            "`vertices` must be a matrix with one vertex per column.",
+            call. = FALSE
+          )
+        }
+        if (!all(is.finite(value))) {
+          stop("`vertices` must all be finite.", call. = FALSE)
+        }
+        attr(self, "vertices") <- value
+        attr(self, "pinv") <- vertex_pinv(value)
+        self
+      }
+    ),
+    n_vertices = new_property(
+      class_numeric,
+      getter = function(self) ncol(self@vertices)
+    ),
     pinv = class_any
   ),
-  constructor = function(vertices, pinv = NULL) {
-    if (!is.matrix(vertices) || ncol(vertices) == 0L) {
-      stop(
-        "`vertices` must be a matrix with one vertex per column.",
-        call. = FALSE
-      )
-    }
-    if (is.null(pinv)) {
-      sv <- svd(vertices)
-      keep <- sv$d > max(dim(vertices)) * .Machine$double.eps * max(sv$d)
-      pinv <- sv$v[, keep, drop = FALSE] %*%
-        (t(sv$u[, keep, drop = FALSE]) / sv$d[keep])
-    }
-    new_object(
-      S7_object(),
-      vertices = vertices,
-      n_vertices = ncol(vertices),
-      pinv = pinv
-    )
+  constructor = function(vertices) {
+    new_object(S7_object(), vertices = vertices)
   }
 )
 
+method(space_dim, polytope_region) <- function(space) nrow(space@vertices)
 
-method(space_dim, simplex_region) <- function(space) nrow(space@vertices)
 
-
-method(chart, simplex_region) <- function(space) {
+method(chart, polytope_region) <- function(space) {
   vertices <- space@vertices
   pinv <- space@pinv
   n_v <- ncol(vertices)
@@ -378,7 +418,7 @@ method(chart, simplex_region) <- function(space) {
 }
 
 
-method(project, simplex_region) <- function(space, theta) {
+method(project, polytope_region) <- function(space, theta) {
   # Least squares over the vertex weights, constrained to the simplex:
   #   min_alpha ||V alpha - theta||^2  subject to  alpha in the simplex.
   #
@@ -419,9 +459,98 @@ method(project, simplex_region) <- function(space, theta) {
 }
 
 
-method(contains, simplex_region) <- function(space, theta, tol = 1e-8) {
+method(contains, polytope_region) <- function(space, theta, tol = 1e-8) {
   max(abs(project(space, theta) - theta)) <= tol
 }
+
+
+# --- Simplex region ----------------------------------------------------------
+
+#' A simplex: an affinely independent vertex set
+#'
+#' The [polytope_region()] whose vertices are affinely independent, so the hull
+#' is a simplex of dimension `ncol(vertices) - 1`.
+#'
+#' Being a simplex is not on its own enough to certify. The Bernstein enclosure
+#' asks for two further things, both checked by [certify()] rather than here:
+#' one vertex per coordinate, and every vertex inside the standard simplex. A
+#' lower-dimensional cell fails the first; the tetrahedron in the examples below
+#' fails the second, being a full-dimensional simplex of `R^3` rather than of
+#' \eqn{\Delta}{Delta}. Either way [certify()] refuses, naming the condition.
+#'
+#' Neither is a defect in the region. Both still chart, project and fit as
+#' usual, and `sup_lb()` still searches them; they simply have no implemented
+#' bounding method, as a [gaussian_family()] null already does not.
+#'
+#' @inheritParams polytope_region
+#' @return A `simplex_region`, which is also a [polytope_region()].
+#' @examples
+#' # The 2-simplex in R^3, e.g. the entire multinomial parameter space:
+#' simplex_region(vertices = diag(3))
+#'
+#' # The plurality region `{theta : theta_1 <= theta_2}` within it:
+#' simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+#'
+#' # A tetrahedron in R^3, e.g. a piece of a triangulated Gaussian null:
+#' simplex_region(
+#'   vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+#' )
+#' @export
+simplex_region <- new_class(
+  "simplex_region",
+  parent = polytope_region,
+  validator = function(self) {
+    vertices <- self@vertices
+    # `polytope_region`'s setter rejects non-finite vertices on every path that
+    # assigns them, so this guards a hand-rolled `new_object()` only. It stays
+    # first regardless: `NaN < 0` is `NA`, and `if (NA)` would surface as
+    # "missing value where TRUE/FALSE needed" from inside S7.
+    if (!all(is.finite(vertices))) {
+      return("every vertex coordinate must be finite")
+    }
+    n_v <- ncol(vertices)
+    d <- nrow(vertices)
+    if (n_v > d + 1L) {
+      return(paste0(
+        "at most ",
+        d + 1L,
+        " points can be affinely independent in ",
+        d,
+        " dimensions; got ",
+        n_v,
+        ". A hull of more vertices is a `polytope_region`"
+      ))
+    }
+    if (n_v > 1L) {
+      # Affine independence of the columns is linear independence of the edge
+      # vectors from the first. Measured by the edge matrix's reciprocal
+      # condition number rather than a determinant, which may not exist (the
+      # vertex matrix need not be square) and would not be scale invariant if
+      # it did: scaling every vertex by `c` scales `det` by `c^d`.
+      #
+      # The check above bounds `n_v - 1 <= d`, so `sv` has exactly `n_v - 1`
+      # entries and its last is the one that decides rank.
+      edges <- vertices[, -1L, drop = FALSE] - vertices[, 1L]
+      sv <- svd(edges, nu = 0L, nv = 0L)$d
+      if (sv[1L] <= 0) {
+        return("every vertex is the same point, so they span nothing")
+      }
+      rcond <- sv[n_v - 1L] / sv[1L]
+      if (rcond <= 1e-9) {
+        return(paste0(
+          "the vertices must span a non-degenerate simplex, but their ",
+          "reciprocal condition number is ",
+          format(rcond),
+          ", so they are affinely dependent."
+        ))
+      }
+    }
+    NULL
+  },
+  constructor = function(vertices) {
+    new_object(polytope_region(vertices = vertices))
+  }
+)
 
 
 # --- Halfspace region --------------------------------------------------------
@@ -439,7 +568,7 @@ method(contains, simplex_region) <- function(space, theta, tol = 1e-8) {
 #'
 #' Having no vertices, a halfspace admits no certified gap bound. That is a
 #' property of the representation rather than a missing feature -- see
-#' [simplex_region()] for the bounded alternative.
+#' [polytope_region()] for the bounded alternative.
 #'
 #' @param normal Normal vector `a`; must be non-zero.
 #' @param offset Offset `b`.

@@ -27,7 +27,7 @@ an orthonormal basis, and \code{softplus(s) >= 0} is the distance inward.
 
 Having no vertices, a halfspace admits no certified gap bound. That is a
 property of the representation rather than a missing feature -- see
-\code{\link[=simplex_region]{simplex_region()}} for the bounded alternative.
+\code{\link[=polytope_region]{polytope_region()}} for the bounded alternative.
 }
 \examples{
 # `{theta : theta_1 <= theta_2}`

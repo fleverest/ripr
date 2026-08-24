@@ -26,8 +26,8 @@ null geometries that do not permit a \code{\link[=chart]{chart()}}, but these ar
 beyond the scope of this package.
 }
 \examples{
-# `parameter_space` is abstract; simplex_region(), halfspace_region(),
-# point_region() and real_region() subclass it, e.g.
+# `parameter_space` is abstract; polytope_region(), simplex_region(),
+# halfspace_region(), point_region() and real_region() subclass it, e.g.
 s <- simplex_region(vertices = diag(3))
 S7::S7_inherits(s, parameter_space)
 space_dim(s)

@@ -2,36 +2,41 @@
 % Please edit documentation in R/parameter_space.R
 \name{simplex_region}
 \alias{simplex_region}
-\title{Convex hull of a set of vertices}
+\title{A simplex: an affinely independent vertex set}
 \usage{
-simplex_region(vertices, pinv = NULL)
+simplex_region(vertices)
 }
 \arguments{
 \item{vertices}{\verb{(d, V)} numeric matrix, one vertex per column.}
-
-\item{pinv}{Optional precomputed \verb{(V, d)} left pseudo-inverse.}
 }
 \value{
-A \code{simplex_region}.
+A \code{simplex_region}, which is also a \code{\link[=polytope_region]{polytope_region()}}.
 }
 \description{
-The bounded case: a polytope given by its vertices (a V-representation),
-parametrised by convex combinations of them. Every plurality region
-\eqn{\{\theta : \theta_1 \le \theta_j\}}{{theta : theta_1 <= theta_j}} is of
-this form.
+The \code{\link[=polytope_region]{polytope_region()}} whose vertices are affinely independent, so the hull
+is a simplex of dimension \code{ncol(vertices) - 1}.
 }
 \details{
-Holding vertices rather than constraints is what makes a certified bound
-possible later via de Casteljau subdivision.
+Being a simplex is not on its own enough to certify. The Bernstein enclosure
+asks for two further things, both checked by \code{\link[=certify]{certify()}} rather than here:
+one vertex per coordinate, and every vertex inside the standard simplex. A
+lower-dimensional cell fails the first; the tetrahedron in the examples below
+fails the second, being a full-dimensional simplex of \code{R^3} rather than of
+\eqn{\Delta}{Delta}. Either way \code{\link[=certify]{certify()}} refuses, naming the condition.
+
+Neither is a defect in the region. Both still chart, project and fit as
+usual, and \code{sup_lb()} still searches them; they simply have no implemented
+bounding method, as a \code{\link[=gaussian_family]{gaussian_family()}} null already does not.
 }
 \examples{
-# The 2-simplex in R^3, e.g. the full multinomial parameter space:
+# The 2-simplex in R^3, e.g. the entire multinomial parameter space:
 simplex_region(vertices = diag(3))
-}
-\references{
-\insertRef{BeckTeboulle2009}{ripr}
 
-\insertRef{DuchiShalevShwartz2008}{ripr}
+# The plurality region `{theta : theta_1 <= theta_2}` within it:
+simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 
-\insertRef{ODonoghueCandes2015}{ripr}
+# A tetrahedron in R^3, e.g. a piece of a triangulated Gaussian null:
+simplex_region(
+  vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+)
 }

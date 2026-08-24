@@ -361,6 +361,9 @@ boxes_best <- function(boxes, lat) {
 #' @noRd
 reparametrise_to <- function(coef, lat, vertices) {
   V <- as.matrix(vertices)
+  # `bernstein_compatible()` asserts these assumptions for anything arriving
+  # `certify()`; `simplex_region`'s validator asserts non-singularity.
+  # Worth keeping anyway I guess. It isn't called too often.
   stopifnot(
     nrow(V) == lat$K,
     ncol(V) == lat$K,

@@ -63,7 +63,11 @@ test_that("sup_ub is never below a dense grid search", {
   set.seed(101)
   null <- plurality_null(n = 8L, k = 3L)
   for (rep in 1:8) {
-    values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
+    values <- stats::runif(
+      nrow(enumerate_space(null@family@sample_space)),
+      0,
+      10
+    )
     res <- certify(tabulated_rv(null@family, values), null, tol = 1e-9)
     expect_gte(res$sup_ub, null_grid_max(null, values))
   }
@@ -154,7 +158,10 @@ test_that("dividing by the bound gives an e-variable", {
 
 test_that("a constant variable certifies to its own value", {
   null <- plurality_null(n = 6L, k = 3L)
-  x <- tabulated_rv(null@family, rep(3.5, nrow(enumerate_space(null@family@sample_space))))
+  x <- tabulated_rv(
+    null@family,
+    rep(3.5, nrow(enumerate_space(null@family@sample_space)))
+  )
   res <- certify(x, null, tol = 1e-9)
   expect_equal(res$sup_lb, 3.5)
   expect_lt(res$sup_ub - 3.5, 1e-12)
@@ -260,7 +267,10 @@ test_that("certify() reports one entry per subnull", {
 test_that("certify() carries back the variable and null it holds for", {
   # A certificate that does not name what it certifies is not a certificate.
   null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
+  x <- tabulated_rv(
+    null@family,
+    rep(1, nrow(enumerate_space(null@family@sample_space)))
+  )
   res <- certify(x, null)
   expect_identical(res$random_variable, x)
   expect_identical(res$null, null)
@@ -391,7 +401,10 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
 
 test_that("certify() does not record unless asked", {
   null <- plurality_null(n = 6L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
+  x <- tabulated_rv(
+    null@family,
+    rep(1, nrow(enumerate_space(null@family@sample_space)))
+  )
   expect_null(certify(x, null)$record)
   expect_null(certify(x, null)$traces)
   expect_type(certify(x, null)$iterations, "integer")
@@ -425,14 +438,14 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
         list(
           name = "bernstein",
           family = multinomial_family,
-          region = simplex_region,
+          region = bernstein_compatible,
           bound_fn = bernstein_bound,
           description = "real"
         ),
         list(
           name = "fake",
           family = multinomial_family,
-          region = halfspace_region,
+          region = \(s) S7_inherits(s, halfspace_region),
           bound_fn = fake_bound_fn,
           description = "stub"
         )
@@ -469,14 +482,17 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
       list(list(
         name = "short",
         family = multinomial_family,
-        region = simplex_region,
+        region = bernstein_compatible,
         bound_fn = function(x, family, subnulls, control) list(),
         description = "stub"
       ))
     }
   )
   null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
+  x <- tabulated_rv(
+    null@family,
+    rep(1, nrow(enumerate_space(null@family@sample_space)))
+  )
   expect_error(certify(x, null), "returned 0 results for 2 subnulls")
 })
 
@@ -532,6 +548,160 @@ test_that("certify() refuses a family and geometry it has no method for", {
   expect_error(certify(x, null), "halfspace_region")
 })
 
+test_that("lower-dimensional nulls fit but do not certify", {
+  fam <- multinomial_family(n_trials = 6L, k = 3L)
+  # The tie null {theta_1 == theta_2} within the simplex is a segment, and
+  # a legit simplex of dimension 1. It is a valid null but currently no
+  # certify method is  implemented so we expect it to fail at certification.
+  tie <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0, 1)))
+  null <- null_model(fam, list(tie))
+  Q <- fam(c(0.6, 0.2, 0.2))
+
+  # Fitting works. chart() gives one coordinate, project() and maximise_over()
+  # are indifferent to the cell's dimension, and the KL objective is defined.
+  set.seed(1)
+  state <- ripr_init(Q, null)
+  state <- fw_step(
+    state,
+    times = 20L,
+    record_gap = TRUE,
+    until = gap_below(1e-10)
+  )
+  fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE)
+  expect_true(is.finite(fit$kl))
+  # Every atom landed on the tie, which is the point: the geometry is honoured.
+  expect_equal(atoms(fit$W0)[1L, ], atoms(fit$W0)[2L, ])
+
+  X <- likelihood(Q) / likelihood(fit$P_star)
+  expect_true(is.finite(sup_lb(X, null)$sup_lb))
+
+  # Certifying does now.
+  # The reason lower-dimensional regions are out of scope is that three future
+  # issues will show up:
+  #
+  #   1. Reparametrisation requires full-dimension targets. `reparametrise_to()`
+  #      can probably be fixed to drop dimensions, but that probably is not
+  #      going to work without substantial revisions.
+  #
+  #   2. Every Lebesgue integrals over it will be zero, so truncated mixings
+  #      returns -Inf for all outcomes and a rejection sampler will never
+  #      terminate. This is because `contains()` on a lower-dimensional cell
+  #      is a measure-zero test. So it is entirely tolerance-governed in a way
+  #      full-dimensional cells are not. No sampled point ever lands exactly on a
+  #      segment.
+  #
+  #   3. Also we need to decide whether we tolerate taking
+  #      `complement(cell, within = simplex)`, which is technically the entire
+  #      space when `cell` has lower dimension.
+  expect_error(certify(X, null))
+})
+
+test_that("the refusal names the failing condition, not the class", {
+  # A `simplex_region` the Bernstein enclosure cannot take is not a missing
+  # method. The underlying geometry is supported but region is the wrong shape.
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  x <- tabulated_rv(fam, rep(1, nrow(enumerate_space(fam@sample_space))))
+
+  flat <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0, 1)))
+  msg <- tryCatch(
+    certify(x, null_model(fam, list(flat))),
+    error = conditionMessage
+  )
+  expect_match(msg, "2 vertices in 3 dimensions")
+  expect_match(msg, "simplex of dimension 1")
+  expect_match(msg, "Only certification is affected")
+  expect_false(grepl("No bounding method is implemented", msg))
+
+  # A simplex outside the standard simplex fails on membership, and reports
+  # that rather than the vertex count. A tetrahedron in R^3 is affinely
+  # independent and not lower-dimensional at all, so a count-based message
+  # would be actively wrong.
+  tetra <- simplex_region(
+    vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  msg <- tryCatch(
+    certify(x, null_model(fam, list(tetra))),
+    error = conditionMessage
+  )
+  expect_match(msg, "leave the standard simplex")
+  expect_match(msg, "sum to 0 rather than 1")
+  expect_false(grepl("simplex of dimension", msg))
+
+  # A negative coordinate is caught before the sum, and named.
+  outside <- simplex_region(
+    vertices = cbind(c(-0.5, 1.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  msg <- tryCatch(
+    certify(x, null_model(fam, list(outside))),
+    error = conditionMessage
+  )
+  expect_match(msg, "smallest coordinate is -0.5")
+
+  # Whereas a geometry with no method at all still says so.
+  msg <- tryCatch(
+    certify(
+      x,
+      null_model(
+        fam,
+        list(polytope_region(
+          vertices = cbind(diag(3), c(1, 1, 1) / 3)
+        ))
+      )
+    ),
+    error = conditionMessage
+  )
+  expect_match(msg, "No bounding method is implemented")
+})
+
+test_that("a region obstruction is not blamed if the family is not implemented", {
+  # `bernstein_obstruction()` describes a region, so it must only speak for a
+  # family some method actually claims. A `gaussian_family` over a flat
+  # `simplex_region` fails because nothing bounds Gaussian expectations at all.
+  # A full-dimensional region would fail identically, so raising an error
+  # mentioning the region's shape does not give adequate advice.
+  fam <- gaussian_family(dim = 2L)
+  flat <- simplex_region(vertices = cbind(c(1, 0)))
+  x <- random_variable(
+    function(x) rep(1, nrow(as.matrix(x))),
+    sample_space = fam@sample_space
+  )
+  msg <- tryCatch(
+    certify(x, null_model(fam, list(flat))),
+    error = conditionMessage
+  )
+  expect_match(msg, "No bounding method is implemented")
+  expect_match(msg, "gaussian_family")
+  expect_false(grepl("Bernstein", msg))
+  expect_false(grepl("standard simplex", msg))
+})
+
+test_that("bernstein_compatible() accepts when certification is possible", {
+  # Full parameter space
+  expect_true(bernstein_compatible(simplex_region(vertices = diag(3))))
+  # Pairwise plurality
+  expect_true(bernstein_compatible(
+    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+  ))
+
+  # Wrong class: a polytope that happens to be a simplex is still
+  # refused, because nothing has checked that it is one.
+  # Later we will probably just triangulate and we can replace this test.
+  expect_false(bernstein_compatible(polytope_region(vertices = diag(3))))
+
+  expect_false(bernstein_compatible(
+    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0, 1)))
+  ))
+  expect_false(bernstein_compatible(simplex_region(
+    vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+  )))
+  expect_false(bernstein_compatible(halfspace_region(
+    normal = c(1, -1, 0),
+    offset = 0
+  )))
+  expect_false(bernstein_compatible(real_region(3L)))
+})
+
+
 test_that("the refusal names the subnull, not the null model", {
   # The message is meant to say which geometry is missing a bound. Naming the
   # container instead makes it useless.
@@ -583,7 +753,10 @@ test_that("certify() refuses a variable that is not finite on the support", {
 
 test_that("certify() refuses a lattice above the coefficient budget", {
   null <- plurality_null(n = 8L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
+  x <- tabulated_rv(
+    null@family,
+    rep(1, nrow(enumerate_space(null@family@sample_space)))
+  )
   expect_error(
     certify(x, null, max_coefficients = 10L),
     "above `max_coefficients`"
@@ -594,7 +767,10 @@ test_that("certify() refuses a lattice above the coefficient budget", {
 
 test_that("certify() rejects a non-random_variable and bad control values", {
   null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(null@family, rep(1, nrow(enumerate_space(null@family@sample_space))))
+  x <- tabulated_rv(
+    null@family,
+    rep(1, nrow(enumerate_space(null@family@sample_space)))
+  )
   expect_error(certify(function(x) 1, null), "must be a `random_variable`")
   expect_error(certify(x, null, tol = -1))
   expect_error(certify(x, null, max_nodes = 0))

@@ -25,6 +25,11 @@ mixture, and hence what forces the duality gap to be non-negative, so a
 violation is an error rather than a warning: every downstream quantity would
 be wrong.
 }
+\details{
+You need this only if you are writing a fit loop or an engine spec of your
+own; in normal use you hand the spec to \code{\link[=ripr_init]{ripr_init()}}, which calls this for
+you. The weight-sum check here is the contract every spec must satisfy.
+}
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
 Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))

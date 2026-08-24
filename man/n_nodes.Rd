@@ -13,7 +13,9 @@ n_nodes(engine)
 Integer.
 }
 \description{
-Number of quadrature nodes
+You need this only if you are writing a fit loop or an engine spec of your
+own; in normal use \code{\link[=ripr_init]{ripr_init()}} resolves the engine and the step verbs read
+it.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)

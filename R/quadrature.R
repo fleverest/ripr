@@ -15,7 +15,10 @@ NULL
 #' exact engine. Under Monte Carlo the weights are `1/M` while `log_q` is the
 #' density at the drawn nodes, and the objective needs both.
 #'
-#' Build one with [resolve_engine()] rather than the raw constructor.
+#' Build one with [resolve_engine()] rather than the raw constructor. You need
+#' either only if you are writing a fit loop or an engine spec of your own; in
+#' normal use you pass a spec such as [exact_engine()] to [ripr_init()], which
+#' resolves it and hands the engine to the step verbs.
 #'
 #' @param nodes `(M, K)` matrix of evaluation points.
 #' @param log_w Length-`M` log quadrature weights; `exp(log_w)` sums to 1.
@@ -53,6 +56,10 @@ quadrature <- new_class(
 
 
 #' Number of quadrature nodes
+#'
+#' You need this only if you are writing a fit loop or an engine spec of your
+#' own; in normal use [ripr_init()] resolves the engine and the step verbs read
+#' it.
 #' @param engine A [quadrature].
 #' @return Integer.
 #' @examples
@@ -68,6 +75,10 @@ n_nodes <- function(engine) nrow(engine@nodes)
 #' `TRUE` for exact enumeration and deterministic quadrature, `FALSE` for Monte
 #' Carlo. A deterministic rule may still carry approximation error, but it is
 #' bias rather than variance, so [expect_se()] does not describe it.
+#'
+#' You need this only if you are writing a fit loop or an engine spec of your
+#' own; in normal use [ripr_init()] resolves the engine and the step verbs read
+#' it.
 #' @param engine A [quadrature].
 #' @return `TRUE` or `FALSE`.
 #' @examples
@@ -88,6 +99,9 @@ deterministic <- function(engine) isTRUE(engine@deterministic)
 #' Engines hold their nodes as plain data and compile on demand rather than
 #' storing the evaluator, so a serialised engine carries no captured
 #' environment.
+#'
+#' You need this only if you are writing a fit loop or an engine spec of your
+#' own; in normal use the step verbs compile the engine for you.
 #' @param engine A [quadrature].
 #' @return A function of `theta_mat`.
 #' @examples
@@ -107,6 +121,9 @@ compile_engine <- function(engine) {
 #' \eqn{E_Q[v] \approx \sum_i w_i v_i}{E_Q[v] = sum_i w_i v_i}, for values given
 #' directly. Use this when `v` may be negative -- the KL objective, for
 #' instance, integrates a log ratio.
+#'
+#' You need this only if you are writing a fit loop or an engine spec of your
+#' own; in normal use the step verbs and [ripr_finish()] take the expectations.
 #' @param engine A [quadrature].
 #' @param v Length-`M` numeric vector of integrand values at the nodes.
 #' @return Numeric scalar.
@@ -127,6 +144,9 @@ expect_q <- function(engine, v) {
 #' where [expect_q()] would overflow, which it does routinely: likelihood ratios
 #' at audit scale exceed the range of a double long before they stop being
 #' meaningful.
+#'
+#' You need this only if you are writing a fit loop or an engine spec of your
+#' own; in normal use the step verbs and [ripr_finish()] take the expectations.
 #' @param engine A [quadrature].
 #' @param log_v Length-`M` numeric vector of log integrand values at the nodes.
 #' @return Numeric scalar.
@@ -146,6 +166,9 @@ log_expect_q <- function(engine, log_v) {
 #' The Monte Carlo standard error of [expect_q()], and exactly `0` for a
 #' deterministic rule. A deterministic rule with approximation error has bias
 #' rather than variance, so `0` here is not a claim of exactness.
+#'
+#' Nothing in the fit calls this. It is here for a fit loop or a diagnostic of
+#' your own, to judge whether a Monte Carlo engine carries enough draws.
 #' @param engine A [quadrature].
 #' @param v Length-`M` numeric vector of integrand values at the nodes.
 #' @return Numeric scalar.
@@ -246,6 +269,10 @@ mc_engine <- function(n_draws) {
 #' mixture, and hence what forces the duality gap to be non-negative, so a
 #' violation is an error rather than a warning: every downstream quantity would
 #' be wrong.
+#'
+#' You need this only if you are writing a fit loop or an engine spec of your
+#' own; in normal use you hand the spec to [ripr_init()], which calls this for
+#' you. The weight-sum check here is the contract every spec must satisfy.
 #'
 #' @param spec An engine spec, e.g. from [exact_engine()] or [mc_engine()].
 #' @param alternative The alternative \eqn{Q}{Q}, an [distribution].

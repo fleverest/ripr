@@ -137,7 +137,6 @@ rv_expression <- function(x) {
 
 #' @rdname random_variable
 #' @usage NULL
-#' @export
 method(print, random_variable) <- function(x, ...) {
   cat("<random_variable>", format(x), "\n")
   cat("  on", space_label(x@sample_space), "\n")
@@ -154,7 +153,6 @@ method(print, random_variable) <- function(x, ...) {
 #' renders its divisor, so the generic has to work on these too.
 #' @rdname random_variable
 #' @usage NULL
-#' @export
 method(format, random_variable) <- function(x, ...) rv_expression(x)
 
 

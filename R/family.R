@@ -76,7 +76,6 @@ at_theta <- function(at) {
 
 #' @rdname parametric_family
 #' @usage NULL
-#' @export
 method(print, parametric_family) <- function(x, ...) {
   cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
   cat("  parameters ", space_label(x@parameter_space), "\n", sep = "")
@@ -93,7 +92,6 @@ method(print, parametric_family) <- function(x, ...) {
 #' attribute dump.
 #' @rdname parametric_family
 #' @usage NULL
-#' @export
 method(format, parametric_family) <- function(x, ...) {
   sprintf(
     "%s: %s -> %s",

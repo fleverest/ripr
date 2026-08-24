@@ -14,6 +14,9 @@ NULL
 #' an invariant to check rather than one to hold structurally. Weights are
 #' normalised across the whole list, not within a subnull.
 #'
+#' You need the constructor only if you are writing a fit loop of your own; in
+#' normal use [ripr_init()] builds the state and the step verbs advance it.
+#'
 #' @param atoms List of `(d, n_i)` matrices, one per subnull.
 #' @param weights List of numeric vectors matching `atoms`, summing to 1 overall.
 #' @param alternative The alternative \eqn{Q}{Q}.
@@ -79,8 +82,9 @@ ripr_state <- new_class(
 #'
 #' Columns are grouped by subnull, in subnull order, and a new atom is appended
 #' within its own subnull's block. So the flat ordering is not chronological: an
-#' atom added at iteration 5 may sit before one added at iteration 2. Use
-#' [flat_subnull()] to recover which block a column came from.
+#' atom added at iteration 5 may sit before one added at iteration 2. The
+#' blocks themselves are `state@atoms`, and [ripr_finish()] reports the subnull
+#' of each surviving atom in its `subnull` element.
 #' @param state A [ripr_state].
 #' @return `(d, C)` numeric matrix.
 #' @examples
@@ -122,22 +126,15 @@ flat_atoms <- function(state) {
 #' @export
 flat_weights <- function(state) unlist(state@weights, use.names = FALSE)
 
-#' Which subnull each column of [flat_atoms()] belongs to
+#' Which subnull each column of `flat_atoms()` belongs to
+#'
+#' Per-atom bookkeeping the fit uses to index back into the null's cells when
+#' it moves an atom. Users reach the same information through
+#' `ripr_finish()$subnull`.
 #' @param state A [ripr_state].
 #' @return Integer vector.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' plurality <- null_model(
-#'   fam,
-#'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-#'   )
-#' )
-#' Q <- fam(c(0.4, 0.35, 0.25))
-#' state <- ripr_init(Q, plurality)
-#' flat_subnull(state)
-#' @export
+#' @keywords internal
+#' @noRd
 flat_subnull <- function(state) {
   rep(seq_along(state@atoms), block_sizes(state))
 }

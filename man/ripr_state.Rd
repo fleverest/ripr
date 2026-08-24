@@ -47,6 +47,10 @@ about which chart to search in, and a parallel index vector would make that
 an invariant to check rather than one to hold structurally. Weights are
 normalised across the whole list, not within a subnull.
 }
+\details{
+You need the constructor only if you are writing a fit loop of your own; in
+normal use \code{\link[=ripr_init]{ripr_init()}} builds the state and the step verbs advance it.
+}
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(

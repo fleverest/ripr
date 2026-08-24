@@ -15,8 +15,9 @@ flat_atoms(state)
 \description{
 Columns are grouped by subnull, in subnull order, and a new atom is appended
 within its own subnull's block. So the flat ordering is not chronological: an
-atom added at iteration 5 may sit before one added at iteration 2. Use
-\code{\link[=flat_subnull]{flat_subnull()}} to recover which block a column came from.
+atom added at iteration 5 may sit before one added at iteration 2. The
+blocks themselves are \code{state@atoms}, and \code{\link[=ripr_finish]{ripr_finish()}} reports the subnull
+of each surviving atom in its \code{subnull} element.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

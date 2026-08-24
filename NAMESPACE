@@ -18,7 +18,6 @@ export(expect_q)
 export(expect_se)
 export(finite_mixing)
 export(flat_atoms)
-export(flat_subnull)
 export(flat_weights)
 export(fw_step)
 export(gap_below)
@@ -71,8 +70,24 @@ export(sup_lb)
 export(support_gap_below)
 export(validate_outcome)
 export(weight_step)
-import(S7)
 importFrom(Rdpack,reprompt)
+importFrom(S7,
+  "method<-",
+  S7_class,
+  S7_inherits,
+  S7_object,
+  class_any,
+  class_character,
+  class_function,
+  class_integer,
+  class_list,
+  class_logical,
+  class_numeric,
+  new_class,
+  new_generic,
+  new_object,
+  new_property
+)
 importFrom(matrixStats,
   colLogSumExps,
   logSumExp,

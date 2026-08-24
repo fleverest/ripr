@@ -135,7 +135,6 @@ method(draw, induced_distribution) <- function(dist, n_obs) {
 
 #' @rdname induced_distribution
 #' @usage NULL
-#' @export
 method(print, induced_distribution) <- function(x, ...) {
   cat("<induced_distribution>", format(x), "\n")
   invisible(x)
@@ -146,7 +145,6 @@ method(print, induced_distribution) <- function(x, ...) {
 #'   a point mass from a genuine mixture.
 #' @rdname induced_distribution
 #' @usage NULL
-#' @export
 method(format, induced_distribution) <- function(x, ...) {
   name <- attr(S7_class(x@family), "name")
   n <- n_atoms(x@mixing)

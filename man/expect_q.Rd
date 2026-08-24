@@ -19,6 +19,10 @@ Numeric scalar.
 directly. Use this when \code{v} may be negative -- the KL objective, for
 instance, integrates a log ratio.
 }
+\details{
+You need this only if you are writing a fit loop or an engine spec of your
+own; in normal use the step verbs and \code{\link[=ripr_finish]{ripr_finish()}} take the expectations.
+}
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
 Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))

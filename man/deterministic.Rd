@@ -17,6 +17,11 @@ deterministic(engine)
 Carlo. A deterministic rule may still carry approximation error, but it is
 bias rather than variance, so \code{\link[=expect_se]{expect_se()}} does not describe it.
 }
+\details{
+You need this only if you are writing a fit loop or an engine spec of your
+own; in normal use \code{\link[=ripr_init]{ripr_init()}} resolves the engine and the step verbs read
+it.
+}
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
 Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))

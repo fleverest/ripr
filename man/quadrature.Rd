@@ -40,7 +40,10 @@ are chosen.
 exact engine. Under Monte Carlo the weights are \code{1/M} while \code{log_q} is the
 density at the drawn nodes, and the objective needs both.
 
-Build one with \code{\link[=resolve_engine]{resolve_engine()}} rather than the raw constructor.
+Build one with \code{\link[=resolve_engine]{resolve_engine()}} rather than the raw constructor. You need
+either only if you are writing a fit loop or an engine spec of your own; in
+normal use you pass a spec such as \code{\link[=exact_engine]{exact_engine()}} to \code{\link[=ripr_init]{ripr_init()}}, which
+resolves it and hands the engine to the step verbs.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)

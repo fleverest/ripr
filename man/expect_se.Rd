@@ -19,6 +19,10 @@ The Monte Carlo standard error of \code{\link[=expect_q]{expect_q()}}, and exact
 deterministic rule. A deterministic rule with approximation error has bias
 rather than variance, so \code{0} here is not a claim of exactness.
 }
+\details{
+Nothing in the fit calls this. It is here for a fit loop or a diagnostic of
+your own, to judge whether a Monte Carlo engine carries enough draws.
+}
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 3L, k = 2L)

@@ -21,6 +21,9 @@ move, so recompiling per evaluation repeats work that depends on them alone.
 Engines hold their nodes as plain data and compile on demand rather than
 storing the evaluator, so a serialised engine carries no captured
 environment.
+
+You need this only if you are writing a fit loop or an engine spec of your
+own; in normal use the step verbs compile the engine for you.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)

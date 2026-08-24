@@ -399,11 +399,11 @@ contrasts a proven bound against an uncertified search.</p>
 <p>Take a three-category multinomial distribution (<code>n = 20</code>)
 and the plurality null: candidate 1 does not win outright,
 <code>H0 = union_j {theta : theta_1 &lt;= theta_j}</code>. This null is
-a union of convex parts – one region where
+a union of convex parts (one region where
 <code>theta_1 &lt;= theta_2</code> and another where
-<code>theta_1 &lt;= theta_3</code> – and each part is a simplex, so the
+<code>theta_1 &lt;= theta_3</code>, each part a simplex), so the
 plurality null is a single <code>null_model</code> holding two
-<code>simplex_region</code> subnulls.</p>
+<code>simplex_region</code> parts.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>K <span class="ot">&lt;-</span> <span class="dv">3</span><span class="dt">L</span></span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">20</span><span class="dt">L</span></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>family <span class="ot">&lt;-</span> <span class="fu">multinomial_family</span>(<span class="at">n_trials =</span> n, <span class="at">k =</span> K)</span>
@@ -411,7 +411,7 @@ plurality null is a single <code>null_model</code> holding two
 <span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>plurality <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
 <span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  family,</span>
 <span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="fu">lapply</span>(<span class="dv">2</span><span class="sc">:</span>K, <span class="cf">function</span>(j) {</span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>    <span class="co"># The two sub-simplices: one for each subnull.</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>    <span class="co"># The two sub-simplices: one for each part.</span></span>
 <span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>    vertices <span class="ot">&lt;-</span> <span class="fu">diag</span>(K)</span>
 <span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>    vertices[, <span class="dv">1</span><span class="dt">L</span>] <span class="ot">&lt;-</span> <span class="fu">replace</span>(<span class="fu">numeric</span>(K), <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, j), <span class="fl">0.5</span>)</span>
 <span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>    <span class="fu">simplex_region</span>(<span class="at">vertices =</span> vertices)</span>
@@ -429,7 +429,7 @@ Plurality null, with the support of the alternative mixing distribution
 W1.
 </p>
 </div>
-<p>The two subnulls overlap, and the alternative sits in the cap above
+<p>The two parts overlap, and the alternative sits in the cap above
 them, where candidate 1 leads.</p>
 </div>
 <div id="fitting-the-projection" class="section level2">
@@ -662,14 +662,13 @@ extending rather than just using the package:</p>
 <li><code>?parametric_family</code> describes the interface a new
 observation model must implement: <code>compile_loglik()</code>,
 <code>score()</code> and <code>kernel_draw()</code>.
-<code>?sample_space</code> and <code>?parameter_space</code> describe
-the two sets it maps between, and <code>?distribution</code> the laws
+<code>?sample_space</code> and <code>?convex_region</code> describe the
+two sets it maps between, and <code>?distribution</code> the laws
 <code>fam(theta)</code> returns.</li>
-<li><code>?parameter_space</code> and its generics
-(<code>chart()</code>, <code>contains()</code>, <code>project()</code>)
-describe the interface a new convex geometry must implement;
-<code>?simplex_region</code> and <code>?halfspace_region</code> are the
-two built-in examples.</li>
+<li><code>?convex_region</code> and its generics (<code>chart()</code>,
+<code>contains()</code>, <code>project()</code>) describe the interface
+a new convex geometry must implement; <code>?simplex_region</code> and
+<code>?halfspace_region</code> are the two built-in examples.</li>
 <li><code>?quadrature</code>, <code>?exact_engine</code>,
 <code>?mc_engine</code> and <code>?gh_engine</code> describe how
 expectations under the alternative are approximated, and how to add a

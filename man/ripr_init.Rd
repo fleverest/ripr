@@ -20,10 +20,11 @@ ripr_init(
 
 \item{engine}{An engine spec, e.g. \code{\link[=exact_engine]{exact_engine()}}.}
 
-\item{atoms}{Optional list of \verb{(d, n_i)} matrices, one per subnull. \code{NULL}
-places one atom per subnull by projecting the alternative's reference point,
-which is the sensible default and what the examples use. Empty subnulls are
-\code{ncol = 0} matrices, which the loop handles without a special case.}
+\item{atoms}{Optional list of \verb{(d, n_i)} matrices, one per part of the
+null region. \code{NULL} places one atom per part by projecting the
+alternative's reference point, which is the sensible default and what the
+examples use. Empty parts are \code{ncol = 0} matrices, which the loop handles
+without a special case.}
 
 \item{weights}{Optional list matching \code{atoms}; defaults to uniform.}
 

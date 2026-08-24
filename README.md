@@ -38,9 +38,7 @@ Take a three-category multinomial distribution (with `n = 20`) and the
 plurality null: candidate 1 does not win outright,
 `H0 = union_j {theta : theta_1 <= theta_j}`. This null can be written as
 a union of convex parts; one region where `theta_1 <= theta_2` and
-another where `theta_1 <= theta_3`. Each part (or sub-null) is a
-simplex, so we represent the plurality null as a single `null_model`
-holding two `simplex_region` subnulls.
+another where `theta_1 <= theta_3`.
 
 ``` r
 library(ripr)
@@ -52,7 +50,7 @@ family <- multinomial_family(n_trials = n, k = K)
 plurality <- null_model(
   family,
   lapply(2:K, function(j) {
-    # The two sub-simplices: one for each subnull.
+    # The two sub-simplices: one for each part.
     vertices <- diag(K)
     vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
     simplex_region(vertices = vertices)
@@ -79,7 +77,7 @@ W1.
 
 </div>
 
-The two subnulls overlap, and the alternative sits in the cap above them
+The two parts overlap, and the alternative sits in the cap above them
 where candidate 1 leads. The fitting procedure is implemented as a
 sequence of steps: `fw_step` for Frank–Wolfe updates and `em_step` for
 EM (also `lb_step` for Li–Barron, but not recommended). Here we

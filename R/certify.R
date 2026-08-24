@@ -11,7 +11,7 @@ NULL
 
 #' Bounding methods available to [certify()]
 #'
-#' Each entry names a family of expectations and a subnull geometry it can
+#' Each entry names a family of expectations and a region geometry it can
 #' enclose, and the `bound_fn` that does it. A combination missing from this table
 #' simply has no implementation yet.
 #'
@@ -25,8 +25,8 @@ NULL
 #'
 #' # The `bound_fn` contract
 #'
-#' `bound_fn(x, family, subnulls, control)` returns one result per element of
-#' `subnulls`, in the same order, each a list with the fields
+#' `bound_fn(x, family, parts, control)` returns one result per element of
+#' `parts`, in the same order, each a list with the fields
 #' `check_bound_result()` requires.
 #'
 #' Named `bound_fn` rather than `engine` because `ripr_engine` already means a
@@ -34,19 +34,19 @@ NULL
 #' [mc_engine()]). That is a different object doing a different job, and the two
 #' meet in the same conversations often enough for one word to serve both.
 #'
-#' A `bound_fn` receives a *group* of subnulls that work for a given `(x, family)`,
+#' A `bound_fn` receives a *group* of parts that work for a given `(x, family)`,
 #' so that enumerating the sample space, evaluating `x` on it, building the
-#' lattice (for multinomial), happens just once for all matching subnulls.
-#' `certify()` groups the subnulls by resolved method, so a `bound_fn` only
-#' ever sees geometries it facilitates, and a null with subnulls of different
+#' lattice (for multinomial), happens just once for all matching parts.
+#' `certify()` groups the parts by resolved method, so a `bound_fn` only
+#' ever sees geometries it facilitates, and a null with parts of different
 #' geometries is split across bounding methods rather than refused.
 #'
 #' Currently only multinomial is supported, but this architecture makes it
 #' easier to extend to other families and geometries later.
-#' @return A list of methods, each with `name`, `family`, `region`, `bound_fn`
-#'   and a one-line `description`. `region` is a predicate on a
-#'   [parameter_space], not a class: what a bounding method can enclose is not
-#'   always a whole geometry.
+#' @return A list of methods, each with `name`, `family`, `accepts`,
+#'   `bound_fn` and a one-line `description`. `accepts` is a predicate on a
+#'   single convex cell (a [convex_region], not a whole [region]), and a
+#'   predicate rather than a class.
 #' @keywords internal
 #' @noRd
 certify_methods <- function() {
@@ -54,7 +54,7 @@ certify_methods <- function() {
     list(
       name = "bernstein",
       family = multinomial_family,
-      region = bernstein_compatible,
+      accepts = bernstein_compatible,
       bound_fn = bernstein_bound,
       description = paste(
         "Bernstein enclosure for multinomial expectations over simplices"
@@ -77,7 +77,7 @@ certify_methods <- function() {
 #' enclosure. A lower-dimensional simplex would need a lower-degree lattice,
 #' which is a separate `certify_methods()` entry rather than a loosened
 #' predicate here.
-#' @param space A [parameter_space].
+#' @param space A [convex_region].
 #' @return `TRUE` or `FALSE`.
 #' @keywords internal
 #' @noRd
@@ -143,16 +143,16 @@ bernstein_obstruction <- function(space) {
 #' This enforces a contract between `certify()` and the bounding methods.
 #' @keywords internal
 #' @noRd
-check_bound_result <- function(results, method_name, n_subnulls) {
-  if (!is.list(results) || length(results) != n_subnulls) {
+check_bound_result <- function(results, method_name, n_parts) {
+  if (!is.list(results) || length(results) != n_parts) {
     stop(
       "The `",
       method_name,
       "` bounding method returned ",
       length(results),
       " results for ",
-      n_subnulls,
-      " subnulls.",
+      n_parts,
+      " parts.",
       call. = FALSE
     )
   }
@@ -215,10 +215,10 @@ check_bound_result <- function(results, method_name, n_subnulls) {
 #' The pmf of a multinomial *is* the degree-`n` Bernstein basis, so `x`
 #' evaluated on the sample space is already a coefficient vector for
 #' \eqn{E_\theta[X]}{E_theta[X]} and no conversion from a power form is needed.
-#' Each subnull is reparametrised onto its own simplex and enclosed separately.
+#' Each part is reparametrised onto its own simplex and enclosed separately.
 #' @keywords internal
 #' @noRd
-bernstein_bound <- function(x, family, subnulls, control) {
+bernstein_bound <- function(x, family, parts, control) {
   check_bernstein_size(family@n_trials, family@k, control$max_coefficients)
 
   outcomes <- enumerate_space(family@sample_space)
@@ -236,7 +236,7 @@ bernstein_bound <- function(x, family, subnulls, control) {
   }
 
   lattice <- bernstein_lattice(family@n_trials, family@k)
-  lapply(subnulls, function(s) {
+  lapply(parts, function(s) {
     box <- list(
       V = s@vertices,
       coef = reparametrise_to(values, lattice, s@vertices)
@@ -251,12 +251,15 @@ bernstein_bound <- function(x, family, subnulls, control) {
 }
 
 
-#' Fetch a method that can certify a (family, region) combination, or `NULL`
+#' Fetch a method that can certify a (family, cell) combination, or `NULL`
+#'
+#' `cell` is one convex piece of a null, not the whole [region]: a null whose
+#' cells differ in geometry resolves a method per cell.
 #' @keywords internal
 #' @noRd
-certify_method <- function(family, region) {
+certify_method <- function(family, cell) {
   for (method in certify_methods()) {
-    fits <- S7_inherits(family, method$family) && method$region(region)
+    fits <- S7_inherits(family, method$family) && method$accepts(cell)
     if (fits) {
       return(method)
     }
@@ -271,7 +274,7 @@ certify_method <- function(family, region) {
 class_name <- function(x) attr(S7_class(x), "name")
 
 
-#' Explain that no implemented method covers this (family, region) combination
+#' Explain that no implemented method covers this (family, cell) combination
 #'
 #' Says what is missing rather than what is impossible. Certifying some other
 #' pairing of family and geometry is a matter of deriving and implementing a
@@ -290,8 +293,8 @@ class_name <- function(x) attr(S7_class(x), "name")
 #' whatever shape its region happens to be.
 #' @keywords internal
 #' @noRd
-unimplemented_message <- function(family, region) {
-  geometry <- class_name(region)
+unimplemented_message <- function(family, cell) {
+  geometry <- class_name(cell)
   # A region obstruction is only the reason when some method claims this
   # family. Otherwise the family is what is missing, and naming the region's
   # shape sends the reader after the wrong thing: a `gaussian_family` over a
@@ -302,7 +305,7 @@ unimplemented_message <- function(family, region) {
     \(m) S7_inherits(family, m$family),
     logical(1)
   ))
-  obstruction <- if (claims_family) bernstein_obstruction(region) else NULL
+  obstruction <- if (claims_family) bernstein_obstruction(cell) else NULL
   if (!is.null(obstruction)) {
     return(paste0(
       "The Bernstein enclosure cannot bound ",
@@ -369,7 +372,7 @@ expectation_objective <- function(family, values) {
 #' treating it like a certificate on the bound. See [certify()] for proven
 #' upper bounds where supported.
 #'
-#' Cheap by comparison, and defined wherever the search is. An unbounded subnull
+#' Cheap by comparison, and defined wherever the search is. An unbounded part
 #' or a continuous parameter space can still be searched, though the lower bound
 #' may not be very tight.
 #' @param x A [random_variable].
@@ -399,7 +402,7 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
   obj <- expectation_objective(family, values)
 
   found <- lapply(
-    null@subnulls,
+    parts(null@region),
     function(s) {
       maximise_over(s, obj, n_seeds = n_seeds, n_restarts = n_restarts)
     }
@@ -408,7 +411,7 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
   list(
     sup_lb = found[[best]]$value,
     theta = found[[best]]$theta,
-    subnull = best
+    part = best
   )
 }
 
@@ -424,7 +427,7 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 #' downstream of a finished run evaluates them.
 #' @keywords internal
 #' @noRd
-node_table <- function(result, subnull) {
+node_table <- function(result, part) {
   nodes <- result$history
   if (!length(nodes)) {
     return(NULL)
@@ -443,7 +446,7 @@ node_table <- function(result, subnull) {
     )
   }
   data.frame(
-    subnull = as.integer(subnull),
+    part = as.integer(part),
     id = field("id", NA_integer_),
     parent = field("parent", NA_integer_),
     depth = field("depth", NA_integer_),
@@ -461,9 +464,9 @@ node_table <- function(result, subnull) {
 #' Record how a certification ran, for inspection and plotting
 #'
 #' Same computation as [certify()], reporting the branch-and-bound tree instead
-#' of the certificate. One row per leaf of the search, per subnull.
+#' of the certificate. One row per leaf of the search, per part.
 #'
-#' The nodes live at any iteration tile their subnull exactly, so at `K = 3` the
+#' The nodes live at any iteration tile their part exactly, so at `K = 3` the
 #' `vertices` column draws the partition of the facet directly, in barycentric
 #' coordinates, at every step and not merely at the end.
 #' `depth` against `born` shows the shape of the tree: a max-bound queue rule
@@ -473,7 +476,7 @@ node_table <- function(result, subnull) {
 #' Only bounding methods that use branch and bound populate this. A method that
 #' bounds in closed form contributes no rows.
 #' @inheritParams certify
-#' @return A data frame with `subnull`, `id`, `parent`, `depth`, `born`,
+#' @return A data frame with `part`, `id`, `parent`, `depth`, `born`,
 #'   `retired`, `fate`, `upper`, `volume` and a `vertices` list column, plus the
 #'   certificate itself in the `"certificate"` attribute and the per-iteration
 #'   bound in `"trace"`.
@@ -531,10 +534,10 @@ certify_trace <- function(
 #' `1` or less says `X` is already an e-variable for `H0`, and otherwise
 #' `X / bound` is one.
 #'
-#' Certification is refused for any (family, region) combination with no known
+#' Certification is refused for any (family, cell) combination with no known
 #' bounding method.
 #'
-#' Currently only multinomial families with simplex subnulls are supported. The
+#' Currently only multinomial families with simplex parts are supported. The
 #' upper bound is found via a branch-and-bound algorithm that recursively
 #' subdivides the simplex \insertCite{Leroy2012}{ripr}, and bounds each subset
 #' via the simplicial Bernstein range enclosure property
@@ -544,15 +547,15 @@ certify_trace <- function(
 #' @param x A [random_variable].
 #' @param null A [null_model].
 #' @param tol Stop once the bound is within `tol` of the best value found.
-#' @param max_nodes Cap on subdivisions per subnull for branch-and-bound
+#' @param max_nodes Cap on subdivisions per part for branch-and-bound
 #'   algorithms.
 #' @param max_coefficients Refuse above this many Bernstein coefficients
 #'   (for bounding multinomial expectation in simplices).
 #' @param .record Also return branch-and-bound nodes. Use [certify_trace()]
 #'   rather than this directly.
 #' @return A list with `sup_ub`, `sup_lb`, the `random_variable` and `null` it
-#'   holds for, the `method` names that produced it (one per distinct subnull
-#'   geometry), and per-subnull `bounds`, `incumbents`, `iterations`,
+#'   holds for, the `method` names that produced it (one per distinct part
+#'   geometry), and per-part `bounds`, `incumbents`, `iterations`,
 #'   `converged` and `budget_hit`. `budget_hit` flags when a search stopped at
 #'   `max_nodes` with the gap still open, so its bound is valid but likely
 #'   loose.
@@ -588,19 +591,19 @@ certify <- function(
   rlang::check_number_whole(max_coefficients, min = 1, max = 2147483647)
 
   family <- null@family
-  # Get applicable bound method for each subnull.
+  # Get applicable bound method for each part.
   methods <- lapply(
-    null@subnulls,
+    parts(null@region),
     function(s) certify_method(family, s)
   )
-  # Stop if any (family, region) combination is not implemented. Report the
-  # offending subnulls rather than the null model, and deduplicate: a plurality
-  # null has one subnull per candidate and they share a geometry, so the same
+  # Stop if any (family, cell) combination is not implemented. Report the
+  # offending parts rather than the null model, and deduplicate: a plurality
+  # null has one part per candidate and they share a geometry, so the same
   # message would otherwise repeat K - 1 times.
   unavailable <- vapply(methods, is.null, logical(1L))
   if (any(unavailable)) {
     unimpl_msgs <- vapply(
-      null@subnulls[unavailable],
+      parts(null@region)[unavailable],
       function(s) unimplemented_message(family, s),
       character(1L)
     )
@@ -612,35 +615,35 @@ certify <- function(
   }
   method_names <- unique(vapply(methods, function(m) m$name, character(1L)))
 
-  # Group the subnulls by resolved method, run each bound_fn once on its group,
-  # then put the results back in subnull order. With one entry in the registry
+  # Group the parts by resolved method, run each bound_fn once on its group,
+  # then put the results back in part order. With one entry in the registry
   # this is a single group; the grouping is what stops that being an assumption.
   control <- list(
     tol = tol,
     max_nodes = max_nodes,
     max_coefficients = max_coefficients
   )
-  per_subnull <- vector("list", length(null@subnulls))
+  per_part <- vector("list", n_parts(null@region))
   for (name in method_names) {
-    which_subnulls <- which(
+    which_parts <- which(
       vapply(methods, function(m) m$name, character(1L)) == name
     )
-    method <- methods[[which_subnulls[[1L]]]]
+    method <- methods[[which_parts[[1L]]]]
     results <- method$bound_fn(
       x,
       family,
-      null@subnulls[which_subnulls],
+      parts(null@region)[which_parts],
       control
     )
-    check_bound_result(results, name, length(which_subnulls))
-    per_subnull[which_subnulls] <- results
+    check_bound_result(results, name, length(which_parts))
+    per_part[which_parts] <- results
   }
 
-  bounds <- vapply(per_subnull, function(r) r$bound, numeric(1L))
-  incumbents <- vapply(per_subnull, function(r) r$incumbent, numeric(1L))
-  iterations <- vapply(per_subnull, function(r) r$iterations, integer(1L))
-  converged <- vapply(per_subnull, function(r) r$converged, logical(1L))
-  budget_hit <- vapply(per_subnull, function(r) r$budget_hit, logical(1L))
+  bounds <- vapply(per_part, function(r) r$bound, numeric(1L))
+  incumbents <- vapply(per_part, function(r) r$incumbent, numeric(1L))
+  iterations <- vapply(per_part, function(r) r$iterations, integer(1L))
+  converged <- vapply(per_part, function(r) r$converged, logical(1L))
+  budget_hit <- vapply(per_part, function(r) r$budget_hit, logical(1L))
   out <- list(
     sup_ub = max(bounds),
     sup_lb = max(incumbents),
@@ -654,15 +657,15 @@ certify <- function(
     budget_hit = budget_hit
   )
   if (.record) {
-    # Records the tables of the node histories for each subnull. Used by
+    # Records the tables of the node histories for each part. Used by
     # `certify_trace`.
     tables <- lapply(
-      seq_along(per_subnull),
-      function(i) node_table(per_subnull[[i]], i)
+      seq_along(per_part),
+      function(i) node_table(per_part[[i]], i)
     )
     out$record <- do.call(rbind, Filter(Negate(is.null), tables))
-    out$traces <- lapply(per_subnull, function(r) r$trace)
-    out$incumbent_traces <- lapply(per_subnull, function(r) r$incumbent_trace)
+    out$traces <- lapply(per_part, function(r) r$trace)
+    out$incumbent_traces <- lapply(per_part, function(r) r$incumbent_trace)
   }
   out
 }

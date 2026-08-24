@@ -17,7 +17,7 @@ and \code{\link[=draw]{draw()}}, over the outcomes its \code{sample_space} admit
 }
 \details{
 This is the sample-side counterpart of \link{mixing_measure}, which is a law over
-a \link{parameter_space}.
+a \link{convex_region}.
 
 \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
 closed-form outcome law can subclass this directly, supply the two methods,

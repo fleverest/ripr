@@ -63,10 +63,10 @@ at one mixture and ends at another.
 \emph{in}, at the mixture the row stepped from. For \code{\link[=fw_step]{fw_step()}} that is
 \eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
 maximiser, so \code{oracle_value - 1} is the pre-step gap for free; for
-\code{\link[=lb_step]{lb_step()}} it is the Li--Barron objective, which is not a gap. Either way
-\code{oracle_theta} is the point the step proposed, so it is where the atom went
--- when \code{subnull} is not \code{NA}, which is how a row says the step actually
-took the candidate rather than moving away.}
+\code{\link[=lb_step]{lb_step()}} it is the Li--Barron objective, which is not a gap. Either way,
+\code{oracle_theta} is the point the step proposed, which is where the atom went
+when \code{part} is not \code{NA}. This is how a row indicates that the step accepted
+the candidate rather than moving away from it.}
 \item{\code{kl}, \code{gap}, \code{gap_theta}}{The mixture the row \emph{produced}. \code{gap} and
 \code{gap_theta} need \code{record_gap = TRUE} and are \code{NA} otherwise, since the
 sweep is not free.}

@@ -1,6 +1,6 @@
 # Properties of R/state.R.
 #
-# The state carries atoms and weights as lists indexed by subnull, and every
+# The state carries atoms and weights as lists indexed by part, and every
 # piece of arithmetic works on flat vectors instead. Almost everything here is
 # about that boundary holding: the flat views must agree with each other and
 # invert cleanly, or an atom silently changes which chart it is searched in.
@@ -8,7 +8,7 @@
 fixture <- function(snapshot = "none") {
   fam <- multinomial_family(n_trials = 8, k = 3)
   alternative <- induced_distribution(fam, point_mixing(c(0.5, 0.3, 0.2)))
-  subnulls <- lapply(2:3, function(j) {
+  parts <- lapply(2:3, function(j) {
     simplex_region(
       vertices = cbind(
         c(0, 1, 0),
@@ -24,7 +24,7 @@ fixture <- function(snapshot = "none") {
     ),
     weights = list(c(0.5, 0.2), 0.3),
     alternative = alternative,
-    null = null_model(fam, subnulls),
+    null = null_model(fam, parts),
     engine = resolve_engine(exact_engine(), alternative, fam),
     control = ripr_control(snapshot = snapshot),
     trace = empty_trace(),
@@ -49,7 +49,7 @@ test_that("atoms and weights must agree, block by block", {
   )
 })
 
-test_that("there must be one atom block per subnull", {
+test_that("there must be one atom block per part", {
   st <- fixture()
   expect_error(
     S7::set_props(
@@ -57,7 +57,7 @@ test_that("there must be one atom block per subnull", {
       atoms = st@atoms[1],
       weights = list(c(0.5, 0.5))
     ),
-    "one element per subnull"
+    "one element per part"
   )
 })
 
@@ -87,15 +87,15 @@ test_that("the flat views agree with one another", {
   st <- fixture()
   expect_identical(ncol(flat_atoms(st)), 3L)
   expect_length(flat_weights(st), 3L)
-  expect_identical(flat_subnull(st), c(1L, 1L, 2L))
+  expect_identical(flat_part(st), c(1L, 1L, 2L))
 })
 
-test_that("flat ordering is by subnull block, not chronological", {
-  # An atom appended to subnull 1 lands before every atom of subnull 2, however
+test_that("flat ordering is by part block, not chronological", {
+  # An atom appended to part 1 lands before every atom of part 2, however
   # late it was added. Anything reading the flat order as a history is wrong.
   st <- fixture()
   st <- add_atom(st, c(0.45, 0.30, 0.25), 1L, c(0.4, 0.2, 0.1, 0.3))
-  expect_identical(flat_subnull(st), c(1L, 1L, 1L, 2L))
+  expect_identical(flat_part(st), c(1L, 1L, 1L, 2L))
   expect_equal(flat_atoms(st)[, 3L], c(0.45, 0.30, 0.25))
 })
 
@@ -119,8 +119,8 @@ test_that("flattening and unflattening round-trip", {
 })
 
 test_that("empty blocks survive the round trip", {
-  # A subnull with no atoms must stay in the list as a zero-column matrix, or
-  # the block-to-subnull correspondence shifts.
+  # A part with no atoms must stay in the list as a zero-column matrix, or
+  # the block-to-part correspondence shifts.
   expect_identical(
     split_by_sizes(c(0.4, 0.6), c(1L, 0L, 1L)),
     list(0.4, numeric(0), 0.6)
@@ -193,7 +193,7 @@ test_that("record requires kl", {
 
 test_that("unfilled columns come back as NA of the right type", {
   st <- record(fixture(), phase = "em", kl = 0.1)
-  expect_identical(st@trace$subnull, NA_integer_)
+  expect_identical(st@trace$part, NA_integer_)
   expect_identical(st@trace$direction, NA_character_)
   expect_identical(st@trace$gap, NA_real_)
 })

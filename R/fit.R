@@ -23,10 +23,11 @@ NULL
 #' @param alternative The alternative \eqn{Q}{Q}, an [distribution].
 #' @param null A [null_model].
 #' @param engine An engine spec, e.g. [exact_engine()].
-#' @param atoms Optional list of `(d, n_i)` matrices, one per subnull. `NULL`
-#'   places one atom per subnull by projecting the alternative's reference point,
-#'   which is the sensible default and what the examples use. Empty subnulls are
-#'   `ncol = 0` matrices, which the loop handles without a special case.
+#' @param atoms Optional list of `(d, n_i)` matrices, one per part of the
+#'   null region. `NULL` places one atom per part by projecting the
+#'   alternative's reference point, which is the sensible default and what the
+#'   examples use. Empty parts are `ncol = 0` matrices, which the loop handles
+#'   without a special case.
 #' @param weights Optional list matching `atoms`; defaults to uniform.
 #' @param control From [ripr_control()].
 #' @return A [ripr_state] with no iterations run.
@@ -61,12 +62,15 @@ ripr_init <- function(
     } else {
       reference_parameter(null@family)
     }
-    atoms <- lapply(null@subnulls, \(s) matrix(init_point(s, ref), ncol = 1L))
+    atoms <- lapply(
+      parts(null@region),
+      \(s) matrix(init_point(s, ref), ncol = 1L)
+    )
   }
-  if (length(atoms) != length(null@subnulls)) {
+  if (length(atoms) != n_parts(null@region)) {
     stop(
-      "`atoms` must be a list with one element per subnull (",
-      length(null@subnulls),
+      "`atoms` must be a list with one element per part (",
+      n_parts(null@region),
       "), not ",
       length(atoms),
       ".",
@@ -77,7 +81,7 @@ ripr_init <- function(
 
   sizes <- vapply(atoms, ncol, integer(1))
   if (sum(sizes) == 0L) {
-    stop("at least one subnull must carry an atom.", call. = FALSE)
+    stop("at least one part must carry an atom.", call. = FALSE)
   }
   if (is.null(weights)) {
     weights <- lapply(sizes, \(n) rep(1 / sum(sizes), n))
@@ -282,10 +286,10 @@ fw_step <- function(
       # Only Frank--Wolfe steps advance the schedule; EM sweeps between two of
       # them must not.
       gamma_fixed = schedule_gamma(length(flat_weights(state))),
-      at = insert_index(state, found$subnull)
+      at = insert_index(state, found$part)
     )(found$theta)
 
-    stepped <- commit_step(state, found$theta, found$subnull, planned)
+    stepped <- commit_step(state, found$theta, found$part, planned)
     # `planned$log_p` is already the stepped mixture's density, and
     # `commit_step()` does not touch the engine, so the sweep needs no
     # recomputation beyond its own optimisation.
@@ -301,7 +305,7 @@ fw_step <- function(
         gap_theta = swept$theta,
         oracle_value = found$value,
         oracle_theta = found$theta,
-        subnull = if (planned$uses_candidate) found$subnull else NA_integer_,
+        part = if (planned$uses_candidate) found$part else NA_integer_,
         step_size = planned$gamma,
         direction = planned$direction
       )
@@ -373,10 +377,10 @@ lb_step <- function(
       size = size,
       gamma_fixed = schedule_gamma(length(flat_weights(state))),
       correct = correct,
-      at = insert_index(state, found$subnull)
+      at = insert_index(state, found$part)
     )(found$theta)
 
-    stepped <- commit_step(state, found$theta, found$subnull, planned)
+    stepped <- commit_step(state, found$theta, found$part, planned)
     swept <- if (record_gap) {
       linear_gap(stepped, planned$log_p, ld, flat_atoms(stepped))
     }
@@ -389,7 +393,7 @@ lb_step <- function(
         gap_theta = swept$theta,
         oracle_value = found$value,
         oracle_theta = found$theta,
-        subnull = if (planned$uses_candidate) found$subnull else NA_integer_,
+        part = if (planned$uses_candidate) found$part else NA_integer_,
         step_size = planned$gamma,
         direction = planned$direction
       )
@@ -401,7 +405,7 @@ lb_step <- function(
 #' EM sweep
 #'
 #' Each sweep updates every weight, then moves every atom within its own
-#' subnull. The support neither grows nor shrinks: only an oracle method such as
+#' part. The support neither grows nor shrinks: only an oracle method such as
 #' [fw_step()] or [lb_step()] can add an atom to the mixture.
 #'
 #' @inheritParams fw_step
@@ -560,7 +564,7 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'   the returned mixture, `gap_fit` (the last Frank--Wolfe gap recorded during
 #'   fitting, `NA` if none was), `gap_final` (a fresh Frank--Wolfe gap over the
 #'   returned mixture, `NA` unless `record_gap = TRUE`), `rounds`, `atoms`,
-#'   `weights`, `subnull`, `trace` and `snapshots`.
+#'   `weights`, `part`, `trace` and `snapshots`.
 #' @references
 #'   \insertRef{FercoqGramfortSalmon2015}{ripr}
 #' @examples
@@ -659,7 +663,7 @@ ripr_finish <- function(
     rounds = rounds,
     atoms = state@atoms,
     weights = state@weights,
-    subnull = flat_subnull(state)[keep],
+    part = flat_part(state)[keep],
     trace = state@trace,
     snapshots = state@snapshots
   )

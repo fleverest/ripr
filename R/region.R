@@ -1,45 +1,145 @@
 #' @include sample_space.R
 NULL
 
-#' Parameter spaces
+# --- The region hierarchy -----------------------------------------------------
+
+#' Regions of a parameter space
 #'
-#' A `parameter_space` is a convex set of parameter values. The same type serves
-#' two roles. A family's own \eqn{\Theta}{Theta} is one, and so is each convex
-#' piece \eqn{\Theta_{0i}}{Theta_0i} of a null hypothesis
-#' \eqn{\Theta_0 = \bigcup_i \Theta_{0i}}{Theta_0 = union_i Theta_0i}. A null's
-#' pieces may overlap.
+#' A `region` is a subset of a family's parameter space: the set a null
+#' hypothesis is stated over, or the support of a truncated prior. The `_region`
+#' suffix marks the parameter space side of the package throughout, as `_space`
+#' marks the sample space side.
 #'
-#' A `parameter_space` object encodes the geometry: it encodes dimension,
+#' `region` is abstract and splits in two. A [convex_region] is one that is
+#' convex, and carries the geometry: [space_dim()], [contains()], [project()],
+#' and a [chart()] to optimise in. A [union_region] is a finite union of convex
+#' regions, and need not be convex.
+#'
+#' Every region answers [parts()] and [cells()]. `parts()` gives the convex
+#' regions it was *declared* as; `cells()` gives the convex regions the
+#' algorithms *decompose* it into. They agree on every geometry the package
+#' currently has, but if one is triangulated they will differ.
+#'
+#' Part and cell are roles, not types. The same [simplex_region()] is a part
+#' when a user declares it as a piece of a plurality null, and a cell when a
+#' triangulation produces it from a [polytope_region()]. That is why neither
+#' word appears in a class name.
+#' @examples
+#' # Every convex_region is a region:
+#' s <- simplex_region(vertices = diag(3))
+#' S7::S7_inherits(s, region)
+#' S7::S7_inherits(s, convex_region)
+#'
+#' # A union of them is a region, but not a convex one:
+#' u <- union_region(s, halfspace_region(normal = c(1, -1, 0)))
+#' S7::S7_inherits(u, region)
+#' S7::S7_inherits(u, convex_region)
+#' @export
+region <- new_class("region", abstract = TRUE)
+
+
+#' The convex regions a region was declared as
+#'
+#' What the caller asked for, unchanged. A convex region is its own only part.
+#'
+#' Contrast [cells()], which is what the algorithms decompose a region into.
+#' Use `parts()` when reporting what was declared, and `cells()` when feeding an
+#' optimiser or an enclosure, or for visualisation.
+#' @param space A [region].
+#' @return A list of [convex_region] objects.
+#' @examples
+#' s <- simplex_region(vertices = diag(3))
+#' parts(s)
+#' parts(union_region(s, halfspace_region(normal = c(1, -1, 0))))
+#' @export
+parts <- new_generic("parts", "space", function(space) S7::S7_dispatch())
+
+
+method(parts, region) <- function(space) list(space)
+
+
+#' Number of convex regions a region was declared as
+#' @inheritParams parts
+#' @return Integer.
+#' @examples
+#' n_parts(simplex_region(vertices = diag(3)))
+#' @export
+n_parts <- function(space) length(parts(space))
+
+
+#' The convex regions a region decomposes into for optimisation
+#'
+#' Every region is its own only cell unless it says otherwise. A region that is
+#' a union of convex pieces returns those pieces here, and a geometry that can
+#' be triangulated will return its triangulation. Things that search or enclose
+#' then run on each convex cell, without needing to know which region it came
+#' from.
+#'
+#' Cells may overlap. This is fine for our case because a supremum over a union
+#' is a supremum over any cover. Overlaps may cost time but the results will
+#' still be valid.
+#'
+#' Contrast [parts()], which is what the region was declared as.
+#' @param space A [region].
+#' @return A list of [convex_region] objects whose union is `space`.
+#' @examples
+#' cells(simplex_region(vertices = diag(3)))
+#' @export
+cells <- new_generic("cells", "space", function(space) S7::S7_dispatch())
+
+
+method(cells, region) <- function(space) list(space)
+
+
+#' Number of convex regions a region decomposes into
+#' @inheritParams cells
+#' @return Integer.
+#' @examples
+#' n_cells(simplex_region(vertices = diag(3)))
+#' @export
+n_cells <- function(space) length(cells(space))
+
+
+# --- Convex regions -----------------------------------------------------------
+
+#' Convex regions
+#'
+#' A `convex_region` is a convex subset of a family's parameter space. The same
+#' type serves two roles. A family's own \eqn{\Theta}{Theta} is one, and so is
+#' each convex piece \eqn{\Theta_{0i}}{Theta_0i} of a null hypothesis
+#' \eqn{\Theta_0 = \bigcup_i \Theta_{0i}}{Theta_0 = union_i Theta_0i}. A
+#' null's pieces may overlap.
+#'
+#' A `convex_region` object encodes the geometry: it encodes dimension,
 #' membership checking, projection, and a [chart()] that maps unconstrained
-#' coordinates to the space. The oracle is written once against the chart, so
-#' a new geometry needs no optimisation code.
+#' coordinates to the region.
 #'
-#' The contrast with [sample_space] is that these are searched over: outcomes
-#' only ever need validating, whereas parameters need coordinates for a
-#' optimiser to search over, which is what [chart()] supplies. There may be
+#' Not to be confused with [sample_space]. Outcomes from a sample space are
+#' only validated, but in this package parameters need coordinates for a
+#' optimiser to search over, which is what [chart()] is for. There may be
 #' null geometries that do not permit a [chart()], but these are currently
 #' beyond the scope of this package.
 #' @examples
-#' # `parameter_space` is abstract; polytope_region(), simplex_region(),
-#' # halfspace_region(), point_region() and real_region() subclass it, e.g.
+#' # `convex_region` is abstract; polytope_region(), simplex_region(),
+#' # halfspace_region(), point_region() and unconstrained_region() subclass it:
 #' s <- simplex_region(vertices = diag(3))
-#' S7::S7_inherits(s, parameter_space)
+#' S7::S7_inherits(s, convex_region)
 #' space_dim(s)
 #' @export
-parameter_space <- new_class("parameter_space", abstract = TRUE)
+convex_region <- new_class("convex_region", parent = region, abstract = TRUE)
 
 
 #' Unconstrained coordinate chart for a parameter space
 #'
 #' Returns a list of closures that define mappings between the parameter space
-#' and an unconstrained coordinate space, which is what lets BFGS run on a
+#' and an unconstrained coordinate space, which is what lets BFGS run on the
 #' constrained set.
 #'
 #' Charts for a compact space generally cover only the relative interior, so
 #' an optimiser never exactly solves a maximum attained at a vertex or at
 #' infinity, though at this point we are in the realm of numerical precision
 #' anyway.
-#' @param space A [parameter_space].
+#' @param space A [convex_region].
 #' @return A list of closures comprising:
 #' \describe{
 #'   \item{`n_par`}{dimension of the coordinate space.}
@@ -63,7 +163,7 @@ chart <- new_generic("chart", "space", function(space) S7::S7_dispatch())
 
 
 #' Does a parameter vector belong to the space?
-#' @param space A [parameter_space].
+#' @param space A [convex_region].
 #' @param theta Parameter vector.
 #' @param tol Tolerance.
 #' @return `TRUE` or `FALSE`.
@@ -83,7 +183,7 @@ contains <- new_generic(
 #'
 #' The closest point of the space to `theta`. Idempotent up to tolerance, and
 #' its output always satisfies [contains()].
-#' @param space A [parameter_space].
+#' @param space A [convex_region].
 #' @param theta Parameter vector.
 #' @return A parameter vector in the space.
 #' @examples
@@ -99,8 +199,8 @@ project <- new_generic(
 
 #' A starting atom in a parameter space
 #'
-#' Defaults to projecting a reference point, typically the alternative's mean.
-#' @param space A [parameter_space].
+#' Defaults to projecting a reference point, e.g. the alternative's mean.
+#' @param space A [convex_region].
 #' @param ref Reference parameter vector.
 #' @return A parameter vector in the space.
 #' @examples
@@ -114,28 +214,7 @@ init_point <- new_generic(
 )
 
 
-method(init_point, parameter_space) <- function(space, ref) project(space, ref)
-
-
-#' The convex pieces a space decomposes into for optimisation
-#'
-#' Every space is its own only piece unless it says otherwise. A geometry that
-#' is a union of convex cells (e.g. a triangulated polytope) returns those
-#' cells here. Things that search or enclose then run on each convex piece,
-#' without needing to know which geometry it came from.
-#'
-#' Pieces may overlap. This is fine for our case because a supremum over a
-#' union is a supremum over any cover. Overlaps may cost time but the results
-#' will still be valid.
-#' @param space A [parameter_space].
-#' @return A list of [parameter_space] objects whose union is `space`.
-#' @examples
-#' pieces(simplex_region(vertices = diag(3)))
-#' @export
-pieces <- new_generic("pieces", "space", function(space) S7::S7_dispatch())
-
-
-method(pieces, parameter_space) <- function(space) list(space)
+method(init_point, convex_region) <- function(space, ref) project(space, ref)
 
 
 #' Bundle an objective for [maximise_over()]
@@ -173,10 +252,10 @@ objective <- function(value, grad, value_batch = NULL) {
 #' guarantees is at least 1, and a duality gap computed from it would come out
 #' spuriously negative.
 #'
-#' @param space A [parameter_space].
+#' @param space A [convex_region].
 #' @param obj An [objective()].
 #' @param seeds Optional `(d, m)` matrix of parameter-space points to seed from.
-#'   Projected onto `space` before use, so points on other subnulls are fine.
+#'   Projected onto `space` before use, so points on other parts are fine.
 #' @param n_seeds Random seeds drawn from the chart.
 #' @param n_restarts How many of the best seeds to refine.
 #' @return `list(theta = , value = )` with `theta` in the space.
@@ -305,7 +384,7 @@ softplus_inv <- function(t) log(expm1(pmax(t, 1e-12)))
 sigmoid <- function(s) 1 / (1 + exp(-s))
 
 
-# --- Polytope region ---------------------------------------------------------
+# --- Polytope region ----------------------------------------------------------
 
 #' The left pseudo-inverse of a vertex matrix, for barycentric recovery
 #' @keywords internal
@@ -350,7 +429,7 @@ vertex_pinv <- function(vertices) {
 #' @export
 polytope_region <- new_class(
   "polytope_region",
-  parent = parameter_space,
+  parent = convex_region,
   properties = list(
     vertices = new_property(
       class_any,
@@ -579,7 +658,7 @@ simplex_region <- new_class(
 #' @export
 halfspace_region <- new_class(
   "halfspace_region",
-  parent = parameter_space,
+  parent = convex_region,
   properties = list(
     normal = class_numeric,
     offset = class_numeric,
@@ -688,7 +767,7 @@ method(contains, halfspace_region) <- function(space, theta, tol = 1e-8) {
 #' @export
 point_region <- new_class(
   "point_region",
-  parent = parameter_space,
+  parent = convex_region,
   properties = list(theta = class_numeric)
 )
 
@@ -714,9 +793,9 @@ method(contains, point_region) <- function(space, theta, tol = 1e-8) {
 }
 
 
-# --- Real region --------------------------------------------------------------
+# --- Unconstrained region -----------------------------------------------------
 
-#' The whole of `R^d` as a parameter space
+#' The whole of `R^d` as a region
 #'
 #' The unconstrained case: \eqn{\Theta = \mathbb{R}^d}{Theta = R^d}, with the
 #' identity chart. This is the parameter space of a [gaussian_family()], and the
@@ -725,15 +804,19 @@ method(contains, point_region) <- function(space, theta, tol = 1e-8) {
 #' Being unbounded it has no vertices, so like [halfspace_region()] it admits no
 #' certified gap bound.
 #'
+#' The name says what the region is, rather than what it is made of: a
+#' [real_space] is a *sample* space, and the two were too easy to confuse while
+#' this one carried the same `real_` prefix.
+#'
 #' @param d Integer dimension.
-#' @return A `real_region`.
+#' @return An `unconstrained_region`.
 #' @examples
-#' real_region(2L)
-#' project(real_region(2L), c(3, -1))
+#' unconstrained_region(2L)
+#' project(unconstrained_region(2L), c(3, -1))
 #' @export
-real_region <- new_class(
-  "real_region",
-  parent = parameter_space,
+unconstrained_region <- new_class(
+  "unconstrained_region",
+  parent = convex_region,
   properties = list(n_dim = class_numeric),
   constructor = function(d) {
     d <- as.integer(d)
@@ -747,10 +830,12 @@ real_region <- new_class(
 )
 
 
-method(space_dim, real_region) <- function(space) as.integer(space@n_dim)
+method(space_dim, unconstrained_region) <- function(space) {
+  as.integer(space@n_dim)
+}
 
 
-method(chart, real_region) <- function(space) {
+method(chart, unconstrained_region) <- function(space) {
   d <- as.integer(space@n_dim)
   list(
     n_par = d,
@@ -764,9 +849,206 @@ method(chart, real_region) <- function(space) {
 }
 
 
-method(project, real_region) <- function(space, theta) as.vector(theta)
+method(project, unconstrained_region) <- function(space, theta) as.vector(theta)
 
 
-method(contains, real_region) <- function(space, theta, tol = 1e-8) {
+method(contains, unconstrained_region) <- function(space, theta, tol = 1e-8) {
   length(theta) == as.integer(space@n_dim) && all(is.finite(theta))
+}
+
+
+# --- Union region -------------------------------------------------------------
+
+#' A finite union of convex regions
+#'
+#' The union \eqn{\bigcup_i \Theta_{0i}}{union_i Theta_0i} of finitely many
+#' [convex_region]s, which generally is not convex. A null hypothesis is one
+#' such union, and so is the support of a truncated prior, so the union is
+#' worth a type of its own rather than an untyped list passed around by
+#' whoever happens to hold it.
+#'
+#' A `union_region` is a [region] but deliberately **not** a [convex_region].
+#' [chart()], [project()], `maximise_over()` assume convexity, and a union of
+#' convex sets is not convex. What this class does implement is [space_dim()]
+#' [contains()], [parts()] and [cells()].
+#'
+#' Given exactly one convex region, `union_region()` returns it unchanged.
+#'
+#' @param ... [convex_region] objects, other `union_region` objects, and lists
+#'   of either, in any combination and any nesting. A `union_region` argument
+#'   flattens rather than nests.
+#' @return A `union_region`, or the lone [convex_region] it was given.
+#' @section Properties:
+#' \describe{
+#'   \item{`parts`}{The flat list of convex cells, as declared.}
+#'   \item{`disjoint`}{`NULL`. A cache for a disjoint decomposition, filled by
+#'   a later phase; nothing computes it yet.}
+#'   \item{`triangulation`}{`NULL`. A cache for a simplicial decomposition, on
+#'   the same terms.}
+#' }
+#' @examples
+#' # The K = 3 plurality null: two overlapping sub-simplices.
+#' union_region(
+#'   simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'   simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#' )
+#'
+#' # Nesting is flattened, so these agree:
+#' s <- simplex_region(vertices = diag(3))
+#' h <- halfspace_region(normal = c(1, -1, 0))
+#' n_parts(union_region(s, h))
+#' n_parts(union_region(list(s, h)))
+#' n_parts(union_region(union_region(s), list(h)))
+#'
+#' # One cell is already a region, so it is handed back as it came:
+#' identical(union_region(s), s)
+#' @export
+union_region <- new_class(
+  "union_region",
+  parent = region,
+  properties = list(
+    parts = class_list,
+    disjoint = class_any,
+    triangulation = class_any
+  ),
+  constructor = function(...) {
+    flat <- flatten_parts(list(...))
+    if (length(flat) == 1L && S7_inherits(flat[[1L]], convex_region)) {
+      return(flat[[1L]])
+    }
+    new_object(
+      S7_object(),
+      parts = flat,
+      disjoint = NULL,
+      triangulation = NULL
+    )
+  },
+  validator = function(self) {
+    if (length(self@parts) == 0L) {
+      return("`parts` must be a non-empty list")
+    }
+    ok <- vapply(
+      self@parts,
+      \(p) S7_inherits(p, convex_region),
+      logical(1)
+    )
+    if (!all(ok)) {
+      return("every element of `parts` must be a `convex_region`")
+    }
+    # Cells of differing dimension have no common ambient space to union in,
+    # and comparing one against a parameter would silently recycle rather than
+    # complain. Both dimensions are named, since neither is more wrong.
+    dims <- vapply(self@parts, space_dim, integer(1))
+    if (length(unique(dims)) > 1L) {
+      return(paste0(
+        "every element of `parts` must have the same dimension; got ",
+        paste(unique(dims), collapse = ", ")
+      ))
+    }
+    NULL
+  }
+)
+
+
+#' Flatten union-ish input into a list of convex parts
+#'
+#' Descends bare lists, unwraps unions into their own parts, and leaves anything
+#' else alone as a leaf for the validator to name.
+#' @keywords internal
+#' @noRd
+flatten_parts <- function(x) {
+  if (S7_inherits(x, union_region)) {
+    return(x@parts)
+  }
+  if (S7_inherits(x, convex_region)) {
+    return(list(x))
+  }
+  if (is.list(x) && !S7_inherits(x)) {
+    return(c(list(), unlist(lapply(x, flatten_parts), recursive = FALSE)))
+  }
+  list(x)
+}
+
+
+#' Coerce region-ish input to a [region]
+#'
+#' A [region] passes through untouched; a list becomes a [union_region] of its
+#' elements, which for a one-element list is that element itself.
+#' @param x A [region], or a list of them.
+#' @return A [region].
+#' @keywords internal
+#' @noRd
+as_region <- function(x) {
+  if (S7_inherits(x, region)) x else union_region(x)
+}
+
+
+method(space_dim, union_region) <- function(space) {
+  # The validator has already established that there is at least one part and
+  # that they agree, so the first one speaks for all of them.
+  space_dim(space@parts[[1L]])
+}
+
+
+method(contains, union_region) <- function(space, theta, tol = 1e-8) {
+  any(vapply(space@parts, \(p) contains(p, theta, tol), logical(1)))
+}
+
+
+method(parts, union_region) <- function(space) space@parts
+
+
+#' @description A union's cells are its parts' cells, flattened: the parts are
+#'   what was declared, the cells are what the algorithms run on.
+#' @rdname cells
+#' @usage NULL
+method(cells, union_region) <- function(space) {
+  unlist(lapply(space@parts, cells), recursive = FALSE)
+}
+
+
+#' The count of cells, as it should read in a message
+#' @keywords internal
+#' @noRd
+parts_label <- function(n) sprintf("%d part%s", n, if (n == 1L) "" else "s")
+
+
+#' @rdname union_region
+#' @usage NULL
+#' @export
+method(print, union_region) <- function(x, ...) {
+  n <- length(x@parts)
+  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("  ", parts_label(n), ", dimension ", space_dim(x), "\n", sep = "")
+  # The cells share a dimension, so the header has already said it and the
+  # class name is all that is left to distinguish them. One line each while
+  # that is readable, a tally beyond it: a triangulated null can hold hundreds
+  # of cells, and listing them tells the reader nothing the tally does not.
+  named <- vapply(x@parts, \(p) attr(S7_class(p), "name"), character(1))
+  if (n <= 6L) {
+    for (nm in named) {
+      cat("    ", nm, "\n", sep = "")
+    }
+  } else {
+    tally <- table(named)
+    for (nm in names(tally)) {
+      cat("    ", tally[[nm]], " x ", nm, "\n", sep = "")
+    }
+  }
+  invisible(x)
+}
+
+
+#' @description `format()` gives the same summary on one line, without the class
+#'   banner and the per-cell listing that `print()` adds.
+#' @rdname union_region
+#' @usage NULL
+#' @export
+method(format, union_region) <- function(x, ...) {
+  sprintf(
+    "%s: %s, dimension %d",
+    attr(S7_class(x), "name"),
+    parts_label(length(x@parts)),
+    space_dim(x)
+  )
 }

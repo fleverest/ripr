@@ -3,13 +3,13 @@
 # The only property that really matters is one-sidedness: `sup_ub` must never be
 # below the true supremum.
 #
-# The reference is a dense barycentric grid over each subnull. This is a *lower*
+# The reference is a dense barycentric grid over each part. This is a *lower*
 # bound on the true supremum, so `sup_ub >= grid` is a necessary condition but
 # not sufficient. It doesn't prove validity enclosure, but may catch something
 # going horribly wrong with certification.
 
 # The plurality null H_0 = union_j {theta : theta_1 <= theta_j}, as simplices.
-plurality_subnulls <- function(k) {
+plurality_parts <- function(k) {
   lapply(2:k, function(j) {
     vertices <- diag(k)
     vertices[, 1L] <- replace(numeric(k), c(1L, j), 0.5)
@@ -19,7 +19,7 @@ plurality_subnulls <- function(k) {
 
 plurality_null <- function(n, k) {
   family <- multinomial_family(n_trials = n, k = k)
-  null_model(family, plurality_subnulls(k))
+  null_model(family, plurality_parts(k))
 }
 
 # A random variable pinned to given values on the support, so the tests do not
@@ -51,7 +51,7 @@ facet_grid_max <- function(family, values, vertices, m = 60L) {
 
 null_grid_max <- function(null, values, m = 60L) {
   max(vapply(
-    null@subnulls,
+    parts(null@region),
     function(s) facet_grid_max(null@family, values, s@vertices, m),
     numeric(1L)
   ))
@@ -132,7 +132,7 @@ test_that("dividing by the bound gives an e-variable", {
     ))
   }
 
-  for (s in null@subnulls) {
+  for (s in parts(null@region)) {
     weights <- matrix(stats::rgamma(4L * 200L, shape = 1), nrow = 4L)
     theta <- s@vertices %*% div_by_col(weights, colSums(weights))
     expect_lte(max(expectations(theta)), 1)
@@ -140,7 +140,7 @@ test_that("dividing by the bound gives an e-variable", {
 
   tight <- c(
     vapply(
-      null@subnulls,
+      parts(null@region),
       function(s) max(expectations(s@vertices)),
       numeric(1L)
     ),
@@ -185,7 +185,7 @@ test_that("a variable maximised at a facet vertex needs no subdivision", {
   expect_equal(res$sup_ub, (3 * max(q))^n, tolerance = 1e-9)
   expect_equal(
     res$bounds,
-    rep((3 * max(q))^n, length(null@subnulls)),
+    rep((3 * max(q))^n, length(parts(null@region))),
     tolerance = 1e-9
   )
 
@@ -205,7 +205,7 @@ test_that("a variable maximised in a facet interior does need subdivision", {
   expect_lt(
     res$sup_ub,
     max(vapply(
-      null@subnulls,
+      parts(null@region),
       function(s) {
         certify_sup(
           list(list(V = s@vertices, coef = values)),
@@ -232,7 +232,7 @@ test_that("the certified bound is a bound on the expectation itself", {
   values <- stats::runif(nrow(outcomes), 0, 10)
   res <- certify(tabulated_rv(family, values), null, tol = 1e-9)
 
-  for (s in null@subnulls) {
+  for (s in parts(null@region)) {
     weights <- matrix(stats::rgamma(3L * 300L, shape = 1), nrow = 3L)
     theta <- s@vertices %*% div_by_col(weights, colSums(weights))
     expectations <- as.vector(
@@ -244,13 +244,13 @@ test_that("the certified bound is a bound on the expectation itself", {
 
 # --- Return shape -------------------------------------------------------------
 
-test_that("certify() reports one entry per subnull", {
+test_that("certify() reports one entry per part", {
   set.seed(105)
   null <- plurality_null(n = 6L, k = 4L)
   values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   res <- certify(tabulated_rv(null@family, values), null, tol = 1e-6)
 
-  n_sub <- length(null@subnulls)
+  n_sub <- length(parts(null@region))
   expect_length(res$bounds, n_sub)
   expect_length(res$incumbents, n_sub)
   expect_length(res$iterations, n_sub)
@@ -288,9 +288,9 @@ test_that("converged and budget_hit distinguish the two ways of stopping", {
 
   starved <- certify(x, null, tol = 1e-12, max_nodes = 2L)
   expect_true(any(starved$budget_hit))
-  # Mutually exclusive per subnull: a search stops one way or the other.
+  # Mutually exclusive per part: a search stops one way or the other.
   expect_false(any(starved$converged & starved$budget_hit))
-  # Every subnull that ran out of budget used all of it.
+  # Every part that ran out of budget used all of it.
   expect_true(all(starved$iterations[starved$budget_hit] == 2L))
 
   # The starved bound is still valid, just looser -- which is the whole reason
@@ -311,15 +311,15 @@ test_that("certify_trace() records every node, and they tile at every step", {
 
   expect_s3_class(nodes, "data.frame")
   iterations <- attr(nodes, "certificate")$iterations
-  for (i in seq_along(null@subnulls)) {
-    rows <- nodes[nodes$subnull == i, ]
+  for (i in seq_along(parts(null@region))) {
+    rows <- nodes[nodes$part == i, ]
     it <- iterations[[i]]
     # `it` splits create two children each, on top of the seed.
     expect_identical(nrow(rows), 1L + 2L * it)
     expect_identical(sum(rows$fate == "split"), it)
     expect_identical(sum(rows$fate != "split"), it + 1L)
 
-    seed_volume <- abs(det(null@subnulls[[i]]@vertices))
+    seed_volume <- abs(det(parts(null@region)[[i]]@vertices))
     for (t in unique(c(0L, seq_len(it)))) {
       drawn <- rows[
         rows$born <= t & !(rows$fate == "split" & rows$retired <= t),
@@ -339,8 +339,8 @@ test_that("certify_trace() records the tree and the order it was built in", {
   nodes <- certify_trace(x, null, tol = 1e-9)
 
   iterations <- attr(nodes, "certificate")$iterations
-  for (i in unique(nodes$subnull)) {
-    rows <- nodes[nodes$subnull == i, ]
+  for (i in unique(nodes$part)) {
+    rows <- nodes[nodes$part == i, ]
     it <- iterations[[i]]
 
     # Every id issued appears exactly once, so no node goes unrecorded.
@@ -387,8 +387,8 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
   expect_true(all(vapply(nodes$vertices, is.matrix, logical(1L))))
 
   bounds <- attr(nodes, "certificate")$bounds
-  for (i in unique(nodes$subnull)) {
-    rows <- nodes[nodes$subnull == i, ]
+  for (i in unique(nodes$part)) {
+    rows <- nodes[nodes$part == i, ]
     expect_lte(max(rows$upper[rows$fate != "split"]), bounds[[i]] + 1e-9)
 
     parents <- rows[match(rows$parent, rows$id), ]
@@ -413,14 +413,14 @@ test_that("certify() does not record unless asked", {
 
 # --- Registry dispatch --------------------------------------------------------
 
-test_that("certify() sends each subnull to the bound_fn that claimed it", {
+test_that("certify() sends each part to the bound_fn that claimed it", {
   # The reason the registry exists. With one entry the grouping is trivially
   # the identity, so this stubs a second entry to check that results are not
   # merely produced but land in the right slots.
   seen <- list()
-  fake_bound_fn <- function(x, family, subnulls, control) {
-    seen[[length(seen) + 1L]] <<- vapply(subnulls, class_name, character(1L))
-    lapply(seq_along(subnulls), function(i) {
+  fake_bound_fn <- function(x, family, parts, control) {
+    seen[[length(seen) + 1L]] <<- vapply(parts, class_name, character(1L))
+    lapply(seq_along(parts), function(i) {
       list(
         bound = 99,
         incumbent = 99,
@@ -438,14 +438,14 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
         list(
           name = "bernstein",
           family = multinomial_family,
-          region = bernstein_compatible,
+          accepts = bernstein_compatible,
           bound_fn = bernstein_bound,
           description = "real"
         ),
         list(
           name = "fake",
           family = multinomial_family,
-          region = \(s) S7_inherits(s, halfspace_region),
+          accepts = \(s) S7_inherits(s, halfspace_region),
           bound_fn = fake_bound_fn,
           description = "stub"
         )
@@ -467,11 +467,11 @@ test_that("certify() sends each subnull to the bound_fn that claimed it", {
   x <- tabulated_rv(family, rep(1, nrow(enumerate_space(family@sample_space))))
   res <- certify(x, null, tol = 1e-9)
 
-  # Subnulls 1 and 3 went to the stub, subnull 2 to the real bound_fn
+  # Parts 1 and 3 went to the stub, part 2 to the real bound_fn
   expect_equal(res$bounds[c(1L, 3L)], c(99, 99))
   expect_lt(res$bounds[[2L]], 99)
   expect_setequal(res$method, c("bernstein", "fake"))
-  # The stub was called once, with both of its subnulls together.
+  # The stub was called once, with both of its parts together.
   expect_length(seen, 1L)
   expect_identical(seen[[1L]], c("halfspace_region", "halfspace_region"))
 })
@@ -482,8 +482,8 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
       list(list(
         name = "short",
         family = multinomial_family,
-        region = bernstein_compatible,
-        bound_fn = function(x, family, subnulls, control) list(),
+        accepts = bernstein_compatible,
+        bound_fn = function(x, family, parts, control) list(),
         description = "stub"
       ))
     }
@@ -493,7 +493,7 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
     null@family,
     rep(1, nrow(enumerate_space(null@family@sample_space)))
   )
-  expect_error(certify(x, null), "returned 0 results for 2 subnulls")
+  expect_error(certify(x, null), "returned 0 results for 2 parts")
 })
 
 test_that("check_bound_result() names the field and the bound_fn", {
@@ -698,11 +698,11 @@ test_that("bernstein_compatible() accepts when certification is possible", {
     normal = c(1, -1, 0),
     offset = 0
   )))
-  expect_false(bernstein_compatible(real_region(3L)))
+  expect_false(bernstein_compatible(unconstrained_region(3L)))
 })
 
 
-test_that("the refusal names the subnull, not the null model", {
+test_that("the refusal names the part, not the null model", {
   # The message is meant to say which geometry is missing a bound. Naming the
   # container instead makes it useless.
   family <- gaussian_family(dim = 2L)
@@ -719,7 +719,7 @@ test_that("the refusal names the subnull, not the null model", {
   expect_false(grepl("FALSE", msg, fixed = TRUE))
 })
 
-test_that("the refusal is not repeated once per subnull", {
+test_that("the refusal is not repeated once per part", {
   family <- gaussian_family(dim = 2L)
   null <- null_model(
     family,
@@ -798,10 +798,10 @@ test_that("sup_lb() reports a value the objective actually attains", {
 
   expect_equal(found$sup_lb, expectations(matrix(found$theta, ncol = 1L)))
 
-  expect_true(contains(null@subnulls[[found$subnull]], found$theta))
+  expect_true(contains(parts(null@region)[[found$part]], found$theta))
 
   vertex_best <- max(vapply(
-    null@subnulls,
+    parts(null@region),
     function(s) max(expectations(s@vertices)),
     numeric(1L)
   ))

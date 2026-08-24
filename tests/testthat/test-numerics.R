@@ -105,7 +105,7 @@ test_that("row_logsumexp handles all--Inf rows without NaN", {
 })
 
 test_that("row_logsumexp of a zero-column matrix is -Inf per row", {
-  # log(sum over nothing) = log(0). An empty subnull contributes a zero-column
+  # log(sum over nothing) = log(0). An empty part contributes a zero-column
   # atom matrix, so this path is reached in ordinary use.
   out <- row_logsumexp(matrix(numeric(0), nrow = 3L, ncol = 0L))
   expect_equal(out, rep(-Inf, 3))

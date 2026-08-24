@@ -2,7 +2,7 @@
 % Please edit documentation in R/null.R
 \name{in_null}
 \alias{in_null}
-\title{Does any subnull contain this parameter value?}
+\title{Does the null contain this parameter value?}
 \usage{
 in_null(null, theta, tol = 1e-08)
 }
@@ -17,7 +17,8 @@ in_null(null, theta, tol = 1e-08)
 \code{TRUE} or \code{FALSE}.
 }
 \description{
-Does any subnull contain this parameter value?
+Membership of \eqn{H_0}{H_0}, which is \code{\link[=contains]{contains()}} on the null's region:
+true when any one part holds \code{theta}.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

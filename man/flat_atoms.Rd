@@ -13,11 +13,11 @@ flat_atoms(state)
 \verb{(d, C)} numeric matrix.
 }
 \description{
-Columns are grouped by subnull, in subnull order, and a new atom is appended
-within its own subnull's block. So the flat ordering is not chronological: an
+Columns are grouped by part, in part order, and a new atom is appended
+within its own part's block. So the flat ordering is not chronological: an
 atom added at iteration 5 may sit before one added at iteration 2. The
-blocks themselves are \code{state@atoms}, and \code{\link[=ripr_finish]{ripr_finish()}} reports the subnull
-of each surviving atom in its \code{subnull} element.
+blocks themselves are \code{state@atoms}, and \code{\link[=ripr_finish]{ripr_finish()}} reports the part
+of each surviving atom in its \code{part} element.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

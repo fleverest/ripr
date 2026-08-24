@@ -1,4 +1,4 @@
-# Tests for spaces and regions in R/parameter_space.R.
+# Tests for spaces and regions in R/region.R.
 #
 # The split between `polytope_region` and `simplex_region` exists so that
 # `certify()` can dispatch on a validated class.
@@ -113,20 +113,21 @@ test_that("the subclass inherits every method unchanged", {
   expect_equal(init_point(p, c(1, 0, 0)), init_point(s, c(1, 0, 0)))
 })
 
-# --- pieces() -----------------------------------------------------------------
+# --- parts() and cells() ------------------------------------------------------
 
-test_that("every space is its own only piece by default", {
+test_that("every convex region is its own only part and its own only cell", {
   spaces <- list(
     simplex_region(vertices = diag(3)),
     polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))),
     halfspace_region(normal = c(1, -1), offset = 0),
     point_region(theta = c(0.5, 0.3, 0.2)),
-    real_region(2L)
+    unconstrained_region(2L)
   )
   for (space in spaces) {
-    parts <- pieces(space)
-    expect_type(parts, "list")
-    expect_length(parts, 1L)
-    expect_identical(parts[[1L]], space)
+    for (decomposition in list(parts(space), cells(space))) {
+      expect_type(decomposition, "list")
+      expect_length(decomposition, 1L)
+      expect_identical(decomposition[[1L]], space)
+    }
   }
 })

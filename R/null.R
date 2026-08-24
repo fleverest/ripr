@@ -1,4 +1,4 @@
-#' @include parameter_space.R family.R
+#' @include region.R family.R
 NULL
 
 # --- The null hypothesis ------------------------------------------------------
@@ -10,9 +10,14 @@ NULL
 #' geometry; keeping them together means nothing downstream has to carry them as
 #' separate arguments that could disagree.
 #'
+#' Each convex part of the region is itself a null hypothesis. This package
+#' calls them parts, because [parts()] is what any [region] answers whether
+#' or not it happens to be a null, but the two words mean the same thing here.
+#'
 #' @param family A [parametric_family].
-#' @param subnulls A non-empty list of [parameter_space] objects, the convex
-#'   pieces of the null.
+#' @param region The null's geometry: any [region]. A single [convex_region]
+#'   is stored as it comes, since one convex set is already a region; a list of
+#'   them becomes the [union_region] of its elements.
 #' @return A `null_model`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -27,30 +32,22 @@ NULL
 #' @export
 null_model <- new_class(
   "null_model",
-  properties = list(family = parametric_family, subnulls = class_list),
+  properties = list(family = parametric_family, region = region),
+  constructor = function(family, region) {
+    new_object(S7_object(), family = family, region = as_region(region))
+  },
   validator = function(self) {
-    if (length(self@subnulls) == 0L) {
-      return("`subnulls` must be a non-empty list")
-    }
-    ok <- vapply(
-      self@subnulls,
-      \(s) S7_inherits(s, parameter_space),
-      logical(1)
-    )
-    if (!all(ok)) {
-      return("every element of `subnulls` must be a `parameter_space`")
-    }
-    # A region of the wrong dimension is not a subset of the family's parameter
-    # space, and comparing it against a parameter would silently recycle rather
-    # than complain. Checked here so the error names the call that built it.
+    # `union_region` already validates that its cells are convex regions of one
+    # shared dimension; all that is left is whether it is compatible with
+    # `family`.
     d <- space_dim(self@family@parameter_space)
-    dims <- vapply(self@subnulls, space_dim, integer(1))
-    if (any(dims != d)) {
+    d_region <- space_dim(self@region)
+    if (d_region != d) {
       return(paste0(
-        "every element of `subnulls` must have dimension ",
+        "the null's region must have dimension ",
         d,
         ", matching the family's parameter space; got ",
-        paste(unique(dims[dims != d]), collapse = ", ")
+        d_region
       ))
     }
     NULL
@@ -58,24 +55,10 @@ null_model <- new_class(
 )
 
 
-#' Number of convex pieces in a null
-#' @param null A [null_model].
-#' @return Integer.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' plurality <- null_model(
-#'   fam,
-#'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-#'   )
-#' )
-#' n_subnulls(plurality)
-#' @export
-n_subnulls <- function(null) length(null@subnulls)
-
-
-#' Does any subnull contain this parameter value?
+#' Does the null contain this parameter value?
+#'
+#' Membership of \eqn{H_0}{H_0}, which is [contains()] on the null's region:
+#' true when any one part holds `theta`.
 #' @param null A [null_model].
 #' @param theta Parameter vector.
 #' @param tol Tolerance.
@@ -87,5 +70,5 @@ n_subnulls <- function(null) length(null@subnulls)
 #' in_null(null, c(0.6, 0.2, 0.2))
 #' @export
 in_null <- function(null, theta, tol = 1e-8) {
-  any(vapply(null@subnulls, \(s) contains(s, theta, tol), logical(1)))
+  contains(null@region, theta, tol)
 }

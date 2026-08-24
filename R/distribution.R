@@ -9,7 +9,7 @@ NULL
 #' and [draw()], over the outcomes its `sample_space` admits.
 #'
 #' This is the sample-side counterpart of [mixing_measure], which is a law over
-#' a [parameter_space].
+#' a [convex_region].
 #'
 #' \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
 #' closed-form outcome law can subclass this directly, supply the two methods,

@@ -31,23 +31,31 @@ reference:
   - score
   - kernel_draw
 
-- title: Parameter spaces
+- title: Regions
   desc: >
-    A `parameter_space` is a convex set of parameter values: a family's own
-    `Theta`, or one convex piece of a null. Each owns its geometry --
-    membership, projection, and an unconstrained chart to optimise in.
+    A `region` is any subset of a family's parameter space. A `convex_region`
+    is one that is convex, and handles the geometry: membership, projection,
+    and an unconstrained chart / coordinate system for optimisation. A
+    `union_region` is a finite union of them, and need not be convex; its cells
+    may overlap.  Every region answers `parts()` for what it was declared as and
+    `cells()` for what the algorithms decompose it into.
   contents:
-  - parameter_space
+  - region
+  - convex_region
+  - union_region
   - polytope_region
   - simplex_region
   - halfspace_region
   - point_region
-  - real_region
+  - unconstrained_region
   - chart
   - contains
   - project
   - init_point
-  - pieces
+  - parts
+  - n_parts
+  - cells
+  - n_cells
 
 - title: Null hypotheses
   desc: >
@@ -55,7 +63,6 @@ reference:
     regions.
   contents:
   - null_model
-  - n_subnulls
   - in_null
 
 - title: Distributions

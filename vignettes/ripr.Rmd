@@ -40,7 +40,7 @@ plot_null <- function(
   on.exit(par(op), add = TRUE)
   plot.new()
   plot.window(c(-0.05, 1.05), c(-0.05, 0.92), asp = 1)
-  for (s in null@subnulls) {
+  for (s in parts(null@region)) {
     xy <- tri_xy(s@vertices)
     polygon(
       xy[1, ],
@@ -123,10 +123,9 @@ bound against an uncertified search.
 Take a three-category multinomial distribution (`n = 20`) and the plurality
 null: candidate 1 does not win outright,
 `H0 = union_j {theta : theta_1 <= theta_j}`.
-This null is a union of convex parts -- one region where
-`theta_1 <= theta_2` and another where `theta_1 <= theta_3` -- and each part
-is a simplex, so the plurality null is a single `null_model` holding two
-`simplex_region` subnulls.
+This null is a union of convex parts (one region where `theta_1 <= theta_2`
+and another where `theta_1 <= theta_3`, each part a simplex), so the plurality
+null is a single `null_model` holding two `simplex_region` parts.
 
 ```{r problem}
 K <- 3L
@@ -136,7 +135,7 @@ family <- multinomial_family(n_trials = n, k = K)
 plurality <- null_model(
   family,
   lapply(2:K, function(j) {
-    # The two sub-simplices: one for each subnull.
+    # The two sub-simplices: one for each part.
     vertices <- diag(K)
     vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
     simplex_region(vertices = vertices)
@@ -162,7 +161,7 @@ plot_null(
 )
 ```
 
-The two subnulls overlap, and the alternative sits in the cap above them,
+The two parts overlap, and the alternative sits in the cap above them,
 where candidate 1 leads.
 
 ## Fitting the projection
@@ -412,9 +411,9 @@ than just using the package:
 
 - `?parametric_family` describes the interface a new observation model must
   implement: `compile_loglik()`, `score()` and `kernel_draw()`. `?sample_space`
-  and `?parameter_space` describe the two sets it maps between, and
+  and `?convex_region` describe the two sets it maps between, and
   `?distribution` the laws `fam(theta)` returns.
-- `?parameter_space` and its generics (`chart()`, `contains()`, `project()`)
+- `?convex_region` and its generics (`chart()`, `contains()`, `project()`)
   describe the interface a new convex geometry must implement; `?simplex_region`
   and `?halfspace_region` are the two built-in examples.
 - `?quadrature`, `?exact_engine`, `?mc_engine` and `?gh_engine` describe how

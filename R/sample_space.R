@@ -139,7 +139,7 @@ method(is_finite_space, sample_space) <- function(space) FALSE
 
 #' A short description of a space, for printing
 #'
-#' Works for a [parameter_space] too: all it needs is a class name and
+#' Works for a [region] too: all it needs is a class name and
 #' [space_dim()].
 #' @keywords internal
 #' @noRd

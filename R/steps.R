@@ -97,10 +97,10 @@ NULL
 #'   *in*, at the mixture the row stepped from. For [fw_step()] that is
 #'   \eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
 #'   maximiser, so `oracle_value - 1` is the pre-step gap for free; for
-#'   [lb_step()] it is the Li--Barron objective, which is not a gap. Either way
-#'   `oracle_theta` is the point the step proposed, so it is where the atom went
-#'   -- when `subnull` is not `NA`, which is how a row says the step actually
-#'   took the candidate rather than moving away.}
+#'   [lb_step()] it is the Li--Barron objective, which is not a gap. Either way,
+#'   `oracle_theta` is the point the step proposed, which is where the atom went
+#'   when `part` is not `NA`. This is how a row indicates that the step accepted
+#'   the candidate rather than moving away from it.}
 #'   \item{`kl`, `gap`, `gap_theta`}{The mixture the row *produced*. `gap` and
 #'   `gap_theta` need `record_gap = TRUE` and are `NA` otherwise, since the
 #'   sweep is not free.}
@@ -179,12 +179,12 @@ linear_oracle <- function(state, log_p, ld) {
 #' `seeds` is a parameter rather than `flat_atoms(state)` because
 #' [ripr_finish()] sweeps over a mixture whose atoms have already been dropped
 #' or re-solved, so the state no longer holds them.
-#' @return `list(gap, theta, subnull)`.
+#' @return `list(gap, theta, part)`.
 #' @keywords internal
 #' @noRd
 linear_gap <- function(state, log_p, ld, seeds) {
   found <- search_null(state, linear_oracle(state, log_p, ld), seeds = seeds)
-  list(gap = found$value - 1, theta = found$theta, subnull = found$subnull)
+  list(gap = found$value - 1, theta = found$theta, part = found$part)
 }
 
 #' Directions the Li--Barron inner optimisation may use
@@ -549,7 +549,7 @@ step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
 #' the oracle just found. That is deliberate there and reasonable when the
 #' support is empty and the first atom must become the whole mixture. It is
 #' problematic when there is a reasonable initial support, e.g. defined via
-#' [ripr_init()] placing a considered atom per subnull, while the linear
+#' [ripr_init()] placing a considered atom per part, while the linear
 #' oracle returns the worst-case \eqn{\theta}{theta}, which puts near-zero mass
 #' where \eqn{Q}{Q} has some.
 #'
@@ -736,7 +736,7 @@ em_weight_step <- function(state, wt) {
 #' The M-step for the atoms
 #'
 #' Each atom maximises its own responsibility-weighted log-likelihood over its
-#' own subnull, so an atom cannot migrate between subnulls however the
+#' own part, so an atom cannot migrate between parts however the
 #' responsibilities fall.
 #'
 #' Local only: seeded at the current atom with no random starts. Exploration is
@@ -753,7 +753,7 @@ em_atom_step <- function(state, ld, wt) {
   if (ncol(atoms_flat) == 0L) {
     return(state)
   }
-  idx <- flat_subnull(state)
+  idx <- flat_part(state)
 
   moved <- vapply(
     seq_len(ncol(atoms_flat)),
@@ -781,7 +781,7 @@ em_atom_step <- function(state, ld, wt) {
         }
       )
       maximise_over(
-        state@null@subnulls[[idx[c_i]]],
+        parts(state@null@region)[[idx[c_i]]],
         obj,
         seeds = atoms_flat[, c_i, drop = FALSE],
         n_seeds = 0L,
@@ -797,9 +797,9 @@ em_atom_step <- function(state, ld, wt) {
 
 # --- Step verbs ---------------------------------------------------------------
 
-#' Search every subnull and keep the best candidate
+#' Search every part and keep the best candidate
 #'
-#' Returns the subnull index, its maximiser, and the attained value. `seeds`
+#' Returns the part index, its maximiser, and the attained value. `seeds`
 #' defaults to the current atoms: the identity `sum_c w_c G(theta_c) = 1` forces
 #' `max_c G(theta_c) >= 1`, so including them stops the search reporting a
 #' maximum below one. A caller sweeping over a mixture the state no longer holds
@@ -808,8 +808,12 @@ em_atom_step <- function(state, ld, wt) {
 #' @noRd
 search_null <- function(state, obj, seeds = flat_atoms(state)) {
   ctl <- state@control
+  # Parts, not cells: the index this returns places an atom, and `state@atoms`
+  # is indexed by part. Decomposing a part into cells is `maximise_over()`'s
+  # job, one level down, and the maximum over a part's cells is the maximum
+  # over the part, so nothing is lost by keeping the loop up here on parts.
   found <- lapply(
-    state@null@subnulls,
+    parts(state@null@region),
     \(s) {
       maximise_over(
         s,
@@ -821,7 +825,7 @@ search_null <- function(state, obj, seeds = flat_atoms(state)) {
     }
   )
   best <- which.max(vapply(found, \(f) f$value, numeric(1)))
-  c(found[[best]], list(subnull = best))
+  c(found[[best]], list(part = best))
 }
 
 
@@ -832,9 +836,9 @@ search_null <- function(state, obj, seeds = flat_atoms(state)) {
 #' driven towards zero stay, since only an oracle can grow the support back.
 #' @keywords internal
 #' @noRd
-commit_step <- function(state, theta, subnull, planned) {
+commit_step <- function(state, theta, part, planned) {
   if (planned$uses_candidate) {
-    add_atom(state, theta, subnull, planned$weights)
+    add_atom(state, theta, part, planned$weights)
   } else {
     set_weights(state, planned$weights[-planned$new_idx])
   }

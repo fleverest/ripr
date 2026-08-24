@@ -12,7 +12,7 @@
 plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   fam <- multinomial_family(n_trials = 12, k = k)
   Q <- induced_distribution(fam, point_mixing(theta_star = q))
-  subnulls <- lapply(2:k, function(j) {
+  parts <- lapply(2:k, function(j) {
     basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
       replace(numeric(k), i, 1)
     })
@@ -21,7 +21,7 @@ plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   })
   ripr_init(
     Q,
-    null_model(fam, subnulls),
+    null_model(fam, parts),
     exact_engine(),
     control = ripr_control(n_seeds = 30L, n_restarts = 4L, ...)
   )
@@ -50,14 +50,14 @@ weighted_gain <- function(state) {
   )
 }
 
-in_own_subnull <- function(state) {
+in_own_part <- function(state) {
   all(vapply(
     seq_along(state@atoms),
     function(i) {
       atoms <- state@atoms[[i]]
       all(vapply(
         seq_len(ncol(atoms)),
-        function(j) contains(state@null@subnulls[[i]], atoms[, j], tol = 1e-5),
+        function(j) contains(parts(state@null@region)[[i]], atoms[, j], tol = 1e-5),
         logical(1)
       ))
     },
@@ -67,7 +67,7 @@ in_own_subnull <- function(state) {
 
 # --- Initialisation -----------------------------------------------------------
 
-test_that("ripr_init places one atom per subnull and starts every counter at 0", {
+test_that("ripr_init places one atom per part and starts every counter at 0", {
   st <- plurality()
   expect_length(st@atoms, 3L)
   expect_identical(block_sizes(st), rep(1L, 3L))
@@ -75,8 +75,8 @@ test_that("ripr_init places one atom per subnull and starts every counter at 0",
   expect_identical(st@iters, c(fw = 0L, lb = 0L, em = 0L, weight = 0L))
 })
 
-test_that("initial atoms lie in their own subnulls", {
-  expect_true(in_own_subnull(plurality()))
+test_that("initial atoms lie in their own parts", {
+  expect_true(in_own_part(plurality()))
 })
 
 test_that("initialisation does not depend on the engine's randomness", {
@@ -145,9 +145,9 @@ test_that("the identity survives every verb", {
   }
 })
 
-test_that("every atom stays in the subnull it was found in", {
+test_that("every atom stays in the part it was found in", {
   st <- plurality() |> fw_step(3L) |> em_step(3L) |> lb_step(1L)
-  expect_true(in_own_subnull(st))
+  expect_true(in_own_part(st))
 })
 
 # --- Monotonicity -------------------------------------------------------------
@@ -162,7 +162,7 @@ test_that("KL never increases under a line search", {
 test_that("the fixed schedule does not discard a seeded initialisation", {
   # Frank-Wolfe opens at gamma = 1, replacing the iterate with the atom the
   # oracle just found. Sensible from an empty support, ruinous from a seeded
-  # one: `ripr_init` places a considered atom per subnull, while the oracle
+  # one: `ripr_init` places a considered atom per part, while the oracle
   # returns the worst-case theta, which puts near-zero mass where Q has some.
   # Indexing the schedule by the component count rather than the step count
   # avoids it -- with three initial atoms the first step is 2/5, not 1.
@@ -180,7 +180,7 @@ test_that("the fixed schedule follows Jaggi's sequence in the component count", 
   # step that adds one moves the sequence on by exactly one place.
   st <- fw_step(plurality(), 5L, size = "fixed")
   fw <- st@trace[st@trace$phase == "fw", ]
-  added <- !is.na(fw$subnull)
+  added <- !is.na(fw$part)
   expect_true(all(added))
   expect_equal(fw$step_size, 2 / (fw$support_size + 1))
 })
@@ -250,25 +250,25 @@ test_that("an lb row's gap is swept, not carried over from the row before", {
 
 test_that("oracle_theta is the atom the step added", {
   st <- fw_step(plurality(), 4L)
-  rows <- st@trace[st@trace$phase == "fw" & !is.na(st@trace$subnull), ]
+  rows <- st@trace[st@trace$phase == "fw" & !is.na(st@trace$part), ]
   expect_true(nrow(rows) > 0L)
 
-  # `subnull` names the block the atom entered, so the atom must be in it. The
+  # `part` names the block the atom entered, so the atom must be in it. The
   # atoms have not moved: only an em or weight sweep would shift them.
   for (i in seq_len(nrow(rows))) {
-    block <- st@atoms[[rows$subnull[i]]]
+    block <- st@atoms[[rows$part[i]]]
     gaps <- sqrt(colSums((block - rows$oracle_theta[[i]])^2))
     expect_equal(min(gaps), 0, tolerance = 1e-12)
   }
 })
 
 test_that("an away step records where the oracle looked but adds nothing", {
-  # `oracle_theta` says what the oracle proposed; `subnull` says whether the
+  # `oracle_theta` says what the oracle proposed; `part` says whether the
   # step took it. An away step proposes a point and then moves the other way.
   st <- fw_step(plurality(), 12L, directions = c("forward", "away"))
   away <- st@trace[!is.na(st@trace$direction) & st@trace$direction == "away", ]
   skip_if(nrow(away) == 0L, "no away step was taken")
-  expect_true(all(is.na(away$subnull)))
+  expect_true(all(is.na(away$part)))
   expect_true(all(!is.na(away$oracle_theta)))
 })
 
@@ -337,7 +337,7 @@ test_that("verbs compose in any order", {
     weight_step(3L) |>
     em_step(2L)
   expect_equal(weighted_gain(st), 1, tolerance = 1e-10)
-  expect_true(in_own_subnull(st))
+  expect_true(in_own_part(st))
 })
 
 test_that("only the stepping verbs can grow the support", {
@@ -358,14 +358,14 @@ test_that("directions names a choice, and the trace says which was taken", {
   expect_true(all(taken %in% c("forward", "away")))
 })
 
-test_that("an away step adds no atom and records no subnull", {
+test_that("an away step adds no atom and records no part", {
   st <- fw_step(plurality(), 8L, directions = c("forward", "away"))
   away <- st@trace[!is.na(st@trace$direction) & st@trace$direction == "away", ]
   if (nrow(away) > 0L) {
-    expect_true(all(is.na(away$subnull)))
+    expect_true(all(is.na(away$part)))
   }
   expect_true(all(
-    !is.na(st@trace$subnull[
+    !is.na(st@trace$part[
       !is.na(st@trace$direction) & st@trace$direction == "forward"
     ])
   ))

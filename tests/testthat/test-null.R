@@ -1,10 +1,10 @@
-# Properties of R/parameter_space.R and R/null.R.
+# Properties of R/region.R and R/null.R.
 #
 # The geometry is checked by round-trips and idempotence rather than against
 # stored coordinates, since a chart is only required to be *a* parametrisation,
 # not a particular one.
 
-# The plurality subnull {theta : theta_1 <= theta_j} on the K-simplex, in both
+# The plurality part {theta : theta_1 <= theta_j} on the K-simplex, in both
 # representations, so the two can be checked against each other.
 plurality_simplex <- function(k, j) {
   basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
@@ -26,7 +26,7 @@ plurality_halfspace <- function(k, j) {
 
 # --- Charts -------------------------------------------------------------------
 
-test_that("a chart round-trips points in the subnull", {
+test_that("a chart round-trips points in the part", {
   for (s in list(plurality_simplex(4, 2), plurality_halfspace(4, 2))) {
     ch <- chart(s)
     set.seed(1)
@@ -68,7 +68,7 @@ test_that("the chart Jacobian matches a finite difference", {
   }
 })
 
-test_that("chart seeds land inside the subnull", {
+test_that("chart seeds land inside the part", {
   for (s in list(plurality_simplex(5, 4), plurality_halfspace(5, 4))) {
     ch <- chart(s)
     set.seed(4)
@@ -81,7 +81,7 @@ test_that("chart seeds land inside the subnull", {
 
 # --- Membership and projection ------------------------------------------------
 
-test_that("projection is idempotent and lands in the subnull", {
+test_that("projection is idempotent and lands in the part", {
   set.seed(5)
   for (s in list(plurality_simplex(4, 2), plurality_halfspace(4, 2))) {
     for (i in 1:5) {
@@ -117,7 +117,7 @@ test_that("the two representations agree on membership within the simplex", {
   }
 })
 
-test_that("a simplex subnull contains its own vertices", {
+test_that("a simplex part contains its own vertices", {
   s <- plurality_simplex(4, 3)
   for (i in seq_len(ncol(s@vertices))) {
     expect_true(contains(s, s@vertices[, i], tol = 1e-6))
@@ -212,8 +212,8 @@ test_that("the chart round-trip is lossless in the interior and lossy at a verte
   expect_equal(round_tripped, vertex, tolerance = 1e-6)
 })
 
-test_that("maximise_over accepts seeds lying outside the subnull", {
-  # Atoms live on other subnulls, so seeds are projected before use.
+test_that("maximise_over accepts seeds lying outside the part", {
+  # Atoms live on other parts, so seeds are projected before use.
   s <- plurality_halfspace(3, 2)
   target <- c(0.2, 0.6, 0.2)
   obj <- objective(
@@ -259,11 +259,36 @@ test_that("a supplied batch evaluator is used", {
 
 # --- null_model ---------------------------------------------------------------
 
-test_that("null_model bundles a family with its subnulls", {
+test_that("null_model bundles a family with its parts", {
   fam <- multinomial_family(n_trials = 10, k = 4)
   null <- null_model(fam, lapply(2:4, \(j) plurality_simplex(4, j)))
-  expect_equal(n_subnulls(null), 3L)
+  expect_equal(n_parts(null@region), 3L)
   expect_identical(null@family, fam)
+})
+
+test_that("a null takes its geometry as a part, a list or a union alike", {
+  # `null_model()` coerces, so none of the three needs the caller to know
+  # which form the others take.
+  fam <- multinomial_family(n_trials = 10, k = 3)
+  s1 <- plurality_simplex(3, 2)
+  s2 <- plurality_simplex(3, 3)
+  theta <- c(0.3, 0.5, 0.2)
+
+  from_list <- null_model(fam, list(s1, s2))
+  from_union <- null_model(fam, union_region(s1, s2))
+  expect_equal(n_parts(from_list@region), 2L)
+  expect_equal(n_parts(from_union@region), 2L)
+  expect_identical(from_list@region, from_union@region)
+  expect_equal(in_null(from_list, theta), in_null(from_union, theta))
+
+  # A lone convex region is already a region, so it is stored as it came --
+  # not wrapped in a one-element union.
+  bare <- null_model(fam, s1)
+  wrapped <- null_model(fam, list(s1))
+  expect_identical(bare@region, s1)
+  expect_identical(wrapped@region, s1)
+  expect_equal(n_parts(bare@region), 1L)
+  expect_equal(in_null(bare, theta), in_null(wrapped, theta))
 })
 
 test_that("in_null is the union of the pieces", {
@@ -276,12 +301,12 @@ test_that("in_null is the union of the pieces", {
   expect_true(in_null(null, c(1 / 3, 1 / 3, 1 / 3)))
 })
 
-test_that("null_model rejects an empty or malformed subnull list", {
+test_that("null_model rejects an empty or malformed part list", {
   fam <- multinomial_family(n_trials = 4, k = 2)
   expect_error(null_model(fam, list()), "non-empty")
   expect_error(
     null_model(fam, list("not a region")),
-    "must be a `parameter_space`"
+    "must be a `convex_region`"
   )
 })
 
@@ -303,7 +328,7 @@ test_that("every region reports the dimension of the parameters it holds", {
   expect_equal(space_dim(simplex_region(vertices = diag(3))), 3L)
   expect_equal(space_dim(halfspace_region(normal = c(1, -1, 0))), 3L)
   expect_equal(space_dim(point_region(theta = c(0.5, 0.3, 0.2))), 3L)
-  expect_equal(space_dim(real_region(3L)), 3L)
+  expect_equal(space_dim(unconstrained_region(3L)), 3L)
 })
 
 test_that("a region of the wrong dimension is refused at construction", {
@@ -320,11 +345,17 @@ test_that("a region of the wrong dimension is refused at construction", {
     null_model(fam, list(point_region(theta = c(0.5, 0.5)))),
     "dimension 3"
   )
+  # Parts that disagree with each other fail earlier and for a better reason:
+  # `region`'s validator refuses them before the family is consulted at all,
+  # since a union of a plane and a line has no ambient space to live in.
   expect_error(
-    null_model(fam, list(simplex_region(vertices = diag(3)), real_region(2L))),
-    "dimension 3"
+    null_model(
+      fam,
+      list(simplex_region(vertices = diag(3)), unconstrained_region(2L))
+    ),
+    "same ambient dimension"
   )
-  expect_silent(null_model(fam, list(real_region(3L))))
+  expect_silent(null_model(fam, list(unconstrained_region(3L))))
 })
 
 test_that("a family's parameter space has the family's own dimension", {
@@ -340,14 +371,14 @@ test_that("a family's parameter space has the family's own dimension", {
 # --- The unconstrained region -------------------------------------------------
 
 test_that("a real region contains every finite point and moves none", {
-  r <- real_region(2L)
+  r <- unconstrained_region(2L)
   expect_true(contains(r, c(1e6, -3)))
   expect_false(contains(r, c(Inf, 0)))
   expect_equal(project(r, c(3, -1)), c(3, -1))
 })
 
 test_that("the real region's chart is the identity", {
-  r <- real_region(3L)
+  r <- unconstrained_region(3L)
   ch <- chart(r)
   expect_equal(ch$n_par, 3L)
   theta <- c(0.4, -2, 7)
@@ -367,7 +398,12 @@ test_that("maximise_over finds an interior optimum on a real region", {
     value = function(theta) -sum((theta - target)^2),
     grad = function(theta) -2 * (theta - target)
   )
-  found <- maximise_over(real_region(2L), obj, n_seeds = 50L, n_restarts = 5L)
+  found <- maximise_over(
+    unconstrained_region(2L),
+    obj,
+    n_seeds = 50L,
+    n_restarts = 5L
+  )
   expect_equal(found$theta, target, tolerance = 1e-6)
   expect_equal(found$value, 0, tolerance = 1e-10)
 })

@@ -143,7 +143,7 @@ test_that("a family with no compile_loglik method errors", {
   toy <- new_class("toy_family", parent = parametric_family)
   toy_fam <- toy(
     sample_space = real_space(1L),
-    parameter_space = real_region(1L)
+    parameter_space = unconstrained_region(1L)
   )
   expect_error(compile_loglik(toy_fam, matrix(1:4, nrow = 2)))
 })

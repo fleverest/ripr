@@ -11,7 +11,7 @@
 plurality <- function(n = 12, k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   fam <- multinomial_family(n_trials = n, k = k)
   Q <- induced_distribution(fam, point_mixing(theta_star = q))
-  subnulls <- lapply(2:k, function(j) {
+  parts <- lapply(2:k, function(j) {
     basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
       replace(numeric(k), i, 1)
     })
@@ -20,7 +20,7 @@ plurality <- function(n = 12, k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   })
   ripr_init(
     Q,
-    null_model(fam, subnulls),
+    null_model(fam, parts),
     exact_engine(),
     control = ripr_control(n_seeds = 30L, n_restarts = 4L, ...)
   )
@@ -536,15 +536,15 @@ test_that("identify_support leaves at least one atom", {
 
 # --- EM -----------------------------------------------------------------------
 
-test_that("an EM sweep keeps every atom in its own subnull", {
+test_that("an EM sweep keeps every atom in its own part", {
   # The M-step optimises each component over its own chart, so an atom cannot
-  # migrate between subnulls however the responsibilities fall.
+  # migrate between parts however the responsibilities fall.
   st <- fw_step(plurality(), 2L)
   moved <- em_sweep(st, compile_engine(st@engine))
   for (i in seq_along(moved@atoms)) {
     for (j in seq_len(ncol(moved@atoms[[i]]))) {
       expect_true(contains(
-        st@null@subnulls[[i]],
+        parts(st@null@region)[[i]],
         moved@atoms[[i]][, j],
         tol = 1e-5
       ))

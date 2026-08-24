@@ -22,7 +22,7 @@ The updated \link{ripr_state}.
 }
 \description{
 Each sweep updates every weight, then moves every atom within its own
-subnull. The support neither grows nor shrinks: only an oracle method such as
+part. The support neither grows nor shrinks: only an oracle method such as
 \code{\link[=fw_step]{fw_step()}} or \code{\link[=lb_step]{lb_step()}} can add an atom to the mixture.
 }
 \examples{

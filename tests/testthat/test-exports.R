@@ -49,6 +49,6 @@ test_that("every export appears somewhere in the pkgdown index", {
   expect_setequal(setdiff(getNamespaceExports("ripr"), covered), character())
 })
 
-test_that("flat_subnull is internal", {
-  expect_false("flat_subnull" %in% getNamespaceExports("ripr"))
+test_that("flat_part is internal", {
+  expect_false("flat_part" %in% getNamespaceExports("ripr"))
 })

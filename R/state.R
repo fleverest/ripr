@@ -2,22 +2,22 @@
 NULL
 
 # The state representation of the ripr optimiser: the class, the conversions between
-# the per-subnull atom lists and the flat vectors the arithmetic works on, and the
+# the per-part atom lists and the flat vectors the arithmetic works on, and the
 # trace. `steps.R` and `scheduler.R` both depend on this.
 
 #' State of a RIPr fit
 #'
-#' Atoms and weights are lists indexed by subnull: element `i` holds the atoms
-#' belonging to \eqn{\Theta_{0i}}{Theta_0i}. The subnull tag matters because the
-#' pieces overlap, so an atom in an intersection would otherwise be ambiguous
+#' Atoms and weights are lists indexed by part: element `i` holds the atoms
+#' belonging to \eqn{\Theta_{0i}}{Theta_0i}. The part tag matters because the
+#' parts overlap, so an atom in an intersection would otherwise be ambiguous
 #' about which chart to search in, and a parallel index vector would make that
 #' an invariant to check rather than one to hold structurally. Weights are
-#' normalised across the whole list, not within a subnull.
+#' normalised across the whole list, not within a part.
 #'
 #' You need the constructor only if you are writing a fit loop of your own; in
 #' normal use [ripr_init()] builds the state and the step verbs advance it.
 #'
-#' @param atoms List of `(d, n_i)` matrices, one per subnull.
+#' @param atoms List of `(d, n_i)` matrices, one per part of the null region.
 #' @param weights List of numeric vectors matching `atoms`, summing to 1 overall.
 #' @param alternative The alternative \eqn{Q}{Q}.
 #' @param null A [null_model].
@@ -58,8 +58,8 @@ ripr_state <- new_class(
     if (length(self@atoms) != length(self@weights)) {
       return("`weights` must have one element per element of `atoms`")
     }
-    if (length(self@atoms) != length(self@null@subnulls)) {
-      return("`atoms` must have one element per subnull")
+    if (length(self@atoms) != n_parts(self@null@region)) {
+      return("`atoms` must have one element per part of the null's region")
     }
     sizes <- vapply(self@atoms, ncol, integer(1))
     if (!identical(sizes, vapply(self@weights, length, integer(1)))) {
@@ -67,7 +67,7 @@ ripr_state <- new_class(
     }
     total <- sum(unlist(self@weights))
     if (sum(sizes) > 0L && abs(total - 1) > 1e-8) {
-      return("weights must sum to 1 across all subnulls")
+      return("weights must sum to 1 across all parts")
     }
     if (is.null(names(self@iters))) {
       return("`iters` must be a named integer vector, one name per verb")
@@ -80,11 +80,11 @@ ripr_state <- new_class(
 
 #' All atoms as one `(d, C)` matrix
 #'
-#' Columns are grouped by subnull, in subnull order, and a new atom is appended
-#' within its own subnull's block. So the flat ordering is not chronological: an
+#' Columns are grouped by part, in part order, and a new atom is appended
+#' within its own part's block. So the flat ordering is not chronological: an
 #' atom added at iteration 5 may sit before one added at iteration 2. The
-#' blocks themselves are `state@atoms`, and [ripr_finish()] reports the subnull
-#' of each surviving atom in its `subnull` element.
+#' blocks themselves are `state@atoms`, and [ripr_finish()] reports the part
+#' of each surviving atom in its `part` element.
 #' @param state A [ripr_state].
 #' @return `(d, C)` numeric matrix.
 #' @examples
@@ -126,20 +126,20 @@ flat_atoms <- function(state) {
 #' @export
 flat_weights <- function(state) unlist(state@weights, use.names = FALSE)
 
-#' Which subnull each column of `flat_atoms()` belongs to
+#' Which part each column of `flat_atoms()` belongs to
 #'
 #' Per-atom bookkeeping the fit uses to index back into the null's cells when
 #' it moves an atom. Users reach the same information through
-#' `ripr_finish()$subnull`.
+#' `ripr_finish()$part`.
 #' @param state A [ripr_state].
 #' @return Integer vector.
 #' @keywords internal
 #' @noRd
-flat_subnull <- function(state) {
+flat_part <- function(state) {
   rep(seq_along(state@atoms), block_sizes(state))
 }
 
-#' Number of atoms in each subnull
+#' Number of atoms in each part
 #' @keywords internal
 #' @noRd
 block_sizes <- function(state) vapply(state@atoms, ncol, integer(1))
@@ -147,7 +147,7 @@ block_sizes <- function(state) vapply(state@atoms, ncol, integer(1))
 #' Cut a flat vector into blocks of the given sizes
 #'
 #' Zero-length blocks are kept, so the result always has one element per
-#' subnull.
+#' part.
 #' @keywords internal
 #' @noRd
 split_by_sizes <- function(x, sizes) {
@@ -159,21 +159,21 @@ split_by_sizes <- function(x, sizes) {
   )
 }
 
-#' Redistribute a flat weight vector back into the per-subnull list
+#' Redistribute a flat weight vector back into the per-part list
 #' @keywords internal
 #' @noRd
 unflatten_weights <- function(state, w) split_by_sizes(w, block_sizes(state))
 
-#' Where an atom appended to `subnull_index` lands in the flat ordering
+#' Where an atom appended to `part_index` lands in the flat ordering
 #'
-#' `add_atom` appends within a subnull's own block, so the new column sits at
+#' `add_atom` appends within a part's own block, so the new column sits at
 #' the end of that block rather than at the end of the flat vector. The step
 #' layer inserts the candidate at this index from the outset, which is what
 #' keeps it from having to re-index anything afterwards.
 #' @keywords internal
 #' @noRd
-insert_index <- function(state, subnull_index) {
-  sum(block_sizes(state)[seq_len(subnull_index)]) + 1L
+insert_index <- function(state, part_index) {
+  sum(block_sizes(state)[seq_len(part_index)]) + 1L
 }
 
 #' Replace the weights from a flat vector
@@ -184,7 +184,7 @@ set_weights <- function(state, w) {
   state
 }
 
-#' Append an atom to a subnull and set every weight at once
+#' Append an atom to a part and set every weight at once
 #'
 #' `weights` is the full post-step flat vector of length `C + 1`, with the new
 #' atom's entry at `insert_index`. Atoms and weights are jointly constrained
@@ -192,10 +192,10 @@ set_weights <- function(state, w) {
 #' assignment has to be a single call.
 #' @keywords internal
 #' @noRd
-add_atom <- function(state, theta, subnull_index, weights) {
+add_atom <- function(state, theta, part_index, weights) {
   atoms <- state@atoms
-  atoms[[subnull_index]] <- cbind(
-    atoms[[subnull_index]],
+  atoms[[part_index]] <- cbind(
+    atoms[[part_index]],
     theta,
     deparse.level = 0
   )
@@ -206,7 +206,7 @@ add_atom <- function(state, theta, subnull_index, weights) {
   )
 }
 
-#' Redistribute a flat `(d, C)` atom matrix back into the per-subnull list
+#' Redistribute a flat `(d, C)` atom matrix back into the per-part list
 #' @keywords internal
 #' @noRd
 unflatten_atoms <- function(state, mat) {
@@ -274,7 +274,7 @@ empty_trace <- function() {
     kl = numeric(0),
     gap = numeric(0),
     oracle_value = numeric(0),
-    subnull = integer(0),
+    part = integer(0),
     step_size = numeric(0),
     direction = character(0),
     support_size = integer(0),
@@ -301,7 +301,7 @@ trace_columns <- function() {
     "gap_theta",
     "oracle_value",
     "oracle_theta",
-    "subnull",
+    "part",
     "step_size",
     "direction",
     "support_size",
@@ -325,7 +325,7 @@ record <- function(
   gap_theta = NULL,
   oracle_value = NA_real_,
   oracle_theta = NULL,
-  subnull = NA_integer_,
+  part = NA_integer_,
   step_size = NA_real_,
   direction = NA_character_
 ) {
@@ -339,7 +339,7 @@ record <- function(
     kl = kl,
     gap = gap,
     oracle_value = oracle_value,
-    subnull = as.integer(subnull),
+    part = as.integer(part),
     step_size = step_size,
     direction = direction,
     support_size = length(w),

@@ -4,13 +4,14 @@
 \alias{null_model}
 \title{A null hypothesis: a family together with its parameter region}
 \usage{
-null_model(family = parametric_family(), subnulls = list())
+null_model(family, region)
 }
 \arguments{
 \item{family}{A \link{parametric_family}.}
 
-\item{subnulls}{A non-empty list of \link{parameter_space} objects, the convex
-pieces of the null.}
+\item{region}{The null's geometry: any \link{region}. A single \link{convex_region}
+is stored as it comes, since one convex set is already a region; a list of
+them becomes the \link{union_region} of its elements.}
 }
 \value{
 A \code{null_model}.
@@ -20,6 +21,11 @@ A \code{null_model}.
 The null is a set of \emph{distributions}, so it needs both the model and the
 geometry; keeping them together means nothing downstream has to carry them as
 separate arguments that could disagree.
+}
+\details{
+Each convex part of the region is itself a null hypothesis. This package
+calls them parts, because \code{\link[=parts]{parts()}} is what any \link{region} answers whether
+or not it happens to be a null, but the two words mean the same thing here.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

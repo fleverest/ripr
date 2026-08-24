@@ -37,7 +37,7 @@ A list with \code{W0} (a \link{finite_mixing}), \code{P_star} (a \link{induced_d
 the returned mixture, \code{gap_fit} (the last Frank--Wolfe gap recorded during
 fitting, \code{NA} if none was), \code{gap_final} (a fresh Frank--Wolfe gap over the
 returned mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms},
-\code{weights}, \code{subnull}, \code{trace} and \code{snapshots}.
+\code{weights}, \code{part}, \code{trace} and \code{snapshots}.
 }
 \description{
 Converts a fitted state into a mixture. By default that is all it does: the

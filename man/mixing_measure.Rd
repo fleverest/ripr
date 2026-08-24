@@ -7,7 +7,7 @@
 mixing_measure()
 }
 \description{
-A law \eqn{W}{W} over a family's \link{parameter_space}: a point mass
+A law \eqn{W}{W} over a family's \link{convex_region}: a point mass
 (\code{\link[=point_mixing]{point_mixing()}}) or a finite weighted set of atoms (\code{\link[=finite_mixing]{finite_mixing()}}).
 Pushed through a family's kernel it induces the law \eqn{P_W}{P_W} over
 outcomes; see \code{\link[=induced_distribution]{induced_distribution()}}.

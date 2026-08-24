@@ -75,7 +75,7 @@ gaussian_family <- new_class(
     new_object(
       at_theta,
       sample_space = real_space(dim),
-      parameter_space = real_region(dim),
+      parameter_space = unconstrained_region(dim),
       n_dim = dim,
       sigma = sigma,
       chol_l = t(chol(sigma)),

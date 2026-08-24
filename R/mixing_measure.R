@@ -1,9 +1,9 @@
-#' @include parameter_space.R
+#' @include region.R
 NULL
 
 #' Mixing measure over a family's parameter space
 #'
-#' A law \eqn{W}{W} over a family's [parameter_space]: a point mass
+#' A law \eqn{W}{W} over a family's [convex_region]: a point mass
 #' ([point_mixing()]) or a finite weighted set of atoms ([finite_mixing()]).
 #' Pushed through a family's kernel it induces the law \eqn{P_W}{P_W} over
 #' outcomes; see [induced_distribution()].

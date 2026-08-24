@@ -20,7 +20,7 @@ certify(
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
-\item{max_nodes}{Cap on subdivisions per subnull for branch-and-bound
+\item{max_nodes}{Cap on subdivisions per part for branch-and-bound
 algorithms.}
 
 \item{max_coefficients}{Refuse above this many Bernstein coefficients
@@ -31,8 +31,8 @@ rather than this directly.}
 }
 \value{
 A list with \code{sup_ub}, \code{sup_lb}, the \code{random_variable} and \code{null} it
-holds for, the \code{method} names that produced it (one per distinct subnull
-geometry), and per-subnull \code{bounds}, \code{incumbents}, \code{iterations},
+holds for, the \code{method} names that produced it (one per distinct part
+geometry), and per-part \code{bounds}, \code{incumbents}, \code{iterations},
 \code{converged} and \code{budget_hit}. \code{budget_hit} flags when a search stopped at
 \code{max_nodes} with the gap still open, so its bound is valid but likely
 loose.
@@ -49,10 +49,10 @@ This exists to prove that a particular random variable is an e-variable for
 \code{1} or less says \code{X} is already an e-variable for \code{H0}, and otherwise
 \code{X / bound} is one.
 
-Certification is refused for any (family, region) combination with no known
+Certification is refused for any (family, cell) combination with no known
 bounding method.
 
-Currently only multinomial families with simplex subnulls are supported. The
+Currently only multinomial families with simplex parts are supported. The
 upper bound is found via a branch-and-bound algorithm that recursively
 subdivides the simplex \insertCite{Leroy2012}{ripr}, and bounds each subset
 via the simplicial Bernstein range enclosure property

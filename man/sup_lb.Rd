@@ -24,7 +24,7 @@ treating it like a certificate on the bound. See \code{\link[=certify]{certify()
 upper bounds where supported.
 }
 \details{
-Cheap by comparison, and defined wherever the search is. An unbounded subnull
+Cheap by comparison, and defined wherever the search is. An unbounded part
 or a continuous parameter space can still be searched, though the lower bound
 may not be very tight.
 }

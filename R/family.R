@@ -1,4 +1,4 @@
-#' @include sample_space.R parameter_space.R
+#' @include sample_space.R region.R
 NULL
 
 #' Parametric families
@@ -7,7 +7,7 @@ NULL
 #' no knowledge of null hypotheses, alternatives, or any optimisation procedure.
 #' Families provide a log-likelihood compiler, score functions and a sampler.
 #'
-#' A family is the pair of a [parameter_space] \eqn{\Theta}{Theta} and the map
+#' A family is the pair of a [convex_region] \eqn{\Theta}{Theta} and the map
 #' \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
 #' [sample_space]; the two spaces are what the family carries, and everything
 #' else it offers is a way of navigating that map.
@@ -25,7 +25,8 @@ NULL
 #' any other incomplete family does.
 #'
 #' @param sample_space The [sample_space] that outcomes belong to.
-#' @param parameter_space The [parameter_space] that parameters belong to.
+#' @param parameter_space The [convex_region] that parameter lives in. For
+#'   instance, the standard simplex for Multinomial proportions.
 #' @return A callable `parametric_family`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -46,7 +47,7 @@ parametric_family <- new_class(
   parent = class_function,
   properties = list(
     sample_space = sample_space,
-    parameter_space = parameter_space
+    parameter_space = convex_region
   ),
   constructor = function(sample_space, parameter_space) {
     new_object(

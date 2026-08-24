@@ -17,7 +17,7 @@ ripr_state(
 )
 }
 \arguments{
-\item{atoms}{List of \verb{(d, n_i)} matrices, one per subnull.}
+\item{atoms}{List of \verb{(d, n_i)} matrices, one per part of the null region.}
 
 \item{weights}{List of numeric vectors matching \code{atoms}, summing to 1 overall.}
 
@@ -40,12 +40,12 @@ the columns mean and which mixture each of them measures.}
 A \code{ripr_state}.
 }
 \description{
-Atoms and weights are lists indexed by subnull: element \code{i} holds the atoms
-belonging to \eqn{\Theta_{0i}}{Theta_0i}. The subnull tag matters because the
-pieces overlap, so an atom in an intersection would otherwise be ambiguous
+Atoms and weights are lists indexed by part: element \code{i} holds the atoms
+belonging to \eqn{\Theta_{0i}}{Theta_0i}. The part tag matters because the
+parts overlap, so an atom in an intersection would otherwise be ambiguous
 about which chart to search in, and a parallel index vector would make that
 an invariant to check rather than one to hold structurally. Weights are
-normalised across the whole list, not within a subnull.
+normalised across the whole list, not within a part.
 }
 \details{
 You need the constructor only if you are writing a fit loop of your own; in

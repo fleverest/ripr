@@ -44,7 +44,7 @@ Collate:
     'numerics.R'
     'bernstein.R'
     'sample_space.R'
-    'parameter_space.R'
+    'region.R'
     'family.R'
     'null.R'
     'mixing_measure.R'

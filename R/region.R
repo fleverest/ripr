@@ -935,13 +935,14 @@ union_region <- new_class(
     if (!all(ok)) {
       return("every element of `parts` must be a `convex_region`")
     }
-    # Cells of differing dimension have no common ambient space to union in,
-    # and comparing one against a parameter would silently recycle rather than
+    # Ambient dimension only; shape and codimension are free. Cells of
+    # differing ambient dimension have no common space to union in, and
+    # comparing one against a parameter would silently recycle rather than
     # complain. Both dimensions are named, since neither is more wrong.
     dims <- vapply(self@parts, space_dim, integer(1))
     if (length(unique(dims)) > 1L) {
       return(paste0(
-        "every element of `parts` must have the same dimension; got ",
+        "every element of `parts` must have the same ambient dimension; got ",
         paste(unique(dims), collapse = ", ")
       ))
     }

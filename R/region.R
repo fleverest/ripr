@@ -1,4 +1,5 @@
 #' @include sample_space.R
+#' @include polyhedra.R
 NULL
 
 # --- The region hierarchy -----------------------------------------------------
@@ -215,6 +216,131 @@ init_point <- new_generic(
 
 
 method(init_point, convex_region) <- function(space, ref) project(space, ref)
+
+# --- Representations ----------------------------------------------------------
+
+#' The half-space description of a region
+#'
+#' Returns the inequalities and equalities cutting a [convex_region] out of its
+#' ambient space, with rcdd's flag columns stripped and its sign convention
+#' undone, so that `a %*% theta <= b` reads directly.
+#'
+#' `eq` flags equality to `rcdd`, e.g. for defining the sum(theta)==1 constraint
+#' for probabilities.
+#'
+#' @param space A [convex_region].
+#' @return A list with `a` (an `m` by `d` matrix), `b` (length `m`) and `eq`
+#'   (logical, length `m`).
+#' @keywords internal
+#' @noRd
+h_rep <- new_generic("h_rep", "space", function(space) S7::S7_dispatch())
+
+
+#' The generator description of a region
+#'
+#' Returns the points, rays and lines whose combination is the region, with
+#' rcdd's flag columns stripped. Generators are columns, as vertices are
+#' everywhere else in the package.
+#'
+#' `r` and `l` are empty for a bounded region, which is what [is_bounded()]
+#' tests. A ray direction is only determined modulo the lineality space, so
+#' there can be multiple correct solutions.
+#'
+#' @param space A [convex_region].
+#' @return A list with `v` (vertices), `r` (rays) and `l` (lineality basis),
+#'   each a `d` by `n` matrix.
+#' @keywords internal
+#' @noRd
+v_rep <- new_generic("v_rep", "space", function(space) S7::S7_dispatch())
+
+
+# Both representations are the rational one, converted once at the boundary.
+# Every class differs only in how it states itself to cddlib, which is `q_hrep()`
+# and `q_vrep()` above.
+method(h_rep, convex_region) <- function(space) from_hmatrix(q_hrep(space))
+
+
+method(v_rep, convex_region) <- function(space) from_vmatrix(q_vrep(space))
+
+
+#' The rational H- and V-representations of a region
+#'
+#' The exact form underneath `h_rep()` and `v_rep()`, as an rcdd matrix with its
+#' flag columns intact. Composing operations here rather than on the double
+#' form is what keeps a chain of them exact.
+#'
+#' `q_hrep()` of an [unconstrained_region] is the trivially true row
+#' `0 . x <= 1` rather than no rows at all, because cddlib needs a row to work
+#' with. `h_rep()` reports the same region as zero rows, which is the honest
+#' answer for a caller reading facets.
+#'
+#' @param space A [convex_region].
+#' @return An rcdd H- or V-representation matrix of rationals.
+#' @keywords internal
+#' @noRd
+q_hrep <- new_generic("q_hrep", "space", function(space) S7::S7_dispatch())
+
+
+#' @keywords internal
+#' @noRd
+q_vrep <- new_generic("q_vrep", "space", function(space) S7::S7_dispatch())
+
+
+#' Is a region empty?
+#'
+#' `rcdd` solves a linear feasibility program (a zero objective over the region's
+#' half-space description) in exact rational arithmetic. A region is empty if
+#' its constraints have no common solution, which will probably happen for cells
+#' produced by intersections or complements rather than by declaring an empty
+#' set.
+#'
+#' A [union_region] is empty when every one of its `parts()` is, so this is
+#' defined on [region] rather than on [convex_region].
+#'
+#' @param space A [region].
+#' @return `TRUE` or `FALSE`.
+#' @examples
+#' # The K = 3 plurality cell `{theta_1 <= theta_2}` is not empty:
+#' is_empty(simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))))
+#'
+#' # Nor is a single point, or the whole space:
+#' is_empty(point_region(theta = c(0.5, 0.3, 0.2)))
+#' is_empty(unconstrained_region(3L))
+#' @export
+is_empty <- new_generic(
+  "is_empty",
+  "space",
+  function(space) S7::S7_dispatch()
+)
+
+
+method(is_empty, convex_region) <- function(space) {
+  q_is_empty(q_hrep(space))
+}
+
+
+#' Is a region bounded?
+#'
+#' A region is bounded when its generator description has no rays and no
+#' lineality.
+#'
+#' A [union_region] is bounded when every one of its `parts()` is.
+#'
+#' @param space A [region].
+#' @return `TRUE` or `FALSE`.
+#' @examples
+#' is_bounded(simplex_region(vertices = diag(3)))
+#' is_bounded(halfspace_region(normal = c(1, -1, 0)))
+#' @export
+is_bounded <- new_generic("is_bounded", "space", function(space) {
+  S7::S7_dispatch()
+})
+
+
+method(is_bounded, convex_region) <- function(space) {
+  v <- v_rep(space)
+  ncol(v$r) == 0L && ncol(v$l) == 0L
+}
 
 
 #' Bundle an objective for [maximise_over()]
@@ -542,6 +668,21 @@ method(contains, polytope_region) <- function(space, theta, tol = 1e-8) {
   max(abs(project(space, theta) - theta)) <= tol
 }
 
+method(v_rep, polytope_region) <- function(space) {
+  # The vertices as declared, not as cddlib would return them: a polytope is
+  # already a generator set, and round-tripping it would drop a redundant vertex
+  # the caller chose to keep and reorder the rest. Use `redundant_vertices()` to
+  # ask for the pruned set explicitly.
+  d <- nrow(space@vertices)
+  list(v = space@vertices, r = no_generators(d), l = no_generators(d))
+}
+
+
+method(q_vrep, polytope_region) <- function(space) as_vmatrix(v_rep(space))
+
+
+method(q_hrep, polytope_region) <- function(space) q_scdd(q_vrep(space))
+
 
 # --- Simplex region ----------------------------------------------------------
 
@@ -751,6 +892,29 @@ method(contains, halfspace_region) <- function(space, theta, tol = 1e-8) {
   sum(space@normal * theta) <= space@offset + tol * sqrt(sum(space@normal^2))
 }
 
+method(h_rep, halfspace_region) <- function(space) {
+  list(a = matrix(space@normal, nrow = 1L), b = space@offset, eq = FALSE)
+}
+
+
+method(v_rep, halfspace_region) <- function(space) {
+  # `anchor`, `unit` and `basis` all come from the constructor: the foot of the
+  # normal on the bounding hyperplane, the inward direction, and an orthonormal
+  # basis of the hyperplane, which is exactly the lineality space.
+  d <- length(space@normal)
+  list(
+    v = matrix(space@anchor, ncol = 1L),
+    r = matrix(-space@unit, ncol = 1L),
+    l = if (d >= 2L) space@basis else no_generators(d)
+  )
+}
+
+
+method(q_hrep, halfspace_region) <- function(space) as_hmatrix(h_rep(space))
+
+
+method(q_vrep, halfspace_region) <- function(space) as_vmatrix(v_rep(space))
+
 
 # --- Point region --------------------------------------------------------
 
@@ -791,6 +955,27 @@ method(project, point_region) <- function(space, theta) space@theta
 method(contains, point_region) <- function(space, theta, tol = 1e-8) {
   max(abs(space@theta - theta)) <= tol
 }
+
+method(h_rep, point_region) <- function(space) {
+  d <- length(space@theta)
+  list(a = diag(d), b = space@theta, eq = rep(TRUE, d))
+}
+
+
+method(v_rep, point_region) <- function(space) {
+  d <- length(space@theta)
+  list(
+    v = matrix(space@theta, ncol = 1L),
+    r = no_generators(d),
+    l = no_generators(d)
+  )
+}
+
+
+method(q_hrep, point_region) <- function(space) as_hmatrix(h_rep(space))
+
+
+method(q_vrep, point_region) <- function(space) as_vmatrix(v_rep(space))
 
 
 # --- Unconstrained region -----------------------------------------------------
@@ -855,6 +1040,30 @@ method(project, unconstrained_region) <- function(space, theta) as.vector(theta)
 method(contains, unconstrained_region) <- function(space, theta, tol = 1e-8) {
   length(theta) == as.integer(space@n_dim) && all(is.finite(theta))
 }
+
+method(h_rep, unconstrained_region) <- function(space) {
+  # `q_hrep()` states this to cddlib as the trivially true row `0 . x <= 1`,
+  # since cddlib needs a row. A caller reading facets wants to be told there are
+  # none.
+  d <- as.integer(space@n_dim)
+  list(
+    a = matrix(numeric(0), nrow = 0L, ncol = d),
+    b = numeric(0),
+    eq = logical(0)
+  )
+}
+
+
+method(v_rep, unconstrained_region) <- function(space) {
+  d <- as.integer(space@n_dim)
+  list(v = matrix(0, nrow = d, ncol = 1L), r = no_generators(d), l = diag(d))
+}
+
+
+method(q_hrep, unconstrained_region) <- function(space) as_hmatrix(h_rep(space))
+
+
+method(q_vrep, unconstrained_region) <- function(space) as_vmatrix(v_rep(space))
 
 
 # --- Union region -------------------------------------------------------------
@@ -993,6 +1202,35 @@ method(space_dim, union_region) <- function(space) {
 
 method(contains, union_region) <- function(space, theta, tol = 1e-8) {
   any(vapply(space@parts, \(p) contains(p, theta, tol), logical(1)))
+}
+
+#' The refusal both representations owe a union
+#' @keywords internal
+#' @noRd
+refuse_union <- function(what) {
+  stop(
+    "`",
+    what,
+    "()` is not defined for a `union_region`: a union is not an ",
+    "intersection of half-spaces and has no single generator set. Take the ",
+    "representation of each of `parts()` or `cells()` instead.",
+    call. = FALSE
+  )
+}
+
+method(h_rep, union_region) <- function(space) refuse_union("h_rep")
+method(v_rep, union_region) <- function(space) refuse_union("v_rep")
+method(q_hrep, union_region) <- function(space) refuse_union("q_hrep")
+method(q_vrep, union_region) <- function(space) refuse_union("q_vrep")
+
+
+method(is_empty, union_region) <- function(space) {
+  all(vapply(space@parts, is_empty, logical(1)))
+}
+
+
+method(is_bounded, union_region) <- function(space) {
+  all(vapply(space@parts, is_bounded, logical(1)))
 }
 
 

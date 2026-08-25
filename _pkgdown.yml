@@ -56,6 +56,8 @@ reference:
   - n_parts
   - cells
   - n_cells
+  - is_empty
+  - is_bounded
 
 - title: Null hypotheses
   desc: >

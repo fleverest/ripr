@@ -24,6 +24,7 @@ Depends:
     R (>= 4.1)
 Imports:
     matrixStats,
+    rcdd,
     Rdpack,
     rlang,
     S7,
@@ -35,6 +36,7 @@ Suggests:
     testthat (>= 3.0.0),
     yaml
 VignetteBuilder: knitr
+SystemRequirements: GMP (GNU MP bignum library)
 Encoding: UTF-8
 Language: en-GB
 Roxygen: list(markdown = TRUE)
@@ -43,6 +45,7 @@ Config/roxygen2/version: 8.1.0
 Collate:
     'numerics.R'
     'bernstein.R'
+    'polyhedra.R'
     'sample_space.R'
     'region.R'
     'family.R'

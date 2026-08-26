@@ -11,8 +11,7 @@ maximise_over(space, obj, seeds = NULL, n_seeds = 200L, n_restarts = 25L)
 
 \item{obj}{An \code{\link[=objective]{objective()}}.}
 
-\item{seeds}{Optional \verb{(d, m)} matrix of parameter-space points to seed from.
-Projected onto \code{space} before use, so points on other parts are fine.}
+\item{seeds}{Optional \verb{(d, m)} matrix of parameter-space points to seed from.}
 
 \item{n_seeds}{Random seeds drawn from the chart.}
 

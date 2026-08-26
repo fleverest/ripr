@@ -777,6 +777,23 @@ test_that("certify() rejects a non-random_variable and bad control values", {
   expect_error(certify(x, null, max_coefficients = 0))
 })
 
+test_that("an ill-conditioned simplex is refused by the enclosure by name", {
+  # The validator's exact independence test lets slivers through; the
+  # conditioning heuristic that used to refuse them at construction now lives
+  # here, where it can say what is actually wrong.
+  sliver <- cbind(c(1, 0, 0), c(0, 1, 0), c(0.5, 0.5 - 1e-12, 1e-12))
+  s <- simplex_region(vertices = sliver)
+  expect_false(bernstein_compatible(s))
+  expect_match(bernstein_obstruction(s), "ill-conditioned")
+
+  ok <- simplex_region(
+    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  expect_true(bernstein_compatible(ok))
+  expect_null(bernstein_obstruction(ok))
+})
+
+
 # --- sup_lb -------------------------------------------------------------------
 
 test_that("sup_lb() reports a value the objective actually attains", {

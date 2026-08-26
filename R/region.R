@@ -147,9 +147,8 @@ convex_region <- new_class("convex_region", parent = region, abstract = TRUE)
 #'   \item{`to_theta(u)`}{coordinates to a parameter vector in the space.}
 #'   \item{`to_theta_batch(u_mat)`}{`(n_par, N)` coordinates to `(d, N)`
 #'   parameters.}
-#'   \item{`from_theta(theta)`}{coordinates for a point in the space. A cheap
-#'   inverse, not a metric projection; compose with [project()] first if `theta`
-#'   may lie outside.}
+#'   \item{`from_theta(theta)`}{Reparemetrised coordinates for a point in the
+#'   space.}
 #'   \item{`jacobian(u)`}{`(d, n_par)` derivative of `to_theta` at `u`.}
 #'   \item{`seed(n)`}{`(n_par, n)` random coordinates for a multi-start search,
 #'   drawn to suit the space's own geometry.}
@@ -381,7 +380,6 @@ objective <- function(value, grad, value_batch = NULL) {
 #' @param space A [convex_region].
 #' @param obj An [objective()].
 #' @param seeds Optional `(d, m)` matrix of parameter-space points to seed from.
-#'   Projected onto `space` before use, so points on other parts are fine.
 #' @param n_seeds Random seeds drawn from the chart.
 #' @param n_restarts How many of the best seeds to refine.
 #' @return `list(theta = , value = )` with `theta` in the space.
@@ -432,12 +430,12 @@ maximise_over <- function(
   starts <- ch$seed(n_seeds)
   if (!is.null(seeds)) {
     seeds <- as.matrix(seeds)
-    projected <- vapply(
+    coords <- vapply(
       seq_len(ncol(seeds)),
-      \(i) ch$from_theta(project(space, seeds[, i])),
+      \(i) ch$from_theta(seeds[, i]),
       numeric(ch$n_par)
     )
-    starts <- cbind(matrix(projected, nrow = ch$n_par), starts)
+    starts <- cbind(matrix(coords, nrow = ch$n_par), starts)
   }
 
   scores <- obj$value_batch(ch$to_theta_batch(starts))
@@ -1084,10 +1082,6 @@ simplex_region <- new_class(
   parent = polytope_region,
   validator = function(self) {
     vertices <- self@vertices
-    # `polytope_region`'s setter rejects non-finite vertices on every path that
-    # assigns them, so this guards a hand-rolled `new_object()` only. It stays
-    # first regardless: `NaN < 0` is `NA`, and `if (NA)` would surface as
-    # "missing value where TRUE/FALSE needed" from inside S7.
     if (!all(is.finite(vertices))) {
       return("every vertex coordinate must be finite")
     }
@@ -1105,26 +1099,21 @@ simplex_region <- new_class(
       ))
     }
     if (n_v > 1L) {
-      # Affine independence of the columns is linear independence of the edge
-      # vectors from the first. Measured by the edge matrix's reciprocal
-      # condition number rather than a determinant, which may not exist (the
-      # vertex matrix need not be square) and would not be scale invariant if
-      # it did: scaling every vertex by `c` scales `det` by `c^d`.
-      #
-      # The check above bounds `n_v - 1 <= d`, so `sv` has exactly `n_v - 1`
-      # entries and its last is the one that decides rank.
-      edges <- vertices[, -1L, drop = FALSE] - vertices[, 1L]
-      sv <- svd(edges, nu = 0L, nv = 0L)$d
-      if (sv[1L] <= 0) {
-        return("every vertex is the same point, so they span nothing")
+      # Affine independence
+      eq_rows <- if (is.null(self@facets)) {
+        sum(q_hrep(self)[, 1L] == "1")
+      } else {
+        sum(self@facets$eq)
       }
-      rcond <- sv[n_v - 1L] / sv[1L]
-      if (rcond <= 1e-9) {
+      hull_dim <- d - eq_rows
+      if (hull_dim != n_v - 1L) {
         return(paste0(
-          "the vertices must span a non-degenerate simplex, but their ",
-          "reciprocal condition number is ",
-          format(rcond),
-          ", so they are affinely dependent."
+          "the vertices are affinely dependent: the ",
+          n_v,
+          " vertices span a hull of dimension ",
+          hull_dim,
+          " rather than ",
+          n_v - 1L
         ))
       }
     }
@@ -1134,6 +1123,21 @@ simplex_region <- new_class(
     new_object(polytope_region(vertices = vertices))
   }
 )
+
+
+method(contains, simplex_region) <- function(space, theta, tol = 1e-8) {
+  # Barycentric membership test.
+  #
+  # The vertices are affinely independent so every point of the hull has unique
+  # weights. A point being inside means each solved weight is non-negative and
+  # the least-squares residual is zero (up to some small tolerance).
+  v <- space@vertices
+  a <- qr.coef(qr(rbind(v, 1)), c(theta, 1))
+  if (anyNA(a)) {
+    return(contains(S7::super(space, to = polyhedron_region), theta, tol))
+  }
+  all(a >= -tol) && max(abs(v %*% a - theta)) <= tol
+}
 
 
 # --- Halfspace region --------------------------------------------------------

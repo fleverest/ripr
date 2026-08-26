@@ -78,17 +78,40 @@ certify_methods <- function() {
 #' which is a separate `certify_methods()` entry rather than a loosened
 #' predicate here.
 #' @param space A [convex_region].
+#' @param tol Tolerance for testing rank-deficiency and sum-to-one constraint.
 #' @return `TRUE` or `FALSE`.
 #' @keywords internal
 #' @noRd
-bernstein_compatible <- function(space) {
+bernstein_compatible <- function(space, tol = 1e-9) {
   if (!S7_inherits(space, simplex_region)) {
     return(FALSE)
   }
   v <- space@vertices
   ncol(v) == nrow(v) &&
     all(v >= -1e-12) &&
-    max(abs(colSums(v) - 1)) < 1e-9
+    max(abs(colSums(v) - 1)) < tol &&
+    simplex_rcond(v) > tol
+}
+
+
+#' Reciprocal condition number of a simplex's edge matrix
+#'
+#' The conditioning heuristic that used to live in `simplex_region`'s
+#' validator, now a certification concern: the validator's affine-independence
+#' test is exact, so a thin sliver is a genuine simplex, but
+#' `reparametrise_to()` inverts the vertex matrix and an ill-conditioned one
+#' cannot be enclosed reliably. Measured on the edge matrix rather than a
+#' determinant, which may not exist (the vertex matrix need not be square)
+#' and would not be scale invariant if it did.
+#' @keywords internal
+#' @noRd
+simplex_rcond <- function(v) {
+  edges <- v[, -1L, drop = FALSE] - v[, 1L]
+  sv <- svd(edges, nu = 0L, nv = 0L)$d
+  if (sv[1L] <= 0) {
+    return(0)
+  }
+  sv[length(sv)] / sv[1L]
 }
 
 
@@ -125,15 +148,22 @@ bernstein_obstruction <- function(space) {
       " rather than 1"
     ))
   }
+  if (ncol(v) != nrow(v)) {
+    return(paste0(
+      "it has ",
+      ncol(v),
+      " vertices in ",
+      nrow(v),
+      " dimensions, so it is a simplex of dimension ",
+      ncol(v) - 1L,
+      " inside a parameter space of dimension ",
+      nrow(v) - 1L
+    ))
+  }
   paste0(
-    "it has ",
-    ncol(v),
-    " vertices in ",
-    nrow(v),
-    " dimensions, so it is a simplex of dimension ",
-    ncol(v) - 1L,
-    " inside a parameter space of dimension ",
-    nrow(v) - 1L
+    "it is too ill-conditioned to enclose: the reciprocal condition number ",
+    "of its edge matrix is ",
+    format(simplex_rcond(v))
   )
 }
 

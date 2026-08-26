@@ -38,6 +38,22 @@ test_that("simplex vertices are affinely independent", {
   )
 })
 
+test_that("independence is decided exactly, so slivers are simplices", {
+  # Affine independence is tested in exact rational arithmetic on the declared
+  # doubles, so a sliver any tolerance would reject is a genuine simplex here.
+  # However, whether it is well-conditioned enough to for certification is a
+  # different question, asserted in another test under `test-certify.R`.
+  sliver <- cbind(c(1, 0, 0), c(0, 1, 0), c(0.5, 0.5 - 1e-12, 1e-12))
+  s <- simplex_region(vertices = sliver)
+  expect_true(contains(s, c(0.5, 0.5, 0)))
+
+  # An exact dependency is still refused, duplicated vertices included.
+  expect_error(
+    simplex_region(vertices = cbind(c(1, 0), c(1, 0))),
+    "affinely dependent"
+  )
+})
+
 test_that("simplex degeneracy test works in high dimensions", {
   for (k in c(3L, 8L, 30L)) {
     vertices <- diag(k)

@@ -16,9 +16,8 @@ A list of closures comprising:
 \item{\code{to_theta(u)}}{coordinates to a parameter vector in the space.}
 \item{\code{to_theta_batch(u_mat)}}{\verb{(n_par, N)} coordinates to \verb{(d, N)}
 parameters.}
-\item{\code{from_theta(theta)}}{coordinates for a point in the space. A cheap
-inverse, not a metric projection; compose with \code{\link[=project]{project()}} first if \code{theta}
-may lie outside.}
+\item{\code{from_theta(theta)}}{Reparemetrised coordinates for a point in the
+space.}
 \item{\code{jacobian(u)}}{\verb{(d, n_par)} derivative of \code{to_theta} at \code{u}.}
 \item{\code{seed(n)}}{\verb{(n_par, n)} random coordinates for a multi-start search,
 drawn to suit the space's own geometry.}

@@ -26,7 +26,28 @@ separate arguments that could disagree.
 Each convex part of the region is itself a null hypothesis. This package
 calls them parts, because \code{\link[=parts]{parts()}} is what any \link{region} answers whether
 or not it happens to be a null, but the two words mean the same thing here.
+
+The decomposition into \code{\link[=cells]{cells()}} is taken once, at construction, and kept.
+Every sweep of a fit searches it and every certification encloses it, so
+triangulating a part on each call would repeat an exact-arithmetic
+computation that cannot change: a \code{null_model} is immutable, and its region
+with it.
 }
+\section{Properties}{
+
+\describe{
+\item{\code{family}}{The \link{parametric_family}.}
+\item{\code{region}}{The null's \link{region}, as declared.}
+\item{\code{cells}}{The flat list of convex cells the region decomposes into,
+in part order: \code{cells(parts(region)[[1]])}, then those of part 2, and so
+on.}
+\item{\code{cell_part}}{Which part each cell came from, as an index into
+\code{parts(region)}. This is what lets an algorithm run on cells and still
+report a part: \code{state@atoms} is indexed by part, and so is the \code{part}
+element \code{\link[=ripr_finish]{ripr_finish()}} returns.}
+}
+}
+
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 # The plurality null

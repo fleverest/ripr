@@ -420,6 +420,70 @@ q_reverse_ineq <- function(m, rows) {
 }
 
 
+#' The exact dimension of a rational representation
+#'
+#' The dimension of the affine hull, which is the ambient dimension minus the
+#' number of independent equalities. cddlib states those as explicit equality
+#' rows in the H-representation derived from generators, so one
+#' double-description step from the V side answers it. H-representations go
+#' through V first, since the rows it was handed may carry implicit linearities
+#' the count would miss.
+#'
+#' @param m An rcdd H- or V-representation of a non-empty polyhedron.
+#' @return An integer between 0 and the ambient dimension.
+#' @keywords internal
+#' @noRd
+q_dim <- function(m) {
+  qv <- if (identical(q_kind(m), "H")) q_scdd(m) else m
+  (ncol(qv) - 2L) - sum(q_scdd(qv)[, 1L] == "1")
+}
+
+
+#' Is one region contained in another?
+#'
+#' Containment without decomposing anything: `x` lies in `{u : A u <= b}`
+#' exactly when no row of that description can be violated anywhere on `x`,
+#' which is one exact linear program per row. An equality row has to be tested
+#' in both directions, and an objective unbounded above on `x` is a violation
+#' at some distance however large `b` is.
+#'
+#' Both arguments are H-representations, and deliberately so. The generators
+#' would test the same thing in one matrix product, but a region's generators
+#' are not always the exact description of it: a `halfspace_region` derives an
+#' orthonormal basis of its bounding hyperplane, which is irrational, so the
+#' rays and lineality it stores are a *rounded* frame that does not lie exactly
+#' in the halfspace its own facet defines. Tested by generators, a halfspace is
+#' not a subset of itself. Every class's H-representation is exact, so the test
+#' lives there.
+#'
+#' @param inner,whole rcdd H-representations. `inner` may be empty, which is
+#'   contained in anything.
+#' @return `TRUE` or `FALSE`.
+#' @keywords internal
+#' @noRd
+q_subset <- function(inner, whole) {
+  if (q_is_empty(inner)) {
+    return(TRUE)
+  }
+  holds <- function(objgrd, limit) {
+    peak <- q_maximum(inner, objgrd)
+    !is.null(peak) && q_leq(peak, limit)
+  }
+  for (i in seq_len(nrow(whole))) {
+    row <- whole[i, ]
+    # The row stores `(l, b, -a)`, so the coordinate block is already `-a`.
+    if (!holds(q_neg(row[-(1:2)]), row[[2L]])) {
+      return(FALSE)
+    }
+    # `a . x == b` is `a . x <= b` and `-a . x <= -b`.
+    if (row[[1L]] == "1" && !holds(row[-(1:2)], q_neg(row[[2L]]))) {
+      return(FALSE)
+    }
+  }
+  TRUE
+}
+
+
 #' Feasibility of a package-native H list
 #'
 #' [is_empty()] for constraints that are not yet a region. Intersection produces

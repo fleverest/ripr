@@ -19,29 +19,37 @@ certify_trace(
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
-\item{max_nodes}{Cap on subdivisions per part for branch-and-bound
-algorithms.}
+\item{max_nodes}{Cap on subdivisions \emph{per cell} for branch-and-bound
+algorithms, so a part triangulated into several cells is allowed
+\code{max_nodes} in each. The per-part \code{iterations} reported below is the total
+actually spent, which is what to read the cap against.}
 
 \item{max_coefficients}{Refuse above this many Bernstein coefficients
 (for bounding multinomial expectation in simplices).}
 }
 \value{
-A data frame with \code{part}, \code{id}, \code{parent}, \code{depth}, \code{born},
+A data frame with \code{part}, \code{cell}, \code{id}, \code{parent}, \code{depth}, \code{born},
 \code{retired}, \code{fate}, \code{upper}, \code{volume} and a \code{vertices} list column, plus the
 certificate itself in the \code{"certificate"} attribute and the per-iteration
 bound in \code{"trace"}.
 }
 \description{
 Same computation as \code{\link[=certify]{certify()}}, reporting the branch-and-bound tree instead
-of the certificate. One row per leaf of the search, per part.
+of the certificate. One row per node of the search, per cell.
 }
 \details{
-The nodes live at any iteration tile their part exactly, so at \code{K = 3} the
+The nodes live at any iteration tile their cell exactly, so at \code{K = 3} the
 \code{vertices} column draws the partition of the facet directly, in barycentric
 coordinates, at every step and not merely at the end.
 \code{depth} against \code{born} shows the shape of the tree: a max-bound queue rule
 can produce a chain rather than anything balanced, which is visible here and
 nowhere else.
+
+A cell is one branch-and-bound run and \code{id} restarts at 1 in each, so group
+by \code{cell} before reading \code{id} or matching \code{parent}. \code{part} says which of the
+declared parts a cell came from, and a triangulated part contributes one
+tree per cell rather than one between them; \code{traces} and \code{incumbent_traces}
+are per cell on the same terms.
 
 Only bounding methods that use branch and bound populate this. A method that
 bounds in closed form contributes no rows.

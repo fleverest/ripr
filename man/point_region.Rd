@@ -19,7 +19,9 @@ is an e-variable for \eqn{\{P_\theta\}}{{P_theta}}.
 }
 \details{
 It is technically a simplex, but it requires no validation so we have a
-separate class for it.
+separate class for it. \code{\link[=certify]{certify()}} treats it separately too: the supremum
+over one parameter is the expectation at that point, so a point null is
+certified by direct evaluation rather than by any enclosing method.
 }
 \examples{
 point_region(theta = c(0.5, 0.3, 0.2))

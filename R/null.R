@@ -14,11 +14,29 @@ NULL
 #' calls them parts, because [parts()] is what any [region] answers whether
 #' or not it happens to be a null, but the two words mean the same thing here.
 #'
+#' The decomposition into [cells()] is taken once, at construction, and kept.
+#' Every sweep of a fit searches it and every certification encloses it, so
+#' triangulating a part on each call would repeat an exact-arithmetic
+#' computation that cannot change: a `null_model` is immutable, and its region
+#' with it.
+#'
 #' @param family A [parametric_family].
 #' @param region The null's geometry: any [region]. A single [convex_region]
 #'   is stored as it comes, since one convex set is already a region; a list of
 #'   them becomes the [union_region] of its elements.
 #' @return A `null_model`.
+#' @section Properties:
+#' \describe{
+#'   \item{`family`}{The [parametric_family].}
+#'   \item{`region`}{The null's [region], as declared.}
+#'   \item{`cells`}{The flat list of convex cells the region decomposes into,
+#'   in part order: `cells(parts(region)[[1]])`, then those of part 2, and so
+#'   on.}
+#'   \item{`cell_part`}{Which part each cell came from, as an index into
+#'   `parts(region)`. This is what lets an algorithm run on cells and still
+#'   report a part: `state@atoms` is indexed by part, and so is the `part`
+#'   element [ripr_finish()] returns.}
+#' }
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' # The plurality null
@@ -32,9 +50,22 @@ NULL
 #' @export
 null_model <- new_class(
   "null_model",
-  properties = list(family = parametric_family, region = region),
+  properties = list(
+    family = parametric_family,
+    region = region,
+    cells = class_list,
+    cell_part = class_integer
+  ),
   constructor = function(family, region) {
-    new_object(S7_object(), family = family, region = as_region(region))
+    region <- as_region(region)
+    per_part <- lapply(parts(region), cells)
+    new_object(
+      S7_object(),
+      family = family,
+      region = region,
+      cells = unlist(per_part, recursive = FALSE),
+      cell_part = rep(seq_along(per_part), lengths(per_part))
+    )
   },
   validator = function(self) {
     # `union_region` already validates that its cells are convex regions of one
@@ -49,6 +80,12 @@ null_model <- new_class(
         ", matching the family's parameter space; got ",
         d_region
       ))
+    }
+    # The constructor derives both, so this only catches a caller that has
+    # replaced a property behind its back and left the two disagreeing --
+    # which would silently file a cell under the wrong part.
+    if (length(self@cells) != length(self@cell_part)) {
+      return("`cell_part` must have one entry per element of `cells`")
     }
     NULL
   }

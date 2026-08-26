@@ -629,3 +629,99 @@ test_that("the EM M-step survives a node its atom gives zero probability", {
   expect_false(is.na(kl_divergence(after)))
   expect_lte(kl_divergence(after), kl_divergence(st))
 })
+
+
+# --- Cells under the steps ----------------------------------------------------
+
+# A null whose one part is a convex hull rather than a simplex: the square
+# `{theta_1 <= 1/2, theta_2 <= 1/2}` in the 2-simplex, which triangulates into
+# two cells. Every part of every other null in this file is its own only cell,
+# so this is where the cell wiring has anything to do.
+square_null <- function(n = 12, q = c(0.15, 0.35, 0.5), ...) {
+  fam <- multinomial_family(n_trials = n, k = 3L)
+  Q <- induced_distribution(fam, point_mixing(theta_star = q))
+  square <- polytope_region(
+    vertices = cbind(
+      c(0.5, 0.5, 0),
+      c(0, 0.5, 0.5),
+      c(0, 0, 1),
+      c(0.5, 0, 0.5)
+    )
+  )
+  ripr_init(
+    Q,
+    null_model(fam, list(square)),
+    exact_engine(),
+    control = ripr_control(n_seeds = 30L, n_restarts = 4L, ...)
+  )
+}
+
+test_that("search_null searches cells and reports the part they belong to", {
+  st <- square_null()
+  expect_length(st@null@cells, 2L)
+
+  log_p <- mixture_log_p(
+    compile_engine(st@engine)(flat_atoms(st)),
+    flat_weights(st)
+  )
+  found <- search_null(st, linear_oracle(st, log_p, compile_engine(st@engine)))
+
+  # The index is a part's, because that is what an atom is filed under, and
+  # `state@atoms` has exactly that many blocks.
+  expect_identical(found$part, 1L)
+  expect_true(found$part <= n_parts(st@null@region))
+  expect_true(contains(parts(st@null@region)[[found$part]], found$theta))
+
+  # And the maximiser is in one of the cells searched, not merely in the hull.
+  expect_true(any(vapply(
+    st@null@cells,
+    \(cell) contains(cell, found$theta, tol = 1e-6),
+    logical(1)
+  )))
+})
+
+test_that("containing_cell picks a cell holding the point, or the nearest", {
+  null <- square_null()@null
+  for (cell in null@cells) {
+    inside <- rowMeans(cell@vertices)
+    expect_identical(containing_cell(null, inside, 1L), cell)
+  }
+
+  # A point on the diagonal the fan cut along is in both cells, and either
+  # answer is right; what matters is that one comes back.
+  shared <- (null@cells[[1L]]@vertices[, 1L] + null@cells[[2L]]@vertices[, 1L]) / 2
+  expect_true(S7_inherits(containing_cell(null, shared, 1L), simplex_region))
+
+  # A point a rounding outside every cell still gets one: the M-step has to
+  # run somewhere, and the nearest cell is where the atom was.
+  outside <- rowMeans(null@cells[[1L]]@vertices) + c(0, 0.4, -0.4)
+  expect_false(any(vapply(
+    null@cells,
+    \(cell) contains(cell, outside),
+    logical(1)
+  )))
+  near <- containing_cell(null, outside, 1L)
+  gaps <- vapply(
+    null@cells,
+    \(cell) sum((project(cell, outside) - outside)^2),
+    numeric(1)
+  )
+  expect_equal(sum((project(near, outside) - outside)^2), min(gaps))
+})
+
+test_that("an EM sweep over a triangulated part keeps its atoms in the part", {
+  # The M-step now optimises in a cell's chart rather than the hull's. An atom
+  # still may not leave the part, which is the invariant `state@atoms` rests
+  # on; staying inside one cell is the stronger thing it now also does.
+  st <- fw_step(square_null(), 3L)
+  moved <- em_sweep(st, compile_engine(st@engine))
+  for (j in seq_len(ncol(moved@atoms[[1L]]))) {
+    theta <- moved@atoms[[1L]][, j]
+    expect_true(contains(parts(st@null@region)[[1L]], theta, tol = 1e-5))
+    expect_true(any(vapply(
+      st@null@cells,
+      \(cell) contains(cell, theta, tol = 1e-5),
+      logical(1)
+    )))
+  }
+})

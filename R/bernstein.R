@@ -541,11 +541,17 @@ prune_active <- function(active, incumbent, slack, eta, keep_argmax) {
 #'   set then encloses the slack-superlevel set rather than the argmax.
 #' @param keep_argmax Prune with `U(S) < incumbent` instead, retaining ties, so
 #'   that `active` is a certified enclosure of every maximiser. Forces
-#'   `slack = 0`; the two modes are mutually exclusive.
+#'   `slack = 0`; the two modes are mutually exclusive. `shared_incumbent` must
+#'   be left at its default (`-Inf`).
 #' @param round_slack Add `n * eps * max|coef|` to the reported bound. de
 #'   Casteljau is all convex combinations and so is stable, but round-to-nearest
 #'   can put the computed maximum coefficient marginally *below* the true one,
 #'   which is the unsafe direction for a validity claim.
+#' @param shared_incumbent A value already attained (hence a valid lower bound)
+#'   somewhere the caller will take a maximum over, e.g. another cell of the
+#'   same null. Allows us to prune nodes earlier, which is what makes a null
+#'   with many cells cost far less than it would otherwise. Many small cells
+#'   will be pruned immediately. Do not specify if `keep_argmax = TRUE`.
 #' @return `list(bound, incumbent, theta, active, rejected, iterations,
 #'   converged, budget_hit, trace)`. `converged` and `budget_hit` are mutually
 #'   exclusive and exactly one is `TRUE`: the search either pruned or closed the
@@ -559,10 +565,17 @@ certify_sup <- function(
   max_iter = 500L,
   slack = 0,
   keep_argmax = FALSE,
-  round_slack = TRUE
+  round_slack = TRUE,
+  shared_incumbent = -Inf
 ) {
   if (keep_argmax && slack > 0) {
     stop("`slack` must be 0 when keep_argmax = TRUE")
+  }
+  if (keep_argmax && is.finite(shared_incumbent)) {
+    # `keep_argmax` promises `active` encloses every maximiser of these seeds,
+    # and a value attained elsewhere would prune away the ones that merely tie
+    # with it.
+    stop("`shared_incumbent` must be -Inf when keep_argmax = TRUE")
   }
   max_iter <- as.integer(max_iter)
 
@@ -578,12 +591,15 @@ certify_sup <- function(
   reason <- NULL
 
   repeat {
+    # What the run may prune against: its own best vertex, or a better one
+    # already found elsewhere. The gap is measured against the same value.
+    incumbent <- max(best$value, shared_incumbent)
     active_ub <- if (length(active)) max(node_ubs(active)) else -Inf
-    bound <- certified_bound(best$value, slack, active_ub, eta)
+    bound <- certified_bound(incumbent, slack, active_ub, eta)
 
     reason <- stop_reason(
       length(active),
-      bound - eta - best$value,
+      bound - eta - incumbent,
       tol,
       it,
       max_iter
@@ -616,7 +632,8 @@ certify_sup <- function(
       best <- kid_best
     }
 
-    pruned <- prune_active(active, best$value, slack, eta, keep_argmax)
+    incumbent <- max(best$value, shared_incumbent)
+    pruned <- prune_active(active, incumbent, slack, eta, keep_argmax)
     rejected <- c(
       rejected,
       lapply(pruned$drop, function(b) {
@@ -629,7 +646,7 @@ certify_sup <- function(
       lapply(pruned$drop, node_stub, retired = it, fate = "pruned")
     )
     active <- pruned$keep
-    trace[it] <- certified_bound(best$value, slack, pruned$kept_ub, eta)
+    trace[it] <- certified_bound(incumbent, slack, pruned$kept_ub, eta)
     incumbent_trace[it] <- best$value
   }
 

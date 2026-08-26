@@ -27,8 +27,8 @@ banner and the per-cell listing that \code{print()} adds.
 \details{
 A \code{union_region} is a \link{region} but deliberately \strong{not} a \link{convex_region}.
 \code{\link[=chart]{chart()}}, \code{\link[=project]{project()}}, \code{maximise_over()} assume convexity, and a union of
-convex sets is not convex. What this class does implement is \code{\link[=space_dim]{space_dim()}}
-\code{\link[=contains]{contains()}}, \code{\link[=parts]{parts()}} and \code{\link[=cells]{cells()}} so that optimisation procedures that
+convex sets is not convex. What this class does implement is \code{\link[=space_dim]{space_dim()}},
+\code{\link[=contains]{contains()}}, \code{\link[=parts]{parts()}} and \code{\link[=cells]{cells()}}, so that optimisation procedures that
 require certain properties may operate on the individual components that
 comply.
 
@@ -43,10 +43,6 @@ Given exactly one convex region, \code{union_region()} returns it unchanged.
 
 \describe{
 \item{\code{parts}}{The flat list of convex cells, as declared.}
-\item{\code{disjoint}}{\code{NULL}. A cache for a disjoint decomposition, filled by
-a later phase; nothing computes it yet.}
-\item{\code{triangulation}}{\code{NULL}. A cache for a simplicial decomposition, on
-the same terms.}
 }
 }
 

@@ -63,10 +63,12 @@ reference:
 
 - title: Set algebra
   desc: >
-    Operations that build new regions from old ones, composed in exact
-    rational arithmetic and converted to doubles once per chain.
+    Operations that build new regions from old ones, and decide questions
+    about them, composed in exact rational arithmetic and converted to doubles
+    once per chain.
   contents:
   - region_algebra
+  - disjoin
 
 - title: Null hypotheses
   desc: >

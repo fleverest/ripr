@@ -132,7 +132,9 @@ test_that("the subclass inherits every method unchanged", {
 
 # --- parts() and cells() ------------------------------------------------------
 
-test_that("every convex region is its own only part and its own only cell", {
+test_that("every convex region is its own only part", {
+  # `parts()` reports what was declared, so it is the identity on a convex
+  # region whatever its shape.
   spaces <- list(
     simplex_region(vertices = diag(3)),
     polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))),
@@ -141,10 +143,32 @@ test_that("every convex region is its own only part and its own only cell", {
     unconstrained_region(2L)
   )
   for (space in spaces) {
-    for (decomposition in list(parts(space), cells(space))) {
-      expect_type(decomposition, "list")
-      expect_length(decomposition, 1L)
-      expect_identical(decomposition[[1L]], space)
-    }
+    expect_type(parts(space), "list")
+    expect_length(parts(space), 1L)
+    expect_identical(parts(space)[[1L]], space)
   }
+})
+
+
+test_that("a convex region is its own only cell unless it can be triangulated", {
+  # A geometry that is already a simplex, or that has no finite simplicial
+  # decomposition at all, has nothing to decompose into and is handed back as
+  # it came.
+  undecomposed <- list(
+    simplex_region(vertices = diag(3)),
+    halfspace_region(normal = c(1, -1), offset = 0),
+    point_region(theta = c(0.5, 0.3, 0.2)),
+    unconstrained_region(2L)
+  )
+  for (space in undecomposed) {
+    expect_identical(cells(space), list(space))
+  }
+
+  # A bounded polytope that is not a simplex is the one case that differs:
+  # the square is two triangles. `test-triangulate.R` covers the fan itself.
+  square <- polytope_region(
+    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+  )
+  expect_length(cells(square), 2L)
+  expect_length(parts(square), 1L)
 })

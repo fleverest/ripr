@@ -22,6 +22,22 @@ plurality_null <- function(n, k) {
   null_model(family, plurality_parts(k))
 }
 
+# A null that is convex but not a simplex: the square
+# `{theta_1 <= 1/2, theta_2 <= 1/2}` cut out of the 2-simplex. Every vertex is
+# an exact double summing to exactly 1, so the hull really does lie in the
+# standard simplex rather than an ulp above it, and it triangulates into two
+# certifiable cells.
+simplex_square <- function() {
+  polytope_region(
+    vertices = cbind(
+      c(0.5, 0.5, 0),
+      c(0, 0.5, 0.5),
+      c(0, 0, 1),
+      c(0.5, 0, 0.5)
+    )
+  )
+}
+
 # A random variable pinned to given values on the support, so the tests do not
 # depend on a fit having converged to anything in particular.
 tabulated_rv <- function(family, values) {
@@ -311,22 +327,27 @@ test_that("certify_trace() records every node, and they tile at every step", {
   nodes <- certify_trace(x, null, tol = 1e-9)
 
   expect_s3_class(nodes, "data.frame")
+  # One tree per cell, and the reported per-part `iterations` is their total.
   iterations <- attr(nodes, "certificate")$iterations
-  for (i in seq_along(parts(null@region))) {
-    rows <- nodes[nodes$part == i, ]
-    it <- iterations[[i]]
+  for (i in seq_along(null@cells)) {
+    rows <- nodes[nodes$cell == i, ]
+    it <- sum(rows$fate == "split")
     # `it` splits create two children each, on top of the seed.
     expect_identical(nrow(rows), 1L + 2L * it)
-    expect_identical(sum(rows$fate == "split"), it)
     expect_identical(sum(rows$fate != "split"), it + 1L)
+    expect_identical(unique(rows$part), null@cell_part[[i]])
 
-    seed_volume <- abs(det(parts(null@region)[[i]]@vertices))
+    seed_volume <- abs(det(null@cells[[i]]@vertices))
     for (t in unique(c(0L, seq_len(it)))) {
       drawn <- rows[
         rows$born <= t & !(rows$fate == "split" & rows$retired <= t),
       ]
       expect_equal(sum(drawn$volume), seed_volume)
     }
+  }
+  for (p in seq_along(parts(null@region))) {
+    rows <- nodes[nodes$part == p, ]
+    expect_identical(sum(rows$fate == "split"), iterations[[p]])
   }
 })
 
@@ -339,10 +360,10 @@ test_that("certify_trace() records the tree and the order it was built in", {
   )
   nodes <- certify_trace(x, null, tol = 1e-9)
 
-  iterations <- attr(nodes, "certificate")$iterations
-  for (i in unique(nodes$part)) {
-    rows <- nodes[nodes$part == i, ]
-    it <- iterations[[i]]
+  for (i in unique(nodes$cell)) {
+    rows <- nodes[nodes$cell == i, ]
+    # Ids restart at 1 in every cell, so a cell is the scope to read them in.
+    it <- sum(rows$fate == "split")
 
     # Every id issued appears exactly once, so no node goes unrecorded.
     expect_identical(anyDuplicated(rows$id), 0L)
@@ -388,9 +409,14 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
   expect_true(all(vapply(nodes$vertices, is.matrix, logical(1L))))
 
   bounds <- attr(nodes, "certificate")$bounds
-  for (i in unique(nodes$part)) {
-    rows <- nodes[nodes$part == i, ]
-    expect_lte(max(rows$upper[rows$fate != "split"]), bounds[[i]] + 1e-9)
+  for (i in unique(nodes$cell)) {
+    rows <- nodes[nodes$cell == i, ]
+    # A part's bound is the largest of its cells', so a cell's own nodes sit
+    # under it whichever cell of the part they came from.
+    expect_lte(
+      max(rows$upper[rows$fate != "split"]),
+      bounds[[unique(rows$part)]] + 1e-9
+    )
 
     parents <- rows[match(rows$parent, rows$id), ]
     has_parent <- !is.na(rows$parent)
@@ -419,12 +445,12 @@ test_that("certify() sends each part to the bound_fn that claimed it", {
   # the identity, so this stubs a second entry to check that results are not
   # merely produced but land in the right slots.
   seen <- list()
-  fake_bound_fn <- function(x, family, parts, control) {
-    seen[[length(seen) + 1L]] <<- vapply(parts, class_name, character(1L))
-    lapply(seq_along(parts), function(i) {
+  fake_bound_fn <- function(x, family, cells, control) {
+    seen[[length(seen) + 1L]] <<- vapply(cells, class_name, character(1L))
+    lapply(seq_along(cells), function(i) {
       list(
         bound = 99,
-        incumbent = 99,
+        incumbent = 0,
         theta = NULL,
         iterations = 0L,
         converged = TRUE,
@@ -438,17 +464,17 @@ test_that("certify() sends each part to the bound_fn that claimed it", {
       list(
         list(
           name = "bernstein",
-          family = multinomial_family,
-          accepts = bernstein_compatible,
-          bound_fn = bernstein_bound,
-          description = "real"
+          subject = "The real one",
+          fit = function(cell, family) if (bernstein_compatible(cell)) TRUE,
+          bound_fn = bernstein_bound
         ),
         list(
           name = "fake",
-          family = multinomial_family,
-          accepts = \(s) S7_inherits(s, halfspace_region),
-          bound_fn = fake_bound_fn,
-          description = "stub"
+          subject = "The stub",
+          fit = function(cell, family) {
+            if (S7_inherits(cell, halfspace_region)) TRUE
+          },
+          bound_fn = fake_bound_fn
         )
       )
     }
@@ -482,10 +508,9 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
     certify_methods = function() {
       list(list(
         name = "short",
-        family = multinomial_family,
-        accepts = bernstein_compatible,
-        bound_fn = function(x, family, parts, control) list(),
-        description = "stub"
+        subject = "The stub",
+        fit = function(cell, family) if (bernstein_compatible(cell)) TRUE,
+        bound_fn = function(x, family, cells, control) list()
       ))
     }
   )
@@ -494,7 +519,7 @@ test_that("certify() rejects a bound_fn that returns the wrong number of results
     null@family,
     rep(1, nrow(enumerate_space(null@family@sample_space)))
   )
-  expect_error(certify(x, null), "returned 0 results for 2 parts")
+  expect_error(certify(x, null), "returned 0 results for 2 cells")
 })
 
 test_that("check_bound_result() names the field and the bound_fn", {
@@ -638,20 +663,26 @@ test_that("the refusal names the failing condition, not the class", {
   )
   expect_match(msg, "smallest coordinate is -0.5")
 
-  # Whereas a geometry with no method at all still says so.
+  # An unbounded region fails for a reason of its own, and says which. It is
+  # not a missing method either: nothing is missing, there is simply no finite
+  # simplicial cover to enclose.
   msg <- tryCatch(
     certify(
       x,
-      null_model(
-        fam,
-        list(polytope_region(
-          vertices = cbind(diag(3), c(1, 1, 1) / 3)
-        ))
-      )
+      null_model(fam, list(halfspace_region(normal = c(1, -1, 0), offset = 0)))
     ),
     error = conditionMessage
   )
-  expect_match(msg, "No bounding method is implemented")
+  expect_match(msg, "it is unbounded")
+  expect_match(msg, "State the null over a bounded region")
+  expect_false(grepl("No bounding method is implemented", msg))
+
+  # Whereas a bounded hull is triangulated rather than refused: the square
+  # `{theta_1 <= 1/2, theta_2 <= 1/2}` inside the 2-simplex is two triangles,
+  # and each of those the enclosure takes.
+  expect_no_error(
+    certify(x, null_model(fam, list(simplex_square())))
+  )
 })
 
 test_that("a region obstruction is not blamed if the family is not implemented", {
@@ -684,10 +715,16 @@ test_that("bernstein_compatible() accepts when certification is possible", {
     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
   ))
 
-  # Wrong class: a polytope that happens to be a simplex is still
-  # refused, because nothing has checked that it is one.
-  # Later we will probably just triangulate and we can replace this test.
+  # A `polytope_region` is refused even when its hull is a simplex, because
+  # nothing has established that it is one. That is the predicate's job, not a
+  # limitation: `certify()` sends it `cells()`, and the fan hands back
+  # `simplex_region`s whatever the part was declared as.
   expect_false(bernstein_compatible(polytope_region(vertices = diag(3))))
+  expect_true(all(vapply(
+    cells(polytope_region(vertices = diag(3))),
+    bernstein_compatible,
+    logical(1)
+  )))
 
   expect_false(bernstein_compatible(
     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0, 1)))
@@ -785,13 +822,180 @@ test_that("an ill-conditioned simplex is refused by the enclosure by name", {
   sliver <- cbind(c(1, 0, 0), c(0, 1, 0), c(0.5, 0.5 - 1e-12, 1e-12))
   s <- simplex_region(vertices = sliver)
   expect_false(bernstein_compatible(s))
-  expect_match(bernstein_obstruction(s), "ill-conditioned")
+  expect_match(bernstein_obstruction(s)$because, "ill-conditioned")
+  expect_match(bernstein_obstruction(s)$remedy, "numerical limit")
+  expect_false(grepl(
+    "one vertex per coordinate",
+    bernstein_obstruction(s)$remedy
+  ))
 
   ok <- simplex_region(
     vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
   )
   expect_true(bernstein_compatible(ok))
   expect_null(bernstein_obstruction(ok))
+})
+
+
+test_that("an obstruction gets a follow-up that belongs to it", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  x <- tabulated_rv(fam, rep(1, nrow(enumerate_space(fam@sample_space))))
+  refusal <- function(region) {
+    tryCatch(certify(x, null_model(fam, region)), error = conditionMessage)
+  }
+  # Lower-dimensional
+  msg <- refusal(simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0, 1))))
+  expect_match(msg, "simplex of dimension")
+  expect_match(msg, "a parametrisation is not yet implemented")
+  expect_false(grepl("No bounding method is implemented", msg))
+})
+
+
+test_that("every bounded region triangulates, whatever class states it", {
+  # `cells()` keys on boundedness, not on class, so the claim the unbounded
+  # refusal makes.
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  x <- tabulated_rv(fam, rep(1, nrow(enumerate_space(fam@sample_space))))
+  bare <- polyhedron_region(
+    vertices = cbind(c(0.5, 0.5, 0), c(0, 0.5, 0.5), c(0, 0, 1), c(0.5, 0, 0.5))
+  )
+  expect_false(S7_inherits(bare, polytope_region))
+  expect_length(cells(bare), 2L)
+  expect_no_error(certify(x, null_model(fam, bare), tol = 1e-9))
+
+  # And an unbounded one is still its own only cell.
+  expect_length(cells(halfspace_region(normal = c(1, -1, 0))), 1L)
+})
+
+
+# --- Point nulls --------------------------------------------------------------
+
+test_that("a point null is certified by evaluation, exactly", {
+  # The simple null. `sup` over `{theta}` is `E_theta[X]`, so there is nothing
+  # to enclose and nothing to subdivide.
+  set.seed(9)
+  family <- multinomial_family(n_trials = 6L, k = 3L)
+  outcomes <- enumerate_space(family@sample_space)
+  values <- stats::runif(nrow(outcomes), 0, 10)
+  x <- tabulated_rv(family, values)
+  theta <- c(0.5, 0.3, 0.2)
+
+  res <- certify(x, null_model(family, point_region(theta = theta)), tol = 0)
+  direct <- sum(
+    exp(as.vector(compile_loglik(family, outcomes)(matrix(theta, ncol = 1L)))) *
+      values
+  )
+
+  expect_identical(res$method, "point")
+  expect_identical(res$iterations, 0L)
+  expect_true(all(res$converged))
+  expect_false(any(res$budget_hit))
+
+  # The attained value is the evaluation itself, to the last bit.
+  expect_identical(res$sup_lb, direct)
+  # The bound carries a rounding margin over it -- strictly above, and small.
+  expect_gt(res$sup_ub, res$sup_lb)
+  expect_lt(res$sup_ub - res$sup_lb, 1e-10 * abs(direct))
+})
+
+
+test_that("the point method takes any family whose sample space is enumerable", {
+  # Nothing here is multinomial-specific, so the registry entry claims
+  # `parametric_family` and gates on the sample space instead.
+  binomial <- multinomial_family(n_trials = 10L, k = 2L)
+  x <- tabulated_rv(
+    binomial,
+    rep(1, nrow(enumerate_space(binomial@sample_space)))
+  )
+  res <- certify(x, null_model(binomial, point_region(theta = c(0.5, 0.5))))
+  # The expectation of the constant 1 is 1, whatever the parameter.
+  expect_equal(res$sup_lb, 1)
+  expect_gte(res$sup_ub, 1)
+
+  # A continuous sample space has an integral rather than a sum, and quadrature
+  # returns an estimate, which a certificate may not rest on.
+  gaussian <- gaussian_family(dim = 2L)
+  y <- random_variable(
+    function(z) rep(1, nrow(as.matrix(z))),
+    sample_space = gaussian@sample_space
+  )
+  msg <- tryCatch(
+    certify(y, null_model(gaussian, point_region(theta = c(0, 0)))),
+    error = conditionMessage
+  )
+  expect_match(msg, "Exact evaluation at a point")
+  expect_match(msg, "an integral over a `real_space`")
+  expect_false(grepl("No bounding method is implemented", msg))
+})
+
+
+test_that("the wildcard does not make every refusal its business", {
+  # The point entry claims `parametric_family`, so every family now has a
+  # method that "claims" it. That must not let one method's obstruction speak
+  # for all others.
+  gaussian <- gaussian_family(dim = 2L)
+  y <- random_variable(
+    function(z) rep(1, nrow(as.matrix(z))),
+    sample_space = gaussian@sample_space
+  )
+  msg <- tryCatch(
+    certify(y, null_model(gaussian, halfspace_region(normal = c(1, -1)))),
+    error = conditionMessage
+  )
+  expect_match(msg, "No bounding method is implemented")
+  expect_false(grepl("standard simplex", msg))
+  expect_false(grepl("Exact evaluation", msg))
+})
+
+
+test_that("a point outside the parameter space is refused, not evaluated", {
+  # An expectation at a point the family has no distribution for is not an
+  # expectation under the null, so the method declines it and the family's own
+  # method explains why.
+  family <- multinomial_family(n_trials = 4L, k = 3L)
+  x <- tabulated_rv(family, rep(1, nrow(enumerate_space(family@sample_space))))
+  outside <- point_region(theta = c(2, -1, 0))
+  expect_null(point_fit(outside, family))
+
+  msg <- tryCatch(
+    certify(x, null_model(family, outside)),
+    error = conditionMessage
+  )
+  expect_match(msg, "leave the standard simplex")
+  expect_match(msg, "basis polynomials may take negative values")
+})
+
+
+test_that("a null mixing a point with a simplex certifies under both methods", {
+  # The reason the registry groups by method rather than refusing a null whose
+  # cells differ: each part goes to what can take it, and one certificate comes
+  # back.
+  set.seed(10)
+  family <- multinomial_family(n_trials = 6L, k = 3L)
+  outcomes <- enumerate_space(family@sample_space)
+  x <- tabulated_rv(family, stats::runif(nrow(outcomes), 0, 10))
+  null <- null_model(
+    family,
+    list(
+      point_region(theta = c(0.5, 0.3, 0.2)),
+      simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+    )
+  )
+
+  res <- certify(x, null, tol = 1e-9)
+  expect_setequal(res$method, c("point", "bernstein"))
+  expect_length(res$bounds, 2L)
+  expect_identical(res$iterations[[1L]], 0L)
+  expect_gt(res$iterations[[2L]], 0L)
+  expect_equal(res$sup_ub, max(res$bounds))
+
+  # Each part's bound covers its own part, and the whole covers both.
+  alone <- vapply(
+    parts(null@region),
+    function(p) certify(x, null_model(family, p), tol = 1e-9)$sup_ub,
+    numeric(1)
+  )
+  expect_gte(res$sup_ub, max(alone) - 1e-6)
 })
 
 
@@ -853,4 +1057,160 @@ test_that("sup_lb() improves on a single seed given more of them", {
 test_that("sup_lb() rejects a non-random_variable", {
   null <- plurality_null(n = 4L, k = 3L)
   expect_error(sup_lb(function(x) 1, null), "must be a `random_variable`")
+})
+
+
+# --- Convex nulls that are not simplices --------------------------------------
+
+test_that("a polytope null certifies through its triangulation", {
+  # The acceptance case for the whole decomposition: a null stated as a convex
+  # hull, with no simplex anywhere in what the caller wrote, certifying end to
+  # end.
+  set.seed(207)
+  family <- multinomial_family(n_trials = 6L, k = 3L)
+  null <- null_model(family, list(simplex_square()))
+  x <- tabulated_rv(
+    family,
+    stats::runif(nrow(enumerate_space(family@sample_space)), 0, 10)
+  )
+
+  res <- certify(x, null, tol = 1e-9)
+  expect_length(res$bounds, 1L)
+  expect_identical(res$method, "bernstein")
+  expect_true(all(res$converged))
+
+  # One part, two cells, and the certificate is reduced back onto the part.
+  expect_length(null@cells, 2L)
+  expect_identical(null@cell_part, c(1L, 1L))
+
+  # One-sidedness, against a dense grid over the square. The grid is a lower
+  # bound on the true supremum, so this is necessary and not sufficient, which
+  # is the same standard the simplex cases here are held to.
+  chart <- chart(null@cells[[1L]])
+  grid <- do.call(
+    cbind,
+    lapply(null@cells, function(cell) {
+      w <- as.matrix(expand.grid(rep(list(seq(0, 1, length.out = 21L)), 2L)))
+      w <- cbind(w, 1 - rowSums(w))
+      w <- w[rowSums(w >= 0) == 3L, , drop = FALSE]
+      cell@vertices %*% t(w)
+    })
+  )
+  outcomes <- enumerate_space(family@sample_space)
+  values <- x(outcomes)
+  attained <- as.vector(
+    crossprod(exp(kernel_loglik_batch(family, grid, outcomes)), values)
+  )
+  expect_lte(max(attained), res$sup_ub)
+  expect_gte(res$sup_lb, max(attained) - 1e-6)
+})
+
+
+test_that("an incumbent found in one cell prunes the searches over the rest", {
+  # The point of sharing it: a cell that cannot beat what is already known
+  # stops as soon as its active set falls below that value, instead of proving
+  # its own supremum to `tol` for an answer the maximum discards anyway.
+  set.seed(3)
+  family <- multinomial_family(n_trials = 12L, k = 3L)
+  outcomes <- enumerate_space(family@sample_space)
+  x <- tabulated_rv(family, stats::runif(nrow(outcomes), 0, 10))
+  null <- null_model(family, list(simplex_square()))
+
+  # Each cell certified as a null of its own gets no incumbent from the other,
+  # which is the comparison: same cells, same tolerance, no sharing.
+  alone <- lapply(
+    null@cells,
+    function(cell) certify(x, null_model(family, list(cell)), tol = 1e-9)
+  )
+  shared <- certify(x, null, tol = 1e-9)
+
+  expect_lt(
+    shared$iterations,
+    sum(vapply(alone, \(r) r$iterations, integer(1)))
+  )
+
+  # And the certificate is unaffected. Pruning against a value that was
+  # actually attained cannot drop the maximiser, and the bound each pruned run
+  # returns still accounts for what it dropped.
+  separate_ub <- max(vapply(alone, \(r) r$sup_ub, numeric(1)))
+  expect_equal(shared$sup_ub, separate_ub, tolerance = 1e-6)
+  expect_equal(
+    shared$sup_lb,
+    max(vapply(alone, \(r) r$sup_lb, numeric(1)))
+  )
+})
+
+
+test_that("the incumbent carries from one bound_fn group to the next", {
+  # Nothing about the reduction stops a value attained under one method from
+  # pruning a search under another: `sup_lb` is a maximum over every cell of
+  # every group, so any group's incumbent bounds the supremum from below. With
+  # one entry in the registry there is only ever one group, so this stubs a
+  # second to check that the value is actually handed on.
+  seen <- numeric(0)
+  fake_bound_fn <- function(x, family, cells, control) {
+    seen <<- c(seen, control$incumbent)
+    lapply(seq_along(cells), function(i) {
+      list(
+        bound = 99,
+        incumbent = 99,
+        theta = NULL,
+        iterations = 0L,
+        converged = TRUE,
+        budget_hit = FALSE
+      )
+    })
+  }
+  local_mocked_bindings(
+    certify_methods = function() {
+      list(
+        list(
+          name = "fake",
+          subject = "The stub",
+          fit = function(cell, family) {
+            if (S7_inherits(cell, halfspace_region)) TRUE
+          },
+          bound_fn = fake_bound_fn
+        ),
+        list(
+          name = "bernstein",
+          subject = "The real one",
+          fit = function(cell, family) if (bernstein_compatible(cell)) TRUE,
+          bound_fn = bernstein_bound
+        )
+      )
+    }
+  )
+
+  family <- multinomial_family(n_trials = 4L, k = 3L)
+  facet <- diag(3L)
+  facet[, 1L] <- c(0.5, 0.5, 0)
+  x <- tabulated_rv(family, rep(1, nrow(enumerate_space(family@sample_space))))
+
+  # The stub runs first and attains 99, which the real method then has to be
+  # handed. Reversing the order shows the first group starts from nothing.
+  first <- null_model(
+    family,
+    list(
+      halfspace_region(normal = c(1, -1, 0), offset = 0),
+      simplex_region(vertices = facet)
+    )
+  )
+  certify(x, first, tol = 1e-9)
+  expect_identical(seen, -Inf)
+
+  seen <- numeric(0)
+  second <- null_model(
+    family,
+    list(
+      simplex_region(vertices = facet),
+      halfspace_region(normal = c(1, -1, 0), offset = 0)
+    )
+  )
+  certify(x, second, tol = 1e-9)
+  # The Bernstein group ran first, so the stub was handed what it attained --
+  # a real value, not the `-Inf` a first group starts from.
+  expect_length(seen, 1L)
+  expect_true(is.finite(seen))
+  expect_gt(seen, 0)
 })

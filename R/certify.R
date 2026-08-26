@@ -11,9 +11,9 @@ NULL
 
 #' Bounding methods available to [certify()]
 #'
-#' Each entry names a family of expectations and a region geometry it can
-#' enclose, and the `bound_fn` that does it. A combination missing from this table
-#' simply has no implementation yet.
+#' Each entry decides for itself which `(cell, family)` combinations it can
+#' bound, and carries the `bound_fn` that does it. A combination no entry
+#' claims simply has no implementation yet.
 #'
 #' The Bernstein enclosure bound for multinomial random variables may be
 #' extendable to other families for which the expectation takes the form of a
@@ -25,8 +25,8 @@ NULL
 #'
 #' # The `bound_fn` contract
 #'
-#' `bound_fn(x, family, parts, control)` returns one result per element of
-#' `parts`, in the same order, each a list with the fields
+#' `bound_fn(x, family, cells, control)` returns one result per element of
+#' `cells`, in the same order, each a list with the fields
 #' `check_bound_result()` requires.
 #'
 #' Named `bound_fn` rather than `engine` because `ripr_engine` already means a
@@ -34,33 +34,119 @@ NULL
 #' [mc_engine()]). That is a different object doing a different job, and the two
 #' meet in the same conversations often enough for one word to serve both.
 #'
-#' A `bound_fn` receives a *group* of parts that work for a given `(x, family)`,
+#' A `bound_fn` receives a *group* of cells that work for a given `(x, family)`,
 #' so that enumerating the sample space, evaluating `x` on it, building the
-#' lattice (for multinomial), happens just once for all matching parts.
-#' `certify()` groups the parts by resolved method, so a `bound_fn` only
-#' ever sees geometries it facilitates, and a null with parts of different
+#' lattice (for multinomial), happens just once for all matching cells.
+#' `certify()` groups the cells by resolved method, so a `bound_fn` only
+#' ever sees geometries it facilitates, and a null with cells of differing
 #' geometries is split across bounding methods rather than refused.
 #'
-#' Currently only multinomial is supported, but this architecture makes it
-#' easier to extend to other families and geometries later.
-#' @return A list of methods, each with `name`, `family`, `accepts`,
-#'   `bound_fn` and a one-line `description`. `accepts` is a predicate on a
-#'   single convex cell (a [convex_region], not a whole [region]), and a
-#'   predicate rather than a class.
+#' # The shared incumbent
+#'
+#' `control$incumbent` is the largest value attained anywhere on the null so
+#' far: `-Inf` for the first group, and the best of the preceding groups'
+#' `incumbent` fields after that.
+#'
+#' A method that ignores the field is correct, just slower. What it costs is
+#' that the order the groups run in decides how much work each does, but the
+#' final supremum returned should be the same.
+#'
+#' @return A list of methods, each with `name`, `bound_fn`, a `subject` naming
+#'   the method as the subject of a sentence, and a `fit`.
+#'
+#' `fit(cell, family)` answers three questions at once, for one convex cell (a
+#' [convex_region], not a whole [region]) and the family it would be bounded
+#' under:
+#'
+#' \describe{
+#'   \item{`TRUE`}{this method can bound that combination.}
+#'   \item{a list with `because` and `remedy`}{this method is *about* that
+#'   combination but cannot proceed; the elements describe why and what to do.}
+#'   \item{`NULL`}{not this method's business, so it has nothing to say.}
+#' }
 #' @keywords internal
 #' @noRd
 certify_methods <- function() {
   list(
     list(
+      name = "point",
+      subject = "Exact evaluation at a point",
+      fit = point_fit,
+      bound_fn = point_bound
+    ),
+    list(
       name = "bernstein",
-      family = multinomial_family,
-      accepts = bernstein_compatible,
-      bound_fn = bernstein_bound,
-      description = paste(
-        "Bernstein enclosure for multinomial expectations over simplices"
-      )
+      subject = "The Bernstein enclosure",
+      fit = bernstein_fit,
+      bound_fn = bernstein_bound
     )
   )
+}
+
+
+#' Can a supremum over this cell be found by evaluation alone?
+#'
+#' A [point_region] is a single parameter, so the supremum over it is the
+#' expectation at that parameter and there is nothing more to enclose. That
+#' makes the method independent of the family in a way no other bound is: it
+#' does not require a polynomial form, there are no vertices and no subdivision
+#' is required.
+#'
+#' But the expectation has to be computable *exactly*, which here means summing
+#' over an enumerable sample space (for now; TODO?), and not through monte carlo
+#' or quadrature.
+#'
+#' Also the parameter must belong to the families parameter space.
+#' @keywords internal
+#' @noRd
+point_fit <- function(cell, family) {
+  if (!S7_inherits(cell, point_region)) {
+    return(NULL)
+  }
+  if (!is_finite_space(family@sample_space)) {
+    return(point_unenumerable(family))
+  }
+  if (!contains(family@parameter_space, cell@theta)) {
+    return(NULL)
+  }
+  TRUE
+}
+
+
+#' The one refusal point evaluation owns
+#' @keywords internal
+#' @noRd
+point_unenumerable <- function(family) {
+  list(
+    because = paste0(
+      "its expectation is an integral over a `",
+      class_name(family@sample_space),
+      "` rather than a sum over an enumerable one"
+    ),
+    remedy = paste0(
+      "The expectation has to be computed exactly, i.e. not via quadrature or",
+      "monte carlo estimates, for certification. Only certification is ",
+      "affected: the region charts, projects and fits like any other, and ",
+      "`sup_lb()` still searches it."
+    )
+  )
+}
+
+
+#' Can the Bernstein enclosure bound this cell, and if not, why not?
+#'
+#' The family gate lives here and only here, which is what entitles everything
+#' below it to talk about the standard simplex.
+#' @keywords internal
+#' @noRd
+bernstein_fit <- function(cell, family) {
+  if (!S7_inherits(family, multinomial_family)) {
+    return(NULL)
+  }
+  if (bernstein_compatible(cell)) {
+    return(TRUE)
+  }
+  bernstein_obstruction(cell)
 }
 
 
@@ -117,15 +203,52 @@ simplex_rcond <- function(v) {
 
 #' Why the Bernstein enclosure cannot handle this region, or `NULL` if it can
 #'
-#' Names the condition that fails. Currently only meaningful for a
-#' [simplex_region()]; anything else is already refused by class.
+#' Names the condition that fails *and* what you can do about it. There are
+#' four, and they are four different kinds of problem: an unbounded region,
+#' a region outside the family's parameter space, a simplex of less than full
+#' dimension (TODO?), and a simplex too narrow.
+#'
+#' A bounded region that is not a simplex is not among them, because [cells()]
+#' triangulated it before it got here. `NULL` covers that case and anything
+#' else unforeseen, and the caller falls back to naming the class.
+#' @param space A [convex_region].
+#' @return `NULL`, or a list with `because` (the clause completing "... cannot
+#'   bound this region, because ...") and `remedy` (the whole of what the
+#'   reader should take from it, the caller appending nothing). Three of the
+#'   four remedies close by saying that only certification is affected; the
+#'   region outside the parameter space does not, because for that one it is
+#'   not true.
 #' @keywords internal
 #' @noRd
 bernstein_obstruction <- function(space) {
   if (bernstein_compatible(space)) {
     return(NULL)
   }
-  if (!S7_inherits(space, simplex_region)) {
+  only_cert_affected_msg <- paste0(
+    "Only certification is affected: the region ",
+    "charts, projects and fits like any other, and `sup_lb()` still ",
+    "searches it."
+  )
+  # Before the class test, because it is the class-independent one: a
+  # `halfspace_region` and an `unconstrained_region` fail for the same reason,
+  # and so would an unbounded `polyhedron_region` belonging to neither.
+  if (!is_bounded(space)) {
+    return(list(
+      because = paste0(
+        "it is unbounded, and no finite set of simplices covers an unbounded ",
+        "region"
+      ),
+      remedy = paste0(
+        "The Bernstein enclosure only works for bounded polytopes. State the ",
+        "null over a bounded region instead. ",
+        only_cert_affected_msg
+      )
+    ))
+  }
+  # Every bounded cell that reaches here is a `polytope_region`: a
+  # `simplex_region` from the fan, or a `point_region`, which is the fan's
+  # degenerate output and a `polytope_region` too.
+  if (!S7_inherits(space, polytope_region)) {
     return(NULL)
   }
   v <- space@vertices
@@ -133,37 +256,67 @@ bernstein_obstruction <- function(space) {
   # dimension deficit, which is only true once the vertices are known to share
   # the hyperplane `sum(theta) == 1`; a tetrahedron in `R^3` has four
   # affinely independent vertices and is not lower-dimensional at all.
+  outside <- paste0(
+    "A region reaching outside the standard simplex cannot be bounded by its ",
+    "Bernstein coefficients, as the Bernstein basis polynomials may take ",
+    "negative values there."
+  )
   if (any(v < -1e-12)) {
-    return(paste0(
-      "its vertices leave the standard simplex: the smallest coordinate is ",
-      format(min(v))
+    return(list(
+      because = paste0(
+        "its vertices leave the standard simplex: the smallest coordinate is ",
+        format(min(v))
+      ),
+      remedy = outside
     ))
   }
   sums <- colSums(v)
   if (max(abs(sums - 1)) >= 1e-9) {
-    return(paste0(
-      "its vertices leave the standard simplex: the coordinates of one sum ",
-      "to ",
-      format(sums[which.max(abs(sums - 1))]),
-      " rather than 1"
+    return(list(
+      because = paste0(
+        "its vertices leave the standard simplex: the coordinates of one sum ",
+        "to ",
+        format(sums[which.max(abs(sums - 1))]),
+        " rather than 1"
+      ),
+      remedy = outside
     ))
   }
   if (ncol(v) != nrow(v)) {
-    return(paste0(
-      "it has ",
-      ncol(v),
-      " vertices in ",
-      nrow(v),
-      " dimensions, so it is a simplex of dimension ",
-      ncol(v) - 1L,
-      " inside a parameter space of dimension ",
-      nrow(v) - 1L
+    return(list(
+      because = paste0(
+        "it has ",
+        count_label(ncol(v), "vertex", "vertices"),
+        " in ",
+        nrow(v),
+        " dimensions, so it is a simplex of dimension ",
+        ncol(v) - 1L,
+        " inside a parameter space of dimension ",
+        nrow(v) - 1L
+      ),
+      remedy = paste0(
+        "The enclosure pushes a degree-`n_trials` Bernstein lattice on the ",
+        "standard simplex onto a simplex of the same dimension, so it needs ",
+        "one vertex per coordinate. A lower-dimensional region would need a ",
+        "lattice of its own dimension instead, for which a parametrisation is ",
+        "not yet implemented. ",
+        only_cert_affected_msg
+      )
     ))
   }
-  paste0(
-    "it is too ill-conditioned to enclose: the reciprocal condition number ",
-    "of its edge matrix is ",
-    format(simplex_rcond(v))
+  list(
+    because = paste0(
+      "it is too ill-conditioned to enclose: the reciprocal condition number ",
+      "of its edge matrix is ",
+      format(simplex_rcond(v))
+    ),
+    remedy = paste0(
+      "The region is a genuine simplex but the enclosure inverts the vertex ",
+      "matrix to reparametrise onto it, and an inversion this ill-conditioned ",
+      "cannot be trusted to produce a valid bound. This is a numerical limit ",
+      "rather than a shape the method excludes. ",
+      only_cert_affected_msg
+    )
   )
 }
 
@@ -173,16 +326,16 @@ bernstein_obstruction <- function(space) {
 #' This enforces a contract between `certify()` and the bounding methods.
 #' @keywords internal
 #' @noRd
-check_bound_result <- function(results, method_name, n_parts) {
-  if (!is.list(results) || length(results) != n_parts) {
+check_bound_result <- function(results, method_name, n_cells) {
+  if (!is.list(results) || length(results) != n_cells) {
     stop(
       "The `",
       method_name,
       "` bounding method returned ",
       length(results),
       " results for ",
-      n_parts,
-      " parts.",
+      n_cells,
+      " cells.",
       call. = FALSE
     )
   }
@@ -245,37 +398,87 @@ check_bound_result <- function(results, method_name, n_parts) {
 #' The pmf of a multinomial *is* the degree-`n` Bernstein basis, so `x`
 #' evaluated on the sample space is already a coefficient vector for
 #' \eqn{E_\theta[X]}{E_theta[X]} and no conversion from a power form is needed.
-#' Each part is reparametrised onto its own simplex and enclosed separately.
+#' Each cell is reparametrised onto its own simplex and enclosed separately.
 #' @keywords internal
 #' @noRd
-bernstein_bound <- function(x, family, parts, control) {
+bernstein_bound <- function(x, family, cells, control) {
   check_bernstein_size(family@n_trials, family@k, control$max_coefficients)
 
-  outcomes <- enumerate_space(family@sample_space)
-  values <- x(outcomes)
+  values <- evaluate_on_space(x, family)
+  lattice <- bernstein_lattice(family@n_trials, family@k)
+  boxes <- lapply(cells, function(s) {
+    list(V = s@vertices, coef = reparametrise_to(values, lattice, s@vertices))
+  })
+  incumbent <- max(control$incumbent, boxes_best(boxes, lattice)$value)
+  lapply(boxes, function(box) {
+    result <- certify_sup(
+      list(box),
+      lattice,
+      tol = control$tol,
+      max_iter = control$max_nodes,
+      shared_incumbent = incumbent
+    )
+    incumbent <<- max(incumbent, result$incumbent)
+    result
+  })
+}
+
+
+#' Evaluate a random variable on the whole of an enumerable sample space
+#'
+#' Raises an error when the random variable is not bounded.
+#' @keywords internal
+#' @noRd
+evaluate_on_space <- function(x, family) {
+  values <- x(enumerate_space(family@sample_space))
   if (any(!is.finite(values))) {
-    # If the random variable is not bounded, the expectation is not well-defined
-    # and therefore no bound is coherent. This could arise, for instance, in
-    # mixture likelihood ratios where the numerator and denominator are not
-    # absolutely continuous.
     stop(
       "Cannot certify: the variable is not finite everywhere on the sample ",
       "space, so its null expectation is unbounded.",
       call. = FALSE
     )
   }
+  values
+}
 
-  lattice <- bernstein_lattice(family@n_trials, family@k)
-  lapply(parts, function(s) {
-    box <- list(
-      V = s@vertices,
-      coef = reparametrise_to(values, lattice, s@vertices)
-    )
-    certify_sup(
-      list(box),
-      lattice,
-      tol = control$tol,
-      max_iter = control$max_nodes
+
+#' Exact evaluation at a single parameter, for any enumerable family
+#'
+#' \eqn{\sup_{\theta \in \{\theta_0\}} E_\theta[X]}{sup over {theta_0} of
+#' E_theta[X]} is \eqn{E_{\theta_0}[X]}{E_theta0[X]}, so there is no
+#' enclosure, no subdivision and no budget: the answer is one weighted sum over
+#' the sample space, and the search converges before it starts.
+#'
+#' The sum is in floating point, though, and a certificate may not rest on a
+#' value that round-to-nearest could have placed below the truth. So the bound
+#' carries a margin, in the same spirit as `rounding_slack()` and for the same
+#' reason. Two things it has to cover: the log-density's absolute error
+#' surviving `exp()` as a relative error of order `|log p| * eps`, and the
+#' accumulation of the sum itself over its terms. The `incumbent` reported is
+#' the sum without the margin, being what the evaluation actually attained.
+#' @keywords internal
+#' @noRd
+point_bound <- function(x, family, cells, control) {
+  outcomes <- enumerate_space(family@sample_space)
+  values <- evaluate_on_space(x, family)
+  loglik <- compile_loglik(family, outcomes)
+  lapply(cells, function(cell) {
+    log_p <- as.vector(loglik(matrix(cell@theta, ncol = 1L)))
+    terms <- exp(log_p) * values
+    value <- sum(terms)
+    # A zero-probability outcome contributes an exact zero and a `-Inf` log,
+    # which is not an error term to account for.
+    depth <- max(abs(log_p[is.finite(log_p)]), 0)
+    slack <- .Machine$double.eps *
+      (length(terms) + depth) *
+      sum(abs(terms))
+    list(
+      bound = value + slack,
+      incumbent = value,
+      theta = cell@theta,
+      iterations = 0L,
+      converged = TRUE,
+      budget_hit = FALSE
     )
   })
 }
@@ -289,8 +492,7 @@ bernstein_bound <- function(x, family, parts, control) {
 #' @noRd
 certify_method <- function(family, cell) {
   for (method in certify_methods()) {
-    fits <- S7_inherits(family, method$family) && method$accepts(cell)
-    if (fits) {
+    if (isTRUE(method$fit(cell, family))) {
       return(method)
     }
   }
@@ -309,18 +511,6 @@ class_name <- function(x) attr(S7_class(x), "name")
 #' Says what is missing rather than what is impossible. Certifying some other
 #' pairing of family and geometry is a matter of deriving and implementing a
 #' bound, not of the thing being unbounded.
-#'
-#' Two different refusals share this function. A [polytope_region()] or a
-#' [halfspace_region()] has no method for its *geometry*, and naming the class
-#' says everything. A [simplex_region()] that the Bernstein enclosure cannot
-#' take is a different matter: the geometry is supported, this particular region
-#' is the wrong shape for it, and naming the class would send the reader looking
-#' for a missing method that is not missing. Those get the failing condition
-#' instead, and a reminder that only certification is affected.
-#'
-#' The second wording is reserved for families some method actually claims. A
-#' region obstruction is not the reason a `gaussian_family` fails to certify,
-#' whatever shape its region happens to be.
 #' @keywords internal
 #' @noRd
 unimplemented_message <- function(family, cell) {
@@ -330,27 +520,21 @@ unimplemented_message <- function(family, cell) {
   # shape sends the reader after the wrong thing: a `gaussian_family` over a
   # flat `simplex_region` would be told to fix the region, when a
   # full-dimensional one would not certify either.
-  claims_family <- any(vapply(
-    certify_methods(),
-    \(m) S7_inherits(family, m$family),
-    logical(1)
-  ))
-  obstruction <- if (claims_family) bernstein_obstruction(cell) else NULL
-  if (!is.null(obstruction)) {
-    return(paste0(
-      "The Bernstein enclosure cannot bound ",
-      class_name(family),
-      " expectations over this ",
-      geometry,
-      ", because ",
-      obstruction,
-      ".\n",
-      "The enclosure pushes the Bernstein basis on the standard simplex onto ",
-      "the region's vertices, which needs one vertex per coordinate, all of ",
-      "them in that simplex. Only certification is affected: the region ",
-      "charts, projects and fits like any other, and `sup_lb()` still ",
-      "searches it."
-    ))
+  for (method in certify_methods()) {
+    obstruction <- method$fit(cell, family)
+    if (is.list(obstruction)) {
+      return(paste0(
+        method$subject,
+        " cannot bound ",
+        class_name(family),
+        " expectations over this ",
+        geometry,
+        ", because ",
+        obstruction$because,
+        ".\n",
+        obstruction$remedy
+      ))
+    }
   }
   paste0(
     "No bounding method is implemented for ",
@@ -452,12 +636,17 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
 #' iteration it left the active set (`retired`) and why (`fate`: `"split"`,
 #' `"pruned"`, or `"active"` for one still live at the end).
 #'
+#' One run is one cell, and `id` restarts at 1 in each, so `(cell, id)` is what
+#' identifies a node and `parent` is to be matched within a cell. `part` is
+#' along for reporting: it is `cell_part[cell]`, constant down a cell's rows,
+#' and a part with several cells contributes several trees rather than one.
+#'
 #' Coefficients are dropped. They are the bulk of a node (10,626 doubles each at
 #' `K = 5, n = 20`, against a handful for everything else here) and nothing
 #' downstream of a finished run evaluates them.
 #' @keywords internal
 #' @noRd
-node_table <- function(result, part) {
+node_table <- function(result, cell, part) {
   nodes <- result$history
   if (!length(nodes)) {
     return(NULL)
@@ -477,6 +666,7 @@ node_table <- function(result, part) {
   }
   data.frame(
     part = as.integer(part),
+    cell = as.integer(cell),
     id = field("id", NA_integer_),
     parent = field("parent", NA_integer_),
     depth = field("depth", NA_integer_),
@@ -494,19 +684,25 @@ node_table <- function(result, part) {
 #' Record how a certification ran, for inspection and plotting
 #'
 #' Same computation as [certify()], reporting the branch-and-bound tree instead
-#' of the certificate. One row per leaf of the search, per part.
+#' of the certificate. One row per node of the search, per cell.
 #'
-#' The nodes live at any iteration tile their part exactly, so at `K = 3` the
+#' The nodes live at any iteration tile their cell exactly, so at `K = 3` the
 #' `vertices` column draws the partition of the facet directly, in barycentric
 #' coordinates, at every step and not merely at the end.
 #' `depth` against `born` shows the shape of the tree: a max-bound queue rule
 #' can produce a chain rather than anything balanced, which is visible here and
 #' nowhere else.
 #'
+#' A cell is one branch-and-bound run and `id` restarts at 1 in each, so group
+#' by `cell` before reading `id` or matching `parent`. `part` says which of the
+#' declared parts a cell came from, and a triangulated part contributes one
+#' tree per cell rather than one between them; `traces` and `incumbent_traces`
+#' are per cell on the same terms.
+#'
 #' Only bounding methods that use branch and bound populate this. A method that
 #' bounds in closed form contributes no rows.
 #' @inheritParams certify
-#' @return A data frame with `part`, `id`, `parent`, `depth`, `born`,
+#' @return A data frame with `part`, `cell`, `id`, `parent`, `depth`, `born`,
 #'   `retired`, `fate`, `upper`, `volume` and a `vertices` list column, plus the
 #'   certificate itself in the `"certificate"` attribute and the per-iteration
 #'   bound in `"trace"`.
@@ -565,30 +761,42 @@ certify_trace <- function(
 #' `X / bound` is one.
 #'
 #' Certification is refused for any (family, cell) combination with no known
-#' bounding method.
+#' bounding method.A part that is a [polytope_region()] is triangulated first,
+#' so any bounded null will certify for a multinomial expectation. What is
+#' currently refused is a part that is unbounded (e.g. a [polyhedron_region()]
+#' with rays or lineality, of which [halfspace_region()] and
+#' [unconstrained_region()] are instances of).
 #'
-#' Currently only multinomial families with simplex parts are supported. The
-#' upper bound is found via a branch-and-bound algorithm that recursively
-#' subdivides the simplex \insertCite{Leroy2012}{ripr}, and bounds each subset
-#' via the simplicial Bernstein range enclosure property
-#' \insertCite{Garloff1986}{ripr}.
+#' Only two methods are currently implemented. A [point_region()] is certified
+#' by evaluation, for any family whose sample space can be enumerated (and thus
+#' the expectation computed exactly) the supremum over a single parameter is the
+#' expectation at that point, so there is nothing to enclose. Anything larger
+#' needs a specific bounding method, and the only one currently implemented is
+#' Bernstein branch-and-bound for multinomial families over simplices, found
+#' via a branch-and-bound algorithm that recursively subdivides the simplex
+#' \insertCite{Leroy2012}{ripr} and bounds each subset via the simplicial
+#' Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
 #'
 #' Unlike [sup_lb()] this is a proven bound.
 #' @param x A [random_variable].
 #' @param null A [null_model].
 #' @param tol Stop once the bound is within `tol` of the best value found.
-#' @param max_nodes Cap on subdivisions per part for branch-and-bound
-#'   algorithms.
+#' @param max_nodes Cap on subdivisions *per cell* for branch-and-bound
+#'   algorithms, so a part triangulated into several cells is allowed
+#'   `max_nodes` in each. The per-part `iterations` reported below is the total
+#'   actually spent, which is what to read the cap against.
 #' @param max_coefficients Refuse above this many Bernstein coefficients
 #'   (for bounding multinomial expectation in simplices).
 #' @param .record Also return branch-and-bound nodes. Use [certify_trace()]
 #'   rather than this directly.
 #' @return A list with `sup_ub`, `sup_lb`, the `random_variable` and `null` it
-#'   holds for, the `method` names that produced it (one per distinct part
+#'   holds for, the `method` names that produced it (one per distinct cell
 #'   geometry), and per-part `bounds`, `incumbents`, `iterations`,
-#'   `converged` and `budget_hit`. `budget_hit` flags when a search stopped at
-#'   `max_nodes` with the gap still open, so its bound is valid but likely
-#'   loose.
+#'   `converged` and `budget_hit`, each reduced over the part's cells: the
+#'   largest bound and incumbent, the total iterations, converged only if every
+#'   cell did and `budget_hit` if any did. `budget_hit` flags when a search
+#'   stopped at `max_nodes` with the gap still open, so its bound is valid but
+#'   likely loose.
 #' @seealso [sup_lb()]
 #' @references
 #' \insertAllCited{}
@@ -621,19 +829,18 @@ certify <- function(
   rlang::check_number_whole(max_coefficients, min = 1, max = 2147483647)
 
   family <- null@family
-  # Get applicable bound method for each part.
-  methods <- lapply(
-    parts(null@region),
-    function(s) certify_method(family, s)
-  )
+  # A bound is derived on one cell at a time.
+  cells <- null@cells
+  cell_part <- null@cell_part
+  methods <- lapply(cells, function(s) certify_method(family, s))
   # Stop if any (family, cell) combination is not implemented. Report the
-  # offending parts rather than the null model, and deduplicate: a plurality
-  # null has one part per candidate and they share a geometry, so the same
+  # offending cells rather than the null model, and deduplicate: a plurality
+  # null has one cell per candidate and they share a geometry, so the same
   # message would otherwise repeat K - 1 times.
   unavailable <- vapply(methods, is.null, logical(1L))
   if (any(unavailable)) {
     unimpl_msgs <- vapply(
-      parts(null@region)[unavailable],
+      cells[unavailable],
       function(s) unimplemented_message(family, s),
       character(1L)
     )
@@ -645,35 +852,54 @@ certify <- function(
   }
   method_names <- unique(vapply(methods, function(m) m$name, character(1L)))
 
-  # Group the parts by resolved method, run each bound_fn once on its group,
-  # then put the results back in part order. With one entry in the registry
-  # this is a single group; the grouping is what stops that being an assumption.
+  # Group the cells by resolved method, run each bound_fn once on its group,
+  # then put the results back in cell order.
   control <- list(
     tol = tol,
     max_nodes = max_nodes,
-    max_coefficients = max_coefficients
+    max_coefficients = max_coefficients,
+    incumbent = -Inf
   )
-  per_part <- vector("list", n_parts(null@region))
+  per_cell <- vector("list", length(cells))
   for (name in method_names) {
-    which_parts <- which(
+    which_cells <- which(
       vapply(methods, function(m) m$name, character(1L)) == name
     )
-    method <- methods[[which_parts[[1L]]]]
-    results <- method$bound_fn(
-      x,
-      family,
-      parts(null@region)[which_parts],
-      control
+    method <- methods[[which_cells[[1L]]]]
+    results <- method$bound_fn(x, family, cells[which_cells], control)
+    check_bound_result(results, name, length(which_cells))
+    per_cell[which_cells] <- results
+    # Carry the incumbent from this group into onto the next group. The
+    # incumbent from the previous run bounds the supremum from below for all
+    # future steps, so the next groups may use it to prune more aggressively.
+    control$incumbent <- max(
+      control$incumbent,
+      vapply(results, function(r) r$incumbent, numeric(1L))
     )
-    check_bound_result(results, name, length(which_parts))
-    per_part[which_parts] <- results
   }
 
-  bounds <- vapply(per_part, function(r) r$bound, numeric(1L))
-  incumbents <- vapply(per_part, function(r) r$incumbent, numeric(1L))
-  iterations <- vapply(per_part, function(r) r$iterations, integer(1L))
-  converged <- vapply(per_part, function(r) r$converged, logical(1L))
-  budget_hit <- vapply(per_part, function(r) r$budget_hit, logical(1L))
+  # Reduce the cells back to the parts the caller declared. A part is the union
+  # of its cells, so its supremum is the largest of theirs and so is the best
+  # value attained in any of them; the work spent is the total, and a part has
+  # converged only if all of its cells did.
+  by_part <- split(
+    seq_along(cells),
+    factor(
+      cell_part,
+      seq_len(n_parts(
+        null@region
+      ))
+    )
+  )
+  reduce <- function(field, combine, template) {
+    per <- vapply(per_cell, function(r) r[[field]], template)
+    vapply(by_part, function(i) combine(per[i]), template)
+  }
+  bounds <- unname(reduce("bound", max, numeric(1L)))
+  incumbents <- unname(reduce("incumbent", max, numeric(1L)))
+  iterations <- unname(reduce("iterations", sum, integer(1L)))
+  converged <- unname(reduce("converged", all, logical(1L)))
+  budget_hit <- unname(reduce("budget_hit", any, logical(1L)))
   out <- list(
     sup_ub = max(bounds),
     sup_lb = max(incumbents),
@@ -687,15 +913,17 @@ certify <- function(
     budget_hit = budget_hit
   )
   if (.record) {
-    # Records the tables of the node histories for each part. Used by
-    # `certify_trace`.
+    # Records the tables of the node histories for each cell. Used by
+    # `certify_trace`. These stay per cell rather than being reduced: the tree
+    # is what the recording is for, and two cells' trees do not combine into
+    # one. The `part` column carries the reduction's grouping.
     tables <- lapply(
-      seq_along(per_part),
-      function(i) node_table(per_part[[i]], i)
+      seq_along(per_cell),
+      function(i) node_table(per_cell[[i]], cell = i, part = cell_part[[i]])
     )
     out$record <- do.call(rbind, Filter(Negate(is.null), tables))
-    out$traces <- lapply(per_part, function(r) r$trace)
-    out$incumbent_traces <- lapply(per_part, function(r) r$incumbent_trace)
+    out$traces <- lapply(per_cell, function(r) r$trace)
+    out$incumbent_traces <- lapply(per_cell, function(r) r$incumbent_trace)
   }
   out
 }

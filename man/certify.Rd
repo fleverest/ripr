@@ -20,8 +20,10 @@ certify(
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
-\item{max_nodes}{Cap on subdivisions per part for branch-and-bound
-algorithms.}
+\item{max_nodes}{Cap on subdivisions \emph{per cell} for branch-and-bound
+algorithms, so a part triangulated into several cells is allowed
+\code{max_nodes} in each. The per-part \code{iterations} reported below is the total
+actually spent, which is what to read the cap against.}
 
 \item{max_coefficients}{Refuse above this many Bernstein coefficients
 (for bounding multinomial expectation in simplices).}
@@ -31,11 +33,13 @@ rather than this directly.}
 }
 \value{
 A list with \code{sup_ub}, \code{sup_lb}, the \code{random_variable} and \code{null} it
-holds for, the \code{method} names that produced it (one per distinct part
+holds for, the \code{method} names that produced it (one per distinct cell
 geometry), and per-part \code{bounds}, \code{incumbents}, \code{iterations},
-\code{converged} and \code{budget_hit}. \code{budget_hit} flags when a search stopped at
-\code{max_nodes} with the gap still open, so its bound is valid but likely
-loose.
+\code{converged} and \code{budget_hit}, each reduced over the part's cells: the
+largest bound and incumbent, the total iterations, converged only if every
+cell did and \code{budget_hit} if any did. \code{budget_hit} flags when a search
+stopped at \code{max_nodes} with the gap still open, so its bound is valid but
+likely loose.
 }
 \description{
 A \strong{proven} upper bound on
@@ -50,13 +54,21 @@ This exists to prove that a particular random variable is an e-variable for
 \code{X / bound} is one.
 
 Certification is refused for any (family, cell) combination with no known
-bounding method.
+bounding method.A part that is a \code{\link[=polytope_region]{polytope_region()}} is triangulated first,
+so any bounded null will certify for a multinomial expectation. What is
+currently refused is a part that is unbounded (e.g. a \code{\link[=polyhedron_region]{polyhedron_region()}}
+with rays or lineality, of which \code{\link[=halfspace_region]{halfspace_region()}} and
+\code{\link[=unconstrained_region]{unconstrained_region()}} are instances of).
 
-Currently only multinomial families with simplex parts are supported. The
-upper bound is found via a branch-and-bound algorithm that recursively
-subdivides the simplex \insertCite{Leroy2012}{ripr}, and bounds each subset
-via the simplicial Bernstein range enclosure property
-\insertCite{Garloff1986}{ripr}.
+Only two methods are currently implemented. A \code{\link[=point_region]{point_region()}} is certified
+by evaluation, for any family whose sample space can be enumerated (and thus
+the expectation computed exactly) the supremum over a single parameter is the
+expectation at that point, so there is nothing to enclose. Anything larger
+needs a specific bounding method, and the only one currently implemented is
+Bernstein branch-and-bound for multinomial families over simplices, found
+via a branch-and-bound algorithm that recursively subdivides the simplex
+\insertCite{Leroy2012}{ripr} and bounds each subset via the simplicial
+Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
 
 Unlike \code{\link[=sup_lb]{sup_lb()}} this is a proven bound.
 }

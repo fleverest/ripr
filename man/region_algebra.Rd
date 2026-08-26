@@ -8,6 +8,8 @@
 \alias{intersect.default}
 \alias{setdiff}
 \alias{setdiff.default}
+\alias{setequal}
+\alias{setequal.default}
 \title{Set algebra on regions}
 \usage{
 union(x, y, ...)
@@ -21,6 +23,10 @@ intersect(x, y, ...)
 setdiff(x, y, ...)
 
 \method{setdiff}{default}(x, y, ...)
+
+setequal(x, y, ...)
+
+\method{setequal}{default}(x, y, ...)
 }
 \arguments{
 \item{x, y}{\link{region}s, or anything the base R namesake accepts.}
@@ -28,7 +34,8 @@ setdiff(x, y, ...)
 \item{...}{Further regions.}
 }
 \value{
-A \link{region}. \code{union()} returns what \code{\link[=union_region]{union_region()}} would.
+A \link{region}, except from \code{setequal()}, which returns \code{TRUE} or
+\code{FALSE}. \code{union()} returns what \code{\link[=union_region]{union_region()}} would.
 \code{intersect()} returns a \link{union_region} of the surviving cells, the lone
 cell itself when a single one survives, or \code{NULL} when the intersection
 is empty.
@@ -53,6 +60,17 @@ part \code{y} that meets \code{x} in a lower-dimensional slice (e.g. \code{x} is
 difference and closure reverses the subtraction. Doing so will raise a
 warning. The decomposition is a product across the parts of \code{y}, guarded by
 \code{max_cells} (default \code{1000L}, passed through \code{...}).
+
+\code{setequal(x, y)} decides whether two regions are the same set, exactly.
+Containment each way is what it tests, and where the containing side is
+convex that is one exact linear program per facet of it, with nothing
+decomposed.
+
+An empty difference is not what equality means here. The difference is
+closed, so a region covered exactly by a decomposition of itself still leaves
+behind the boundaries its pieces share: \code{setdiff()} of a square and its two
+triangles is the diagonal between them, where \code{setequal()} of the same two is
+\code{TRUE}.
 }
 \examples{
 # The K = 3 plurality null, by verb rather than constructor:
@@ -81,8 +99,15 @@ plurality <- union(
 )
 setdiff(simplex_region(vertices = diag(3)), plurality)
 
+# A square, and the same square cut into two triangles: different objects,
+# the same set. One of those triangles alone is not.
+square <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+setequal(square, union_region(cells(square)))
+setequal(square, cells(square)[[1]])
+
 # Not regions, so base R behaviour, untouched:
 union(c(1, 2), c(2, 3))
 intersect(c(1, 2), c(2, 3))
 setdiff(c(1, 2), c(2, 3))
+setequal(c(1, 2), c(2, 1))
 }

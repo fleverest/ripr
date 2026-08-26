@@ -296,6 +296,37 @@ test_that("a null takes its geometry as a part, a list or a union alike", {
   expect_equal(in_null(bare, theta), in_null(wrapped, theta))
 })
 
+test_that("a null takes its decomposition once, at construction", {
+  fam <- multinomial_family(n_trials = 10, k = 3)
+  # A part that is already a simplex is its own cell, and the same object:
+  # nothing has been rebuilt behind the caller's back.
+  simplices <- null_model(fam, lapply(2:3, \(j) plurality_simplex(3, j)))
+  expect_identical(simplices@cells, parts(simplices@region))
+  expect_identical(simplices@cell_part, 1:2)
+
+  # A part that is a convex hull is several cells, all filed under it.
+  square <- polytope_region(
+    vertices = cbind(
+      c(0.5, 0.5, 0),
+      c(0, 0.5, 0.5),
+      c(0, 0, 1),
+      c(0.5, 0, 0.5)
+    )
+  )
+  mixed <- null_model(fam, list(plurality_simplex(3, 2), square))
+  expect_length(mixed@cells, 3L)
+  expect_identical(mixed@cell_part, c(1L, 2L, 2L))
+  expect_true(all(vapply(
+    mixed@cells,
+    \(c) S7_inherits(c, simplex_region),
+    logical(1)
+  )))
+
+  # The cells are in part order and are that part's own `cells()`.
+  expect_identical(mixed@cells[[1L]], parts(mixed@region)[[1L]])
+  expect_identical(mixed@cells[2:3], cells(square))
+})
+
 test_that("in_null is the union of the pieces", {
   fam <- multinomial_family(n_trials = 10, k = 3)
   null <- null_model(fam, lapply(2:3, \(j) plurality_halfspace(3, j)))

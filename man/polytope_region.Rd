@@ -38,6 +38,10 @@ needs upstream.
 
 Use \code{\link[=simplex_region]{simplex_region()}} when that is what you mean, and use \code{\link[=polytope_region]{polytope_region()}}
 when it is not.
+
+\code{\link[=cells]{cells()}} bridges the two. A polytope that is not a simplex decomposes into
+simplices by a vertex fan triangulation. A square gives two triangles; a
+pentagon, three.
 }
 \examples{
 # A square in R^2

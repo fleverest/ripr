@@ -64,5 +64,6 @@ Collate:
     'gaussian.R'
     'multinomial.R'
     'region_algebra.R'
+    'triangulate.R'
     'zzz.R'
 RdMacros: Rdpack

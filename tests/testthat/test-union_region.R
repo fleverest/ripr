@@ -79,10 +79,13 @@ test_that("one convex region is handed back unwrapped", {
   expect_false(S7_inherits(union_region(s), union_region))
 })
 
-test_that("the decomposition caches start empty", {
+test_that("a union carries its parts and nothing else", {
+  # A union stores no decomposition of itself. `cells()` derives the simplicial
+  # one on demand and `null_model()` keeps the copy worth keeping, being the
+  # object whose every sweep needs it; `disjoin()` returns a region rather than
+  # annotating one.
   r <- union_region(plurality_cell(3, 2), plurality_cell(3, 3))
-  expect_null(r@disjoint)
-  expect_null(r@triangulation)
+  expect_identical(names(S7::props(r)), "parts")
 })
 
 # --- Validation ---------------------------------------------------------------
@@ -136,16 +139,19 @@ test_that("a convex region is its own only part and its own only cell", {
   expect_equal(n_cells(s), 1L)
 })
 
-test_that("parts() and cells() agree on every geometry in the package", {
-  # A marker for the phase that adds triangulation. When we add triangulation
-  # we will get more cells than parts, this test will fail for the polytope
-  # row, and that failure is a reminder to check every caller picked the
-  # accessor it meant. Until then, they should be the same.
-  for (nm in names(every_geometry())) {
+test_that("parts() and cells() agree except where a triangulation splits", {
+  # The square is the whole of the difference: it is the one geometry here
+  # that is bounded and not already a simplex, so it is the one the fan has
+  # anything to do to.
+  for (nm in setdiff(names(every_geometry()), "polytope")) {
     g <- every_geometry()[[nm]]
     expect_identical(parts(g), cells(g), info = nm)
     expect_equal(n_parts(g), n_cells(g), info = nm)
   }
+
+  square <- every_geometry()$polytope
+  expect_equal(n_parts(square), 1L)
+  expect_equal(n_cells(square), 2L)
 })
 
 test_that("a union's parts are its members and its cells are theirs, flattened", {

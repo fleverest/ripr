@@ -54,8 +54,8 @@ region_from_qh <- function(qh) {
 #'
 #' A `union_region` is a [region] but deliberately **not** a [convex_region].
 #' [chart()], [project()], `maximise_over()` assume convexity, and a union of
-#' convex sets is not convex. What this class does implement is [space_dim()]
-#' [contains()], [parts()] and [cells()] so that optimisation procedures that
+#' convex sets is not convex. What this class does implement is [space_dim()],
+#' [contains()], [parts()] and [cells()], so that optimisation procedures that
 #' require certain properties may operate on the individual components that
 #' comply.
 #'
@@ -73,10 +73,6 @@ region_from_qh <- function(qh) {
 #' @section Properties:
 #' \describe{
 #'   \item{`parts`}{The flat list of convex cells, as declared.}
-#'   \item{`disjoint`}{`NULL`. A cache for a disjoint decomposition, filled by
-#'   a later phase; nothing computes it yet.}
-#'   \item{`triangulation`}{`NULL`. A cache for a simplicial decomposition, on
-#'   the same terms.}
 #' }
 #' @examples
 #' # The K = 3 plurality null: two overlapping sub-simplices.
@@ -100,22 +96,13 @@ region_from_qh <- function(qh) {
 union_region <- new_class(
   "union_region",
   parent = region,
-  properties = list(
-    parts = class_list,
-    disjoint = class_any,
-    triangulation = class_any
-  ),
+  properties = list(parts = class_list),
   constructor = function(...) {
     flat <- flatten_parts(list(...))
     if (length(flat) == 1L && S7_inherits(flat[[1L]], convex_region)) {
       return(flat[[1L]])
     }
-    new_object(
-      S7_object(),
-      parts = flat,
-      disjoint = NULL,
-      triangulation = NULL
-    )
+    new_object(S7_object(), parts = flat)
   },
   validator = function(self) {
     if (length(self@parts) == 0L) {
@@ -299,9 +286,21 @@ method(format, union_region) <- function(x, ...) {
 #' warning. The decomposition is a product across the parts of `y`, guarded by
 #' `max_cells` (default `1000L`, passed through `...`).
 #'
+#' `setequal(x, y)` decides whether two regions are the same set, exactly.
+#' Containment each way is what it tests, and where the containing side is
+#' convex that is one exact linear program per facet of it, with nothing
+#' decomposed.
+#'
+#' An empty difference is not what equality means here. The difference is
+#' closed, so a region covered exactly by a decomposition of itself still leaves
+#' behind the boundaries its pieces share: `setdiff()` of a square and its two
+#' triangles is the diagonal between them, where `setequal()` of the same two is
+#' `TRUE`.
+#'
 #' @param x,y [region]s, or anything the base R namesake accepts.
 #' @param ... Further regions.
-#' @return A [region]. `union()` returns what [union_region()] would.
+#' @return A [region], except from `setequal()`, which returns `TRUE` or
+#'   `FALSE`. `union()` returns what [union_region()] would.
 #'   `intersect()` returns a [union_region] of the surviving cells, the lone
 #'   cell itself when a single one survives, or `NULL` when the intersection
 #'   is empty.
@@ -332,10 +331,17 @@ method(format, union_region) <- function(x, ...) {
 #' )
 #' setdiff(simplex_region(vertices = diag(3)), plurality)
 #'
+#' # A square, and the same square cut into two triangles: different objects,
+#' # the same set. One of those triangles alone is not.
+#' square <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+#' setequal(square, union_region(cells(square)))
+#' setequal(square, cells(square)[[1]])
+#'
 #' # Not regions, so base R behaviour, untouched:
 #' union(c(1, 2), c(2, 3))
 #' intersect(c(1, 2), c(2, 3))
 #' setdiff(c(1, 2), c(2, 3))
+#' setequal(c(1, 2), c(2, 1))
 #' @name region_algebra
 NULL
 
@@ -424,20 +430,168 @@ method(setdiff, region) <- function(x, y, ..., max_cells = 1000L) {
   )
   n_sliced <- sum(vapply(results, \(r) r$n_sliced, integer(1)))
   if (n_sliced > 0L) {
-    warning(
+    warning(slice_warning(paste0(
       "in ",
       count_label(n_sliced, "case"),
       ", a part of `y` met a part of `x` only in a lower-dimensional ",
       "slice; nothing was subtracted there, since a closed difference ",
-      "removes nothing from a slice.",
-      call. = FALSE
-    )
+      "removes nothing from a slice."
+    )))
   }
   cells <- unlist(lapply(results, \(r) r$cells), recursive = FALSE)
   if (length(cells) == 0L) {
     return(NULL)
   }
   union_region(lapply(cells, region_from_qh))
+}
+
+
+#' The warning `setdiff()` raises when a part subtracts nothing
+#'
+#' Classed, so that an internal caller who is subtracting only to answer a
+#' question (`setequal()` asking whether a difference is empty, `disjoin()`
+#' peeling parts apart for a measure) can silence just this warning without
+#' suppressing other warnings upstream.
+#' @keywords internal
+#' @noRd
+slice_warning <- function(message) {
+  structure(
+    class = c("ripr_slice_warning", "warning", "condition"),
+    list(message = message, call = NULL)
+  )
+}
+
+
+#' Run an expression with the slice warning suppressed
+#' @keywords internal
+#' @noRd
+without_slice_warning <- function(expr) {
+  withCallingHandlers(
+    expr,
+    ripr_slice_warning = function(w) invokeRestart("suppressWarning")
+  )
+}
+
+
+#' @rdname region_algebra
+#' @export
+setequal <- function(x, y, ...) UseMethod("setequal")
+
+
+#' @rdname region_algebra
+#' @export
+setequal.default <- function(x, y, ...) base::setequal(x, y)
+
+
+method(setequal, region) <- function(x, y, ..., max_cells = 1000L) {
+  y <- as_region(y)
+  if (space_dim(x) != space_dim(y)) {
+    # Not an error, unlike `intersect()` and `setdiff()`. Those have no answer
+    # to give for regions of different ambient dimensions; this one does, and
+    # it is that two sets living in different spaces are not the same set.
+    return(FALSE)
+  }
+  region_subset(x, y, max_cells) && region_subset(y, x, max_cells)
+}
+
+
+#' Is every point of one region in another?
+#'
+#' Checks if `inner` is a subset of `whole`, where both are [region]s.
+#' @keywords internal
+#' @noRd
+region_subset <- function(inner, whole, max_cells = 1000L) {
+  # If whole is just one convex_region, we can check with a single
+  # call for each part of inner.
+  if (S7_inherits(whole, convex_region)) {
+    qh <- q_hrep(whole)
+    return(all(vapply(
+      parts(inner),
+      \(p) q_subset(q_hrep(p), qh),
+      logical(1)
+    )))
+  }
+  # Otherwise we subtract each convex part of whole from each part of
+  # inner, then check the dimension of the remainders.
+  subtract <- parts(whole)
+  for (p in parts(inner)) {
+    qh <- q_hrep(p)
+    dim_p <- q_dim(qh)
+    leftover <- part_difference(qh, subtract, max_cells)$cells
+    if (any(vapply(leftover, \(cell) q_dim(cell) == dim_p, logical(1)))) {
+      return(FALSE)
+    }
+  }
+  TRUE
+}
+
+
+# --- Disjoining ---------------------------------------------------------------
+
+#' Transform a region's parts into a disjoint cover of the union
+#'
+#' Sequential differences: leave the first part as is, then subtract the first
+#' from the second, subtract both from the third, and so on. The result covers
+#' the same set and its parts meet only on shared boundaries, so a measure can
+#' be summed over them where the declared parts would double-count their
+#' overlaps.
+#'
+#' Internally, this is only used for evaluating measures, not during
+#' optimisation or certification. Both require just a supremum, and a supremum
+#' over a union is equivalently a maxmium of the suprema of its parts. Often the
+#' declared cover is a simpler one to search over anyway; its parts are the ones
+#' the caller stated. Disjoining produces cells that are smaller, more numerous
+#' and cut along facets that may not be interesting in the problem setting.
+#'
+#' Parts meeting in a lower-dimensional slice are left overlapping, since
+#' `setdiff()` computes closed differences and a slice has no measure to
+#' double-count.
+#'
+#' @param x A [region].
+#' @param ... Passed to `setdiff()`, e.g. `max_cells`.
+#' @return A [region] covering the same set, whose parts have disjoint
+#'   interiors, or `NULL` if `x` is empty.
+#' @examples
+#' # The two cells of the K = 3 plurality null overlap where candidate 1 trails
+#' # both others. Peeling them apart leaves that region in one of the two.
+#' plurality <- union(
+#'   simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'   simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#' )
+#' peeled <- disjoin(plurality)
+#' n_parts(peeled)
+#' setequal(peeled, plurality)
+#' @seealso [region_algebra]
+#' @export
+disjoin <- new_generic("disjoin", "x", function(x, ...) S7::S7_dispatch())
+
+
+#' @rdname disjoin
+#' @usage NULL
+method(disjoin, convex_region) <- function(x, ...) x
+
+
+#' @rdname disjoin
+#' @usage NULL
+method(disjoin, union_region) <- function(x, ...) {
+  kept <- list()
+  for (part in x@parts) {
+    remainder <- if (length(kept)) {
+      without_slice_warning(setdiff(part, union_region(kept), ...))
+    } else {
+      part
+    }
+    # A part wholly covered by the ones before it contributes nothing, and an
+    # empty one was never going to. Dropping them is the point: what comes back
+    # is a cover with no redundant piece in it.
+    if (!is.null(remainder) && !is_empty(remainder)) {
+      kept <- c(kept, parts(remainder))
+    }
+  }
+  if (length(kept) == 0L) {
+    return(NULL)
+  }
+  union_region(kept)
 }
 
 

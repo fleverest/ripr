@@ -356,3 +356,145 @@ test_that("a subtracted part that never meets x subtracts nothing", {
     n_parts(setdiff(square, triangle))
   )
 })
+
+
+# --- setequal -----------------------------------------------------------------
+
+test_that("setequal() falls through to base R off regions", {
+  expect_true(setequal(c(1, 2), c(2, 1)))
+  expect_false(setequal(c(1, 2), c(2, 3)))
+  expect_true(setequal(letters[1:3], rev(letters[1:3])))
+})
+
+
+test_that("setequal() decides convex regions from their facets alone", {
+  # The same halfspace written two ways. Scaling a normal changes nothing about
+  # the set, and nothing here is decomposed to find that out.
+  expect_true(setequal(
+    halfspace_region(normal = c(1, -1, 0)),
+    halfspace_region(normal = c(2, -2, 0), offset = 0)
+  ))
+  expect_false(setequal(
+    halfspace_region(normal = c(1, -1, 0)),
+    halfspace_region(normal = c(1, -1, 0), offset = 1)
+  ))
+
+  # Reflexivity across every geometry, including the ones whose *generators*
+  # are a rounded frame rather than an exact description of them.
+  for (region in list(
+    simplex_region(vertices = diag(3)),
+    polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))),
+    halfspace_region(normal = c(1, -1, 0)),
+    point_region(theta = c(0.5, 0.3, 0.2)),
+    unconstrained_region(2L)
+  )) {
+    expect_true(setequal(region, region))
+  }
+
+  expect_false(setequal(
+    simplex_region(vertices = diag(3)),
+    unconstrained_region(3L)
+  ))
+  # A different ambient dimension is a `FALSE`, not an error: two sets in
+  # different spaces are answerably not the same set.
+  expect_false(setequal(
+    simplex_region(vertices = diag(3)),
+    simplex_region(vertices = diag(4))
+  ))
+})
+
+
+test_that("setequal() sees through a decomposition into cells", {
+  # The case an emptiness test gets wrong. `setdiff(square, its triangles)` is
+  # the diagonal, not nothing, because the difference is closed; the square is
+  # nonetheless exactly the union of its triangles.
+  square <- polytope_region(
+    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+  )
+  expect_length(cells(square), 2L)
+  expect_false(is.null(setdiff(square, union_region(cells(square)))))
+  expect_true(setequal(square, union_region(cells(square))))
+
+  # And one triangle alone is not the square, which is what stops the
+  # dimension test from calling everything equal.
+  expect_false(setequal(square, cells(square)[[1L]]))
+})
+
+
+test_that("setequal() puts a region back together from its complement", {
+  ambient <- simplex_region(vertices = diag(3))
+  null_region <- union_region(plurality_cell(3L, 2L), plurality_cell(3L, 3L))
+  wins <- setdiff(ambient, null_region)
+
+  expect_true(setequal(union(null_region, wins), ambient))
+  expect_false(setequal(null_region, ambient))
+  expect_false(setequal(wins, ambient))
+
+  # The overlapping declared cover and the peeled one are the same set.
+  expect_true(setequal(
+    union(plurality_cell(3L, 2L), setdiff(ambient, plurality_cell(3L, 2L))),
+    ambient
+  ))
+})
+
+
+test_that("setequal() does not inherit setdiff's slice warning", {
+  # A part meeting the ambient in a slice makes `setdiff()` warn that it
+  # subtracted nothing. For an equality test that is not news: under-
+  # subtracting leaves the difference larger, and a slice was never going to
+  # cover a full-dimensional piece anyway.
+  square <- polytope_region(
+    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+  )
+  diagonal <- polytope_region(vertices = cbind(c(0, 0), c(1, 1)))
+  padded <- union_region(square, diagonal)
+
+  expect_warning(setdiff(square, padded), "lower-dimensional")
+  expect_silent(expect_true(setequal(square, padded)))
+})
+
+
+# --- disjoin ------------------------------------------------------------------
+
+test_that("disjoin() covers the same set with parts that do not overlap", {
+  plurality <- union_region(plurality_cell(3L, 2L), plurality_cell(3L, 3L))
+  peeled <- disjoin(plurality)
+
+  expect_true(setequal(peeled, plurality))
+  # The declared parts genuinely overlap; the peeled ones meet in nothing of
+  # full dimension, which is what lets a measure be summed over them.
+  expect_false(is.null(intersect(
+    plurality_cell(3L, 2L),
+    plurality_cell(3L, 3L)
+  )))
+  for (i in seq_len(n_parts(peeled) - 1L)) {
+    for (j in (i + 1L):n_parts(peeled)) {
+      shared <- intersect(peeled[[i]], peeled[[j]])
+      if (is.null(shared)) {
+        next
+      }
+      # They may meet, but only in a face: the plurality cells are
+      # 2-dimensional in `R^3`, so an overlap of dimension 2 would be the
+      # double-counting the peeling exists to remove.
+      full <- min(q_dim(q_hrep(peeled[[i]])), q_dim(q_hrep(peeled[[j]])))
+      for (cell in parts(shared)) {
+        expect_lt(q_dim(q_hrep(cell)), full)
+      }
+    }
+  }
+})
+
+
+test_that("disjoin() of a convex region is that region", {
+  s <- plurality_cell(3L, 2L)
+  expect_identical(disjoin(s), s)
+})
+
+
+test_that("disjoin() drops a part its predecessors already cover", {
+  ambient <- simplex_region(vertices = diag(3))
+  # The second part is inside the first, so it survives as nothing at all.
+  peeled <- disjoin(union_region(ambient, plurality_cell(3L, 2L)))
+  expect_identical(peeled, ambient)
+  expect_true(setequal(peeled, ambient))
+})

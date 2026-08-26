@@ -34,7 +34,10 @@ binomial <- function(p = 0.75, ...) {
   Q <- induced_distribution(fam, point_mixing(theta_star = c(p, 1 - p)))
   ripr_init(
     Q,
-    null_model(fam, list(simplex_region(vertices = cbind(c(0, 1), c(0.5, 0.5))))),
+    null_model(
+      fam,
+      list(simplex_region(vertices = cbind(c(0, 1), c(0.5, 0.5))))
+    ),
     exact_engine(),
     control = ripr_control(...)
   )
@@ -57,7 +60,9 @@ in_own_part <- function(state) {
       atoms <- state@atoms[[i]]
       all(vapply(
         seq_len(ncol(atoms)),
-        function(j) contains(parts(state@null@region)[[i]], atoms[, j], tol = 1e-5),
+        function(j) {
+          contains(parts(state@null@region)[[i]], atoms[, j], tol = 1e-5)
+        },
         logical(1)
       ))
     },
@@ -442,7 +447,10 @@ test_that("the returned mixture is a distribution", {
   expect_true(S7_inherits(fit$P_star, induced_distribution))
   expect_equal(sum(weights(fit$W0)), 1, tolerance = 1e-12)
   expect_equal(
-    sum(exp(log_density(fit$P_star, enumerate_space(fit$P_star@family@sample_space)))),
+    sum(exp(log_density(
+      fit$P_star,
+      enumerate_space(fit$P_star@family@sample_space)
+    ))),
     1,
     tolerance = 1e-10
   )
@@ -469,4 +477,52 @@ test_that("the binomial projection concentrates at the boundary", {
   heavy <- fit$W0@components[, which.max(weights(fit$W0))]
   expect_equal(heavy, c(0.5, 0.5), tolerance = 1e-3)
   expect_true(max(weights(fit$W0)) > 0.99)
+})
+
+
+# --- A null that is convex but not a simplex ----------------------------------
+
+test_that("a polytope null fits and certifies end to end", {
+  # Nothing the caller writes here is a simplex: the null is the polytope
+  # `{theta_1 <= 1/2, theta_2 <= 1/2}` in the 2-simplex, stated as its four
+  # vertices. `cells()` cuts it into two triangles.
+  set.seed(11)
+  fam <- multinomial_family(n_trials = 8L, k = 3L)
+  square <- polytope_region(
+    vertices = cbind(
+      c(0.5, 0.5, 0),
+      c(0, 0.5, 0.5),
+      c(0, 0, 1),
+      c(0.5, 0, 0.5)
+    )
+  )
+  null <- null_model(fam, list(square))
+  Q <- induced_distribution(fam, point_mixing(theta_star = c(0.7, 0.2, 0.1)))
+
+  fit <- ripr_init(
+    Q,
+    null,
+    exact_engine(),
+    control = ripr_control(n_seeds = 50L, n_restarts = 5L)
+  ) |>
+    fw_step(8L, record_gap = TRUE) |>
+    em_step(8L) |>
+    weight_step(8L) |>
+    ripr_finish(record_gap = TRUE)
+
+  # Every atom is in the null, and filed under the only part there is.
+  expect_true(all(fit$part == 1L))
+  for (j in seq_len(ncol(fit$W0@components))) {
+    expect_true(contains(square, fit$W0@components[, j], tol = 1e-6))
+  }
+
+  X <- likelihood(Q) / likelihood(fit$P_star)
+  cert <- certify(X, null, tol = 1e-9)
+  expect_true(all(cert$converged))
+  expect_gte(cert$sup_ub, cert$sup_lb)
+
+  # The same identity the simplex nulls satisfy: the certified bound lands at
+  # `1 + gap`, with `gap` the duality gap the fit stopped on. Nothing about the
+  # decomposition disturbs it.
+  expect_equal(cert$sup_ub - 1, fit$gap_final, tolerance = 1e-4)
 })

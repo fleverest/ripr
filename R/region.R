@@ -1045,6 +1045,10 @@ method(chart, polyhedron_region) <- function(space) {
 #'
 #' Use [simplex_region()] when that is what you mean, and use [polytope_region()]
 #' when it is not.
+#'
+#' [cells()] bridges the two. A polytope that is not a simplex decomposes into
+#' simplices by a vertex fan triangulation. A square gives two triangles; a
+#' pentagon, three.
 #' @param vertices `(d, V)` numeric matrix, one vertex per column.
 #' @param facets Optionally, the half-space description already known to the
 #'   caller, exactly as [polyhedron_region()] takes it; derived from the
@@ -1279,7 +1283,9 @@ method(contains, halfspace_region) <- function(space, theta, tol = 1e-8) {
 #' is an e-variable for \eqn{\{P_\theta\}}{{P_theta}}.
 #'
 #' It is technically a simplex, but it requires no validation so we have a
-#' separate class for it.
+#' separate class for it. [certify()] treats it separately too: the supremum
+#' over one parameter is the expectation at that point, so a point null is
+#' certified by direct evaluation rather than by any enclosing method.
 #'
 #' @param theta The parameter vector.
 #' @return A `point_region`.

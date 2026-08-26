@@ -43,6 +43,8 @@ reference:
   - region
   - convex_region
   - union_region
+  - polyhedron_region
+  - h_region
   - polytope_region
   - simplex_region
   - halfspace_region

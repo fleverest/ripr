@@ -10,7 +10,8 @@ polytope_region(vertices)
 \item{vertices}{\verb{(d, V)} numeric matrix, one vertex per column.}
 }
 \value{
-A \code{polytope_region}.
+A \code{polytope_region}, which is also a \code{\link[=polyhedron_region]{polyhedron_region()}} with
+empty ray and lineality blocks.
 }
 \description{
 The bounded case: a polytope given by its vertices (a V-representation),
@@ -35,11 +36,4 @@ when it is not.
 \examples{
 # A square in R^2
 polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
-}
-\references{
-\insertRef{BeckTeboulle2009}{ripr}
-
-\insertRef{DuchiShalevShwartz2008}{ripr}
-
-\insertRef{ODonoghueCandes2015}{ripr}
 }

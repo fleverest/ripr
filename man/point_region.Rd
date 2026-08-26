@@ -4,7 +4,7 @@
 \alias{point_region}
 \title{A single parameter point}
 \usage{
-point_region(theta = integer(0))
+point_region(theta)
 }
 \arguments{
 \item{theta}{The parameter vector.}
@@ -16,6 +16,10 @@ A \code{point_region}.
 The degenerate convex set \eqn{\{\theta\}}{{theta}}. Its role is to let a
 likelihood ratio state the null it is valid for: \eqn{Q / P_\theta}{Q / P_theta}
 is an e-variable for \eqn{\{P_\theta\}}{{P_theta}}.
+}
+\details{
+It is technically a simplex, but it requires no validation so we have a
+separate class for it.
 }
 \examples{
 point_region(theta = c(0.5, 0.3, 0.2))

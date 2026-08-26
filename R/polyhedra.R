@@ -164,6 +164,32 @@ from_vmatrix <- function(m) {
 }
 
 
+#' Normalise a V list to hold at least one point
+#'
+#' cddlib omits the point block entirely when the polyhedron is a cone: the
+#' halfspace `{t1 <= 0}` in `R^3` comes back as `nv = 0, nr = 1, nl = 2`. A
+#' V-representation with no points denotes `cone(r) + span(l)`, which always
+#' contains the origin. We just add the point, since `softmax0` over zero
+#' vertices is undefined, and `v_rep(halfspace_region)` already yields the
+#' anchored form, so this way everything is consistent.
+#'
+#' @keywords internal
+#' @noRd
+with_origin_vertex <- function(v) {
+  if (ncol(v$v) > 0L) {
+    return(v)
+  }
+  if (ncol(v$r) == 0L && ncol(v$l) == 0L) {
+    stop(
+      "a representation with no generators is the empty set, not a cone.",
+      call. = FALSE
+    )
+  }
+  v$v <- matrix(0, nrow = nrow(v$v), ncol = 1L)
+  v
+}
+
+
 # --- The rational layer -------------------------------------------------------
 #
 # `h_rep()` and `v_rep()` below return doubles, and doubles are where the
@@ -185,6 +211,24 @@ from_vmatrix <- function(m) {
 # `q_` marks that a value is a flag-column matrix in GMP rationals. Nothing
 # carrying that prefix should leave this file except into the geometry algebra.
 
+#' Evaluate an rcdd call without disturbing the global RNG stream
+#'
+#' cddlib randomises internally through R's own RNG for `scdd()` and
+#' `lpcdd()`. The randomness is a runtime hedge inherited from cddlib, rerouted
+#' through R's RNG by rcdd only to abide by CRAN policy (no direct `rand()` or
+#' `srand()`), but the result itself is deterministic, so we just reset the
+#' PRNG state after such calls.
+#' @keywords internal
+#' @noRd
+without_rng <- function(expr) {
+  if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+    seed <- get(".Random.seed", envir = globalenv())
+    on.exit(assign(".Random.seed", seed, envir = globalenv()))
+  }
+  expr
+}
+
+
 #' Convert a rational representation to the other one
 #'
 #' The exact double-description step, staying in rationals throughout. Reads
@@ -192,7 +236,7 @@ from_vmatrix <- function(m) {
 #' @keywords internal
 #' @noRd
 q_scdd <- function(m) {
-  rcdd::scdd(m, representation = q_kind(m))$output
+  without_rng(rcdd::scdd(m, representation = q_kind(m))$output)
 }
 
 
@@ -254,7 +298,7 @@ q_rbind <- function(a, b) {
 #' @keywords internal
 #' @noRd
 q_nonredundant <- function(m) {
-  rcdd::redundant(m, representation = q_kind(m))$output
+  without_rng(rcdd::redundant(m, representation = q_kind(m))$output)
 }
 
 
@@ -267,12 +311,12 @@ q_nonredundant <- function(m) {
 #' @noRd
 q_is_empty <- function(m) {
   d <- ncol(m) - 2L
-  lp <- rcdd::lpcdd(
+  lp <- without_rng(rcdd::lpcdd(
     m,
     objgrd = as_qmatrix(rep(0, d)),
     objcon = "0",
     minimize = TRUE
-  )
+  ))
   status <- lp$solution.type
   # cddlib reports feasibility through the status string, and the two
   # inconsistent statuses are the answer we came for rather than a failure.
@@ -317,7 +361,7 @@ h_is_empty <- function(h) q_is_empty(as_hmatrix(h))
 #' @keywords internal
 #' @noRd
 q_facets <- function(v) {
-  out <- rcdd::scdd(v, representation = "V", incidence = TRUE)
+  out <- without_rng(rcdd::scdd(v, representation = "V", incidence = TRUE))
   list(h = out$output, on = out$incidence)
 }
 
@@ -353,9 +397,7 @@ q_centroid <- function(v) {
 #' @keywords internal
 #' @noRd
 v_to_h <- function(v) {
-  from_hmatrix(
-    rcdd::scdd(as_vmatrix(v), representation = "V")$output
-  )
+  from_hmatrix(q_scdd(as_vmatrix(v)))
 }
 
 
@@ -363,9 +405,7 @@ v_to_h <- function(v) {
 #' @keywords internal
 #' @noRd
 h_to_v <- function(h) {
-  from_vmatrix(
-    rcdd::scdd(as_hmatrix(h), representation = "H")$output
-  )
+  from_vmatrix(q_scdd(as_hmatrix(h)))
 }
 
 

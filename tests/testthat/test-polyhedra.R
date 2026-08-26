@@ -307,3 +307,22 @@ test_that("no function outside R/hrep.R touches rcdd", {
   )
   expect_equal(basename(offenders), character(0))
 })
+
+
+# --- RNG neutrality -----------------------------------------------------------
+
+test_that("conversions leave the global RNG stream alone", {
+  # cddlib randomises internally through R's own RNG, so a bare `scdd()` call
+  # advances `.Random.seed`. The bridge saves and restores it: geometry is
+  # exact and deterministic, and "same seed, same fit" must not depend on how
+  # many conversions a region's construction happened to run.
+  set.seed(42)
+  before <- .Random.seed
+  s <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+  h_rep(s)
+  v_rep(s)
+  is_empty(s)
+  invisible(q_scdd(q_vrep(s)))
+  invisible(q_nonredundant(q_vrep(s)))
+  expect_identical(.Random.seed, before)
+})

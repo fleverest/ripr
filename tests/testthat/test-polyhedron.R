@@ -315,3 +315,34 @@ test_that("the hierarchy nests as documented", {
   # A point is the one-vertex polytope.
   expect_true(S7_inherits(p, polytope_region))
 })
+
+
+# --- Printing -----------------------------------------------------------------
+
+test_that("regions print a geometric summary, not a property dump", {
+  square <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+  expect_output(print(square), "4 vertices in R\\^2")
+  expect_output(print(square), "facets: 4 inequalities")
+  expect_output(print(square), "vertices:")
+
+  h <- halfspace_region(normal = c(1, -1, 0), offset = 2)
+  expect_output(print(h), "unbounded")
+  expect_output(print(h), "facets: 1 inequality")
+
+  p <- point_region(theta = c(0.5, 0.3, 0.2))
+  expect_output(print(p), "the point \\(0.5, 0.3, 0.2\\)")
+  expect_output(print(p), "facets: 3 equalities")
+
+  expect_output(print(unconstrained_region(3L)), "all of R\\^3")
+  expect_output(print(unconstrained_region(3L)), "facets: none")
+
+  expect_match(format(simplex_region(vertices = diag(3))), "3 vertices in R\\^3")
+
+  # A union lists each part by its own format line while short.
+  u <- union_region(
+    simplex_region(vertices = diag(3)),
+    halfspace_region(normal = c(1, -1, 0))
+  )
+  expect_output(print(u), "simplex_region: 3 vertices")
+  expect_output(print(u), "halfspace_region: the halfspace")
+})

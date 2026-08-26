@@ -408,15 +408,18 @@ plurality null is a single <code>null_model</code> holding two
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">20</span><span class="dt">L</span></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>family <span class="ot">&lt;-</span> <span class="fu">multinomial_family</span>(<span class="at">n_trials =</span> n, <span class="at">k =</span> K)</span>
 <span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>plurality <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  family,</span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="fu">lapply</span>(<span class="dv">2</span><span class="sc">:</span>K, <span class="cf">function</span>(j) {</span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>    <span class="co"># The two sub-simplices: one for each part.</span></span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>    vertices <span class="ot">&lt;-</span> <span class="fu">diag</span>(K)</span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>    vertices[, <span class="dv">1</span><span class="dt">L</span>] <span class="ot">&lt;-</span> <span class="fu">replace</span>(<span class="fu">numeric</span>(K), <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, j), <span class="fl">0.5</span>)</span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>    <span class="fu">simplex_region</span>(<span class="at">vertices =</span> vertices)</span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>  })</span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>)</span></code></pre></div>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co"># Defines {theta : theta_1 &lt;= theta_j}</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>plurality_part <span class="ot">&lt;-</span> <span class="cf">function</span>(j) {</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  vertices <span class="ot">&lt;-</span> <span class="fu">diag</span>(K)</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  vertices[, <span class="dv">1</span><span class="dt">L</span>] <span class="ot">&lt;-</span> <span class="fu">replace</span>(<span class="fu">numeric</span>(K), <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, j), <span class="fl">0.5</span>)</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>  <span class="fu">simplex_region</span>(<span class="at">vertices =</span> vertices)</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>}</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>plurality <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>  family,</span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>  <span class="fu">union</span>(<span class="fu">plurality_part</span>(<span class="dv">2</span>), <span class="fu">plurality_part</span>(<span class="dv">3</span>))</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>)</span></code></pre></div>
 <p>We nominate a discrete mixture-multinomial distribution as the
 alternative. Here the mixing measure is a single dirac at
 <code>q = (0.40, 0.35, 0.25)</code>, yielding a simple
@@ -581,9 +584,9 @@ steps, and nominate an alternative with one dirac per section, equally
 weighted.</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>medial <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
 <span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  family,</span>
-<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">simplex_region</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="fu">simplex_region</span>(</span>
 <span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>    <span class="at">vertices =</span> <span class="fu">cbind</span>(<span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.5</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="dv">0</span>, <span class="fl">0.5</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span>))</span>
-<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  ))</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  )</span>
 <span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>)</span>
 <span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a></span>
 <span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a>W_maj <span class="ot">&lt;-</span> <span class="fu">finite_mixing</span>(</span>
@@ -642,7 +645,7 @@ rather than silently returning something unproven:</p>
 <div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>gaussian <span class="ot">&lt;-</span> <span class="fu">gaussian_family</span>(<span class="at">dim =</span> <span class="dv">2</span><span class="dt">L</span>)</span>
 <span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>null <span class="ot">&lt;-</span> <span class="fu">null_model</span>(</span>
 <span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  gaussian,</span>
-<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">halfspace_region</span>(<span class="at">normal =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="sc">-</span><span class="dv">1</span>), <span class="at">offset =</span> <span class="dv">0</span>))</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="fu">halfspace_region</span>(<span class="at">normal =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="sc">-</span><span class="dv">1</span>), <span class="at">offset =</span> <span class="dv">0</span>)</span>
 <span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>)</span>
 <span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>Y <span class="ot">&lt;-</span> <span class="fu">likelihood</span>(<span class="fu">gaussian</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)))</span>
 <span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="fu">certify</span>(Y, null)</span>

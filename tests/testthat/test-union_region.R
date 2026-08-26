@@ -217,3 +217,33 @@ test_that("print() and format() describe the union", {
   expect_output(print(many), "7 parts")
   expect_output(print(many), "7 x simplex_region")
 })
+
+
+# --- The list interface -------------------------------------------------------
+
+test_that("every region is list-like over its parts", {
+  s <- simplex_region(vertices = diag(3))
+  h <- halfspace_region(normal = c(1, -1, 0))
+  u <- union_region(s, h)
+
+  expect_identical(length(u), 2L)
+  expect_identical(u[[1L]], s)
+  expect_identical(u[[2L]], h)
+  expect_identical(as.list(u), list(s, h))
+
+  # A convex region is its own single part, so results of the algebra read
+  # uniformly whether or not they were unions.
+  expect_identical(length(s), 1L)
+  expect_identical(s[[1L]], s)
+
+  # `[` stays a region: a union, the lone part, or NULL when nothing is left.
+  expect_identical(u[1L], s)
+  expect_identical(length(u[c(1L, 2L)]), 2L)
+  expect_null(u[integer(0)])
+
+  # And lapply() reaches the parts through as.list().
+  expect_identical(
+    lapply(u, space_dim),
+    list(3L, 3L)
+  )
+})

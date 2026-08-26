@@ -68,6 +68,44 @@ method(parts, region) <- function(space) list(space)
 n_parts <- function(space) length(parts(space))
 
 
+# Every region is list-like over its parts, so the results of the set algebra
+# read uniformly whether one cell survived (a bare convex region), several (a
+# union), or none (NULL): `length()` is 1, n, or 0, and `x[[i]]`, `x[i]`,
+# `lapply()` work on all of them. `for` cannot iterate an S7 object -- loop
+# over `parts(x)` or `as.list(x)` instead.
+
+#' @rdname parts
+#' @usage NULL
+#' @export
+method(length, region) <- function(x) length(parts(x))
+
+
+#' @rdname parts
+#' @usage NULL
+#' @export
+method(as.list, region) <- function(x, ...) parts(x)
+
+
+#' @rdname parts
+#' @usage NULL
+#' @export
+method(`[[`, region) <- function(x, i, ...) parts(x)[[i]]
+
+
+#' @description Subsetting with `[` returns a region again: the union of the
+#'   selected parts, the lone part itself, or `NULL` for an empty selection.
+#' @rdname parts
+#' @usage NULL
+#' @export
+method(`[`, region) <- function(x, i, ...) {
+  chosen <- parts(x)[i]
+  if (length(chosen) == 0L) {
+    return(NULL)
+  }
+  union_region(chosen)
+}
+
+
 #' The convex regions a region decomposes into for optimisation
 #'
 #' Every region is its own only cell unless it says otherwise. A region that is
@@ -542,20 +580,22 @@ make_generators <- function(vertices, rays, lines) {
 }
 
 
-#' Derive a facet description at construction, within a size guard
+#' Derive the exact facet matrix at construction, within a size guard
 #'
 #' Facet count is combinatorial in the generator count in the worst case, and
 #' the construction-time measurements stop at 16 vertices in R^5. Above
 #' `guard` generators -- columns: one generator per column, as everywhere in
 #' the package -- the constructor leaves `@facets` NULL and `h_rep()` derives
-#' on demand instead.
+#' on demand instead. Returns the rational matrix rather than doubles: the
+#' constructor stores it in `@q_cache` so the exact work is kept, not
+#' recomputed the first time the set algebra asks.
 #' @keywords internal
 #' @noRd
-derive_facets <- function(g, guard = 100L) {
-  if (ncol(g$v) + ncol(g$r) + ncol(g$l) > guard) {
+derive_qfacets <- function(qv, n_generators, guard = 100L) {
+  if (n_generators > guard) {
     return(NULL)
   }
-  v_to_h(g)
+  q_scdd(qv)
 }
 
 
@@ -593,6 +633,11 @@ derive_facets <- function(g, guard = 100L) {
 #'   per column.}
 #'   \item{`facets`}{The half-space description as above, or `NULL` when it has
 #'   not been derived.}
+#'   \item{`q_cache`}{The exact rational representations, set at
+#'   construction: for a declared region the exact rationals of its doubles,
+#'   and for a region the set algebra produced, the exact cell itself -- so
+#'   further algebra never starts from a rounding. `h` is `NULL` only above
+#'   the facet guard.}
 #' }
 #' @references
 #'   \insertRef{Ziegler1995}{ripr}
@@ -615,7 +660,8 @@ polyhedron_region <- new_class(
   parent = convex_region,
   properties = list(
     generators = class_list,
-    facets = class_any
+    facets = class_any,
+    q_cache = class_any
   ),
   constructor = function(
     vertices = NULL,
@@ -624,10 +670,23 @@ polyhedron_region <- new_class(
     facets = NULL
   ) {
     g <- make_generators(vertices, rays, lines)
-    if (is.null(facets)) {
-      facets <- derive_facets(g)
+    # Every region carries its exact rational representations, generated at
+    # construction. This way set operations stay exact.
+    qv <- as_vmatrix(g)
+    qh <- if (is.null(facets)) {
+      derive_qfacets(qv, ncol(g$v) + ncol(g$r) + ncol(g$l))
+    } else {
+      as_hmatrix(facets)
     }
-    new_object(S7_object(), generators = g, facets = facets)
+    if (is.null(facets) && !is.null(qh)) {
+      facets <- from_hmatrix(qh)
+    }
+    new_object(
+      S7_object(),
+      generators = g,
+      facets = facets,
+      q_cache = list(h = qh, v = qv)
+    )
   },
   validator = function(self) {
     g <- self@generators
@@ -730,7 +789,13 @@ method(v_rep, polyhedron_region) <- function(space) {
 }
 
 
-method(q_vrep, polyhedron_region) <- function(space) as_vmatrix(v_rep(space))
+method(q_vrep, polyhedron_region) <- function(space) {
+  cache <- space@q_cache
+  if (!is.null(cache$v)) {
+    return(cache$v)
+  }
+  as_vmatrix(v_rep(space))
+}
 
 
 method(h_rep, polyhedron_region) <- function(space) {
@@ -747,7 +812,15 @@ method(h_rep, polyhedron_region) <- function(space) {
 # exact conversion rather than re-rationalising the stored double `@facets`.
 # Can override this with `as_hmatrix(h_rep(space))` when the facets are,
 # declared directly by the user, for them it is exact and cheaper.
-method(q_hrep, polyhedron_region) <- function(space) q_scdd(q_vrep(space))
+method(q_hrep, polyhedron_region) <- function(space) {
+  cache <- space@q_cache
+  if (!is.null(cache$h)) {
+    return(cache$h)
+  }
+  # Only above the facet guard: the exact H was never derived, so derive on
+  # demand without keeping it (S7 value semantics leave nowhere to put it).
+  q_scdd(q_vrep(space))
+}
 
 
 method(is_bounded, polyhedron_region) <- function(space) {
@@ -1005,6 +1078,11 @@ method(chart, polyhedron_region) <- function(space) {
 #' Use [simplex_region()] when that is what you mean, and use [polytope_region()]
 #' when it is not.
 #' @param vertices `(d, V)` numeric matrix, one vertex per column.
+#' @param facets Optionally, the half-space description already known to the
+#'   caller, exactly as [polyhedron_region()] takes it; derived from the
+#'   vertices when `NULL`. Set algebra operations supply the exact rows here:
+#'   facets re-derived from *rounded* vertices can change the combinatorics
+#'   outright when the vertices are nearly degenerate.
 #' @return A `polytope_region`, which is also a [polyhedron_region()] with
 #'   empty ray and lineality blocks.
 #' @examples
@@ -1024,7 +1102,7 @@ polytope_region <- new_class(
       getter = function(self) ncol(self@generators$v)
     )
   ),
-  constructor = function(vertices) {
+  constructor = function(vertices, facets = NULL) {
     if (!is.matrix(vertices) || ncol(vertices) == 0L) {
       stop(
         "`vertices` must be a matrix with one vertex per column.",
@@ -1034,7 +1112,7 @@ polytope_region <- new_class(
     if (!all(is.finite(vertices))) {
       stop("`vertices` must all be finite.", call. = FALSE)
     }
-    new_object(polyhedron_region(vertices = vertices))
+    new_object(polyhedron_region(vertices = vertices, facets = facets))
   },
   validator = function(self) {
     if (ncol(self@generators$r) > 0L || ncol(self@generators$l) > 0L) {
@@ -1119,8 +1197,8 @@ simplex_region <- new_class(
     }
     NULL
   },
-  constructor = function(vertices) {
-    new_object(polytope_region(vertices = vertices))
+  constructor = function(vertices, facets = NULL) {
+    new_object(polytope_region(vertices = vertices, facets = facets))
   }
 )
 
@@ -1224,11 +1302,6 @@ method(contains, halfspace_region) <- function(space, theta, tol = 1e-8) {
   sum(space@normal * theta) <= space@offset + tol * sqrt(sum(space@normal^2))
 }
 
-# `@facets` holds the declared inequality exactly, so rationalising it via
-# as_hmatrix is exact.
-method(q_hrep, halfspace_region) <- function(space) as_hmatrix(h_rep(space))
-
-
 # --- Point region --------------------------------------------------------
 
 #' A single parameter point
@@ -1260,13 +1333,12 @@ point_region <- new_class(
       stop("`theta` must be a finite numeric vector.", call. = FALSE)
     }
     d <- length(theta)
-    # The exact facets `theta_i == b_i` replace the ones the polytope
-    # constructor derives through cddlib, which describe the same point less
-    # directly.
-    new_object(
-      polytope_region(vertices = matrix(theta, ncol = 1L)),
+    # The exact facets `theta_i == b_i`, rather than letting the polytope
+    # constructor derive rows that describe the same point less directly.
+    new_object(polytope_region(
+      vertices = matrix(theta, ncol = 1L),
       facets = list(a = diag(d), b = theta, eq = rep(TRUE, d))
-    )
+    ))
   },
   validator = function(self) {
     if (ncol(self@generators$v) != 1L) {
@@ -1282,10 +1354,6 @@ method(project, point_region) <- function(space, theta) space@theta
 method(contains, point_region) <- function(space, theta, tol = 1e-8) {
   max(abs(space@theta - theta)) <= tol
 }
-
-# `@facets` holds `theta` itself as equality rows, exact under rationalisation.
-method(q_hrep, point_region) <- function(space) as_hmatrix(h_rep(space))
-
 
 # --- Unconstrained region -----------------------------------------------------
 
@@ -1352,232 +1420,106 @@ method(contains, unconstrained_region) <- function(space, theta, tol = 1e-8) {
   length(theta) == as.integer(space@n_dim) && all(is.finite(theta))
 }
 
-# `@facets` is the exact zero-row description, so no re-derivation is needed.
-method(q_hrep, unconstrained_region) <- function(space) as_hmatrix(h_rep(space))
 
+# --- Printing -----------------------------------------------------------------
 
-# --- Union region -------------------------------------------------------------
-
-#' A finite union of convex regions
-#'
-#' The union \eqn{\bigcup_i \Theta_{0i}}{union_i Theta_0i} of finitely many
-#' [convex_region]s, which generally is not convex. A null hypothesis is one
-#' such union, and so is the support of a truncated prior, so the union is
-#' worth a type of its own rather than an untyped list passed around by
-#' whoever happens to hold it.
-#'
-#' A `union_region` is a [region] but deliberately **not** a [convex_region].
-#' [chart()], [project()], `maximise_over()` assume convexity, and a union of
-#' convex sets is not convex. What this class does implement is [space_dim()]
-#' [contains()], [parts()] and [cells()].
-#'
-#' Given exactly one convex region, `union_region()` returns it unchanged.
-#'
-#' @param ... [convex_region] objects, other `union_region` objects, and lists
-#'   of either, in any combination and any nesting. A `union_region` argument
-#'   flattens rather than nests.
-#' @return A `union_region`, or the lone [convex_region] it was given.
-#' @section Properties:
-#' \describe{
-#'   \item{`parts`}{The flat list of convex cells, as declared.}
-#'   \item{`disjoint`}{`NULL`. A cache for a disjoint decomposition, filled by
-#'   a later phase; nothing computes it yet.}
-#'   \item{`triangulation`}{`NULL`. A cache for a simplicial decomposition, on
-#'   the same terms.}
-#' }
-#' @examples
-#' # The K = 3 plurality null: two overlapping sub-simplices.
-#' union_region(
-#'   simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'   simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-#' )
-#'
-#' # Nesting is flattened, so these agree:
-#' s <- simplex_region(vertices = diag(3))
-#' h <- halfspace_region(normal = c(1, -1, 0))
-#' n_parts(union_region(s, h))
-#' n_parts(union_region(list(s, h)))
-#' n_parts(union_region(union_region(s), list(h)))
-#'
-#' # One cell is already a region, so it is handed back as it came:
-#' identical(union_region(s), s)
-#' @export
-union_region <- new_class(
-  "union_region",
-  parent = region,
-  properties = list(
-    parts = class_list,
-    disjoint = class_any,
-    triangulation = class_any
-  ),
-  constructor = function(...) {
-    flat <- flatten_parts(list(...))
-    if (length(flat) == 1L && S7_inherits(flat[[1L]], convex_region)) {
-      return(flat[[1L]])
-    }
-    new_object(
-      S7_object(),
-      parts = flat,
-      disjoint = NULL,
-      triangulation = NULL
-    )
-  },
-  validator = function(self) {
-    if (length(self@parts) == 0L) {
-      return("`parts` must be a non-empty list")
-    }
-    ok <- vapply(
-      self@parts,
-      \(p) S7_inherits(p, convex_region),
-      logical(1)
-    )
-    if (!all(ok)) {
-      return("every element of `parts` must be a `convex_region`")
-    }
-    # Ambient dimension only; shape and codimension are free. Cells of
-    # differing ambient dimension have no common space to union in, and
-    # comparing one against a parameter would silently recycle rather than
-    # complain. Both dimensions are named, since neither is more wrong.
-    dims <- vapply(self@parts, space_dim, integer(1))
-    if (length(unique(dims)) > 1L) {
-      return(paste0(
-        "every element of `parts` must have the same ambient dimension; got ",
-        paste(unique(dims), collapse = ", ")
-      ))
-    }
-    NULL
-  }
-)
-
-
-#' Flatten union-ish input into a list of convex parts
-#'
-#' Descends bare lists, unwraps unions into their own parts, and leaves anything
-#' else alone as a leaf for the validator to name.
+#' A count with its noun, pluralised
 #' @keywords internal
 #' @noRd
-flatten_parts <- function(x) {
-  if (S7_inherits(x, union_region)) {
-    return(x@parts)
-  }
-  if (S7_inherits(x, convex_region)) {
-    return(list(x))
-  }
-  if (is.list(x) && !S7_inherits(x)) {
-    return(c(list(), unlist(lapply(x, flatten_parts), recursive = FALSE)))
-  }
-  list(x)
+count_label <- function(n, singular, plural = paste0(singular, "s")) {
+  sprintf("%d %s", n, if (n == 1L) singular else plural)
 }
 
 
-#' Coerce region-ish input to a [region]
+#' One-line summary of a convex region
 #'
-#' A [region] passes through untouched; a list becomes a [union_region] of its
-#' elements, which for a one-element list is that element itself.
-#' @param x A [region], or a list of them.
-#' @return A [region].
+#' `format()` appends this to the class name and `print()` puts under the
+#' banner. The base counts the generator blocks; classes with a closed form
+#' say it directly.
 #' @keywords internal
 #' @noRd
-as_region <- function(x) {
-  if (S7_inherits(x, region)) x else union_region(x)
+region_phrase <- new_generic("region_phrase", "space", function(space) {
+  S7::S7_dispatch()
+})
+
+
+method(region_phrase, polyhedron_region) <- function(space) {
+  g <- space@generators
+  counts <- c(
+    count_label(ncol(g$v), "vertex", "vertices"),
+    if (ncol(g$r) > 0L) count_label(ncol(g$r), "ray"),
+    if (ncol(g$l) > 0L) count_label(ncol(g$l), "line")
+  )
+  sprintf("%s in R^%d", paste(counts, collapse = ", "), space_dim(space))
 }
 
 
-method(space_dim, union_region) <- function(space) {
-  # The validator has already established that there is at least one part and
-  # that they agree, so the first one speaks for all of them.
-  space_dim(space@parts[[1L]])
+method(region_phrase, point_region) <- function(space) {
+  sprintf("the point (%s)", toString(signif(space@theta, 4L)))
 }
 
 
-method(contains, union_region) <- function(space, theta, tol = 1e-8) {
-  any(vapply(space@parts, \(p) contains(p, theta, tol), logical(1)))
-}
-
-#' The refusal both representations owe a union
-#' @keywords internal
-#' @noRd
-refuse_union <- function(what) {
-  stop(
-    "`",
-    what,
-    "()` is not defined for a `union_region`: a union is not an ",
-    "intersection of half-spaces and has no single generator set. Take the ",
-    "representation of each of `parts()` or `cells()` instead.",
-    call. = FALSE
+method(region_phrase, halfspace_region) <- function(space) {
+  sprintf(
+    "the halfspace normal . theta <= %s, normal (%s)",
+    format(signif(space@offset, 4L)),
+    toString(signif(space@normal, 4L))
   )
 }
 
-method(h_rep, union_region) <- function(space) refuse_union("h_rep")
-method(v_rep, union_region) <- function(space) refuse_union("v_rep")
-method(q_hrep, union_region) <- function(space) refuse_union("q_hrep")
-method(q_vrep, union_region) <- function(space) refuse_union("q_vrep")
 
-
-method(is_empty, union_region) <- function(space) {
-  all(vapply(space@parts, is_empty, logical(1)))
+method(region_phrase, unconstrained_region) <- function(space) {
+  sprintf("all of R^%d", space_dim(space))
 }
 
 
-method(is_bounded, union_region) <- function(space) {
-  all(vapply(space@parts, is_bounded, logical(1)))
-}
-
-
-method(parts, union_region) <- function(space) space@parts
-
-
-#' @description A union's cells are its parts' cells, flattened: the parts are
-#'   what was declared, the cells are what the algorithms run on.
-#' @rdname cells
-#' @usage NULL
-method(cells, union_region) <- function(space) {
-  unlist(lapply(space@parts, cells), recursive = FALSE)
-}
-
-
-#' The count of cells, as it should read in a message
-#' @keywords internal
-#' @noRd
-parts_label <- function(n) sprintf("%d part%s", n, if (n == 1L) "" else "s")
-
-
-#' @rdname union_region
+#' @rdname polyhedron_region
 #' @usage NULL
 #' @export
-method(print, union_region) <- function(x, ...) {
-  n <- length(x@parts)
+method(format, polyhedron_region) <- function(x, ...) {
+  sprintf("%s: %s", attr(S7_class(x), "name"), region_phrase(x))
+}
+
+
+#' @description `print()` summarises the geometry -- the generator blocks, the
+#'   facet counts, and for a small polytope the vertices themselves -- rather
+#'   than dumping the properties.
+#' @rdname polyhedron_region
+#' @usage NULL
+#' @export
+method(print, polyhedron_region) <- function(x, ...) {
   cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
-  cat("  ", parts_label(n), ", dimension ", space_dim(x), "\n", sep = "")
-  # The cells share a dimension, so the header has already said it and the
-  # class name is all that is left to distinguish them. One line each while
-  # that is readable, a tally beyond it: a triangulated null can hold hundreds
-  # of cells, and listing them tells the reader nothing the tally does not.
-  named <- vapply(x@parts, \(p) attr(S7_class(p), "name"), character(1))
-  if (n <= 6L) {
-    for (nm in named) {
-      cat("    ", nm, "\n", sep = "")
-    }
+  cat(
+    "  ",
+    region_phrase(x),
+    if (!is_bounded(x) && !S7_inherits(x, unconstrained_region)) ", unbounded",
+    "\n",
+    sep = ""
+  )
+  f <- x@facets
+  if (is.null(f)) {
+    cat("  facets not derived: generator count is above the size guard\n")
+  } else if (length(f$eq) == 0L) {
+    cat("  facets: none\n")
   } else {
-    tally <- table(named)
-    for (nm in names(tally)) {
-      cat("    ", tally[[nm]], " x ", nm, "\n", sep = "")
-    }
+    n_eq <- sum(f$eq)
+    n_ineq <- length(f$eq) - n_eq
+    line <- paste(
+      c(
+        if (n_ineq > 0L) count_label(n_ineq, "inequality", "inequalities"),
+        if (n_eq > 0L) count_label(n_eq, "equality", "equalities")
+      ),
+      collapse = ", "
+    )
+    cat("  facets: ", line, "\n", sep = "")
+  }
+  if (
+    S7_inherits(x, polytope_region) &&
+      !S7_inherits(x, point_region) &&
+      ncol(x@vertices) <= 8L
+  ) {
+    cat("  vertices:\n")
+    print(x@vertices)
   }
   invisible(x)
-}
-
-
-#' @description `format()` gives the same summary on one line, without the class
-#'   banner and the per-cell listing that `print()` adds.
-#' @rdname union_region
-#' @usage NULL
-#' @export
-method(format, union_region) <- function(x, ...) {
-  sprintf(
-    "%s: %s, dimension %d",
-    attr(S7_class(x), "name"),
-    parts_label(length(x@parts)),
-    space_dim(x)
-  )
 }

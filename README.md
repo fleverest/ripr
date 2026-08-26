@@ -47,14 +47,17 @@ K <- 3L
 n <- 20L
 family <- multinomial_family(n_trials = n, k = K)
 
+# Defines {theta : theta_1 <= theta_j}
+plurality_part <- function(j) {
+  vertices <- diag(K)
+  vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+  simplex_region(vertices = vertices)
+}
+
+
 plurality <- null_model(
   family,
-  lapply(2:K, function(j) {
-    # The two sub-simplices: one for each part.
-    vertices <- diag(K)
-    vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
-    simplex_region(vertices = vertices)
-  })
+  union(plurality_part(2), plurality_part(3))
 )
 ```
 
@@ -256,9 +259,9 @@ equally weighted.
 ``` r
 medial <- null_model(
   family,
-  list(simplex_region(
+  simplex_region(
     vertices = cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
-  ))
+  )
 )
 
 W_maj <- finite_mixing(
@@ -340,7 +343,7 @@ Where no bounding method has been implemented, `certify()` refuses:
 gaussian <- gaussian_family(dim = 2L)
 null <- null_model(
   gaussian,
-  list(halfspace_region(normal = c(1, -1), offset = 0))
+  halfspace_region(normal = c(1, -1), offset = 0)
 )
 Y <- likelihood(gaussian(c(0, 0)))
 certify(Y, null)

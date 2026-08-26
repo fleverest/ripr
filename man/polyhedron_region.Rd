@@ -2,6 +2,8 @@
 % Please edit documentation in R/region.R
 \name{polyhedron_region}
 \alias{polyhedron_region}
+\alias{format,ripr::polyhedron_region-method}
+\alias{print,ripr::polyhedron_region-method}
 \title{A convex polyhedron given by its generators}
 \usage{
 polyhedron_region(vertices = NULL, rays = NULL, lines = NULL, facets = NULL)
@@ -31,6 +33,10 @@ form \eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone
 have friendlier constructors and do extra validation; use this one when
 you know the generators themselves, or \code{\link[=h_region]{h_region()}} if you have the
 H-representation.
+
+\code{print()} summarises the geometry -- the generator blocks, the
+facet counts, and for a small polytope the vertices themselves -- rather
+than dumping the properties.
 }
 \details{
 The \code{\link[=chart]{chart()}} is based directly on the generators:
@@ -48,6 +54,11 @@ theorem (Ziegler 1995, Theorem 1.2).
 per column.}
 \item{\code{facets}}{The half-space description as above, or \code{NULL} when it has
 not been derived.}
+\item{\code{q_cache}}{The exact rational representations, set at
+construction: for a declared region the exact rationals of its doubles,
+and for a region the set algebra produced, the exact cell itself -- so
+further algebra never starts from a rounding. \code{h} is \code{NULL} only above
+the facet guard.}
 }
 }
 

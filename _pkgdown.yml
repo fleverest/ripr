@@ -61,6 +61,13 @@ reference:
   - is_empty
   - is_bounded
 
+- title: Set algebra
+  desc: >
+    Operations that build new regions from old ones, composed in exact
+    rational arithmetic and converted to doubles once per chain.
+  contents:
+  - region_algebra
+
 - title: Null hypotheses
   desc: >
     A null is a family together with a finite union of convex parameter

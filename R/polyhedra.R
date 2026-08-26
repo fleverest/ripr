@@ -298,6 +298,12 @@ q_rbind <- function(a, b) {
 #' @keywords internal
 #' @noRd
 q_nonredundant <- function(m) {
+  # `rcdd::redundant()` refuses a single row outright ("less than 2 rows,
+  # cannot be redundant"), and it is right: there is nothing to be redundant
+  # with.
+  if (nrow(m) < 2L) {
+    return(m)
+  }
   without_rng(rcdd::redundant(m, representation = q_kind(m))$output)
 }
 
@@ -333,6 +339,84 @@ q_is_empty <- function(m) {
       call. = FALSE
     )
   )
+}
+
+
+#' Exact maximum of a linear objective over a rational H-representation
+#'
+#' `max { objgrd . x : x in the region }`, in GMP rationals, for deciding
+#' whether one region's facet is implied by another region: `a . x <= b` holds
+#' everywhere on the region exactly when this maximum is at most `b`.
+#'
+#' @param m An rcdd H-representation of a *non-empty* region.
+#' @param objgrd Length-`d` character vector of rationals.
+#' @return The maximum as a rational string, or `NULL` when the objective is
+#'   unbounded above on the region.
+#' @keywords internal
+#' @noRd
+q_maximum <- function(m, objgrd) {
+  lp <- without_rng(rcdd::lpcdd(
+    m,
+    objgrd = objgrd,
+    objcon = "0",
+    minimize = FALSE
+  ))
+  switch(
+    lp$solution.type,
+    "Optimal" = lp$optimal.value,
+    "DualInconsistent" = NULL,
+    "StrucDualInconsistent" = NULL,
+    "Inconsistent" = stop(
+      "an empty region has no maximum; prune with `q_is_empty()` first.",
+      call. = FALSE
+    ),
+    stop(
+      "`lpcdd()` returned the status \"",
+      lp$solution.type,
+      "\", which a bounded-feasible maximisation should not produce. ",
+      "This is a bug in ripr.",
+      call. = FALSE
+    )
+  )
+}
+
+
+#' Exact comparison and negation of rational scalars and vectors
+#' @keywords internal
+#' @noRd
+q_leq <- function(x, y) rcdd::qsign(rcdd::qmq(x, y)) <= 0L
+
+
+#' @keywords internal
+#' @noRd
+q_neg <- function(x) rcdd::qneg(x)
+
+
+#' Subset rows of a representation, keeping its kind
+#'
+#' Plain `[` drops the `representation` attribute `q_rbind()` and `q_scdd()`
+#' dispatch on.
+#' @keywords internal
+#' @noRd
+q_subrows <- function(m, rows) {
+  out <- m[rows, , drop = FALSE]
+  attr(out, "representation") <- q_kind(m)
+  out
+}
+
+
+#' Reverse an inequality row: `a . x <= b` becomes `a . x >= b`
+#'
+#' An H-row is `(l, b, -a)` for `b - a . x >= 0`; negating everything but the
+#' flag gives `(l, -b, a)`, which is `a . x - b >= 0`. Taking the closure
+#' (`>=`, not `>`) is deliberate: every cell stays a closed polyhedron, and
+#' cells of a decomposition then overlap on a Lebesgue-null boundary, which is
+#' correct for every consumer here -- measures and suprema both.
+#' @keywords internal
+#' @noRd
+q_reverse_ineq <- function(m, rows) {
+  m[rows, -1L] <- rcdd::qneg(m[rows, -1L])
+  m
 }
 
 

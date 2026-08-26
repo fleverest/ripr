@@ -169,9 +169,9 @@ from_vmatrix <- function(m) {
 #' cddlib omits the point block entirely when the polyhedron is a cone: the
 #' halfspace `{t1 <= 0}` in `R^3` comes back as `nv = 0, nr = 1, nl = 2`. A
 #' V-representation with no points denotes `cone(r) + span(l)`, which always
-#' contains the origin. We just add the point, since `softmax0` over zero
-#' vertices is undefined, and `v_rep(halfspace_region)` already yields the
-#' anchored form, so this way everything is consistent.
+#' contains the origin. We just add the point, since a chart's barycentric
+#' coordinates on zero vertices is undefined, and `v_rep(halfspace_region)`
+#' already yields the anchored form, so this way everything is consistent.
 #'
 #' @keywords internal
 #' @noRd

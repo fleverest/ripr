@@ -39,13 +39,15 @@ facet counts, and for a small polytope the vertices themselves -- rather
 than dumping the properties.
 }
 \details{
-The \code{\link[=chart]{chart()}} is based directly on the generators:
-\deqn{\theta(u) = V\,\mathrm{softmax0}(u_v) + L u_l + R\,\mathrm{softplus}(u_r)}{
-theta(u) = V softmax0(u_v) + L u_l + R softplus(u_r)}
-with \code{n_par = (nv - 1) + nl + nr} coordinates ordered \verb{(u_v, u_l, u_r)}:
-vertex weights, then lineality, then rays. That every polyhedron admits
-such a generator form, dually to its H-representation, is the Minkowski--Weyl
-theorem (Ziegler 1995, Theorem 1.2).
+The \code{\link[=chart]{chart()}} defines the generator map:
+\deqn{\theta(u) = V a + L z + R c}{theta(u) = V a + L z + R c}
+with coordinates \verb{u = (a, z, c)} ordered vertex weights, then lineality,
+then rays, and the constraints \code{a >= 0}, \code{sum(a) = 1} and \code{c >= 0} declared
+to the optimiser rather than substituted away. A lone vertex contributes no
+coordinate, so \code{n_par = nv + nl + nr} when \code{nv > 1} and \code{nl + nr}
+otherwise. That every polyhedron admits such a generator form, dually to
+its H-representation, is the Minkowski--Weyl theorem (Ziegler 1995,
+Theorem 1.2).
 }
 \section{Properties}{
 

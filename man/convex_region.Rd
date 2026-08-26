@@ -15,8 +15,8 @@ null's pieces may overlap.
 }
 \details{
 A \code{convex_region} object encodes the geometry: it encodes dimension,
-membership checking, projection, and a \code{\link[=chart]{chart()}} that maps unconstrained
-coordinates to the region.
+membership checking, projection, and a \code{\link[=chart]{chart()}} that maps constrained
+generator coordinates to the region.
 
 Not to be confused with \link{sample_space}. Outcomes from a sample space are
 only validated, but in this package parameters need coordinates for a

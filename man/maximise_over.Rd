@@ -21,15 +21,16 @@ maximise_over(space, obj, seeds = NULL, n_seeds = 200L, n_restarts = 25L)
 \code{list(theta = , value = )} with \code{theta} in the space.
 }
 \description{
-Multi-start BFGS in the space's own \code{\link[=chart]{chart()}}: seed coordinates are scored in
-batch, the best \code{n_restarts} are refined, and the best refinement wins.
-Written once and shared by every geometry, since only the chart differs.
+Multi-start SLSQP in the space's own \code{\link[=chart]{chart()}}: seed coordinates are scored
+in batch, the best \code{n_restarts} are refined under the chart's declared
+constraints, and the best refinement wins. Written once and shared by all
+geometries, since only the charts should differ.
 }
 \details{
 \strong{The result is a lower bound on the true supremum, not the supremum.} The
-objective is generally non-convex, the search is heuristic, and charts cover
-only the relative interior, so a maximum at a vertex is approached and never
-attained. Anything needing an upper bound must obtain it elsewhere.
+objective is generally non-convex, so this search is a heuristic. Restarts
+will converge to local maxima. Anything needing an upper bound must obtain
+it some other way, e.g. via certification.
 
 \code{seeds} should always include the current mixture's atoms. Without them the
 returned value can fall below \verb{max_j G(theta_j)}, which the mixture already

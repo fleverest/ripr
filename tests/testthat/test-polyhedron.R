@@ -1,62 +1,80 @@
 # Tests for the polyhedron base class in R/region.R.
 #
 # Every implemented convex region is a polyhedron (at the time of writing), and
-# the base chart is written once against the generator triple. These tests
-# restate the old per-class formulas inline and check there is zero difference.
+# the base chart is written once against the generator triple. Coordinates are
+# the generator weights themselves (barycentric on the vertices, non-negative
+# ray coefficients and free lineality coords) so the map is linear and the
+# constraints are handed to the optimiser explicitly through `lower` and `heq`
+# rather than being reparametrised away (like we did in an earlier version via
+# softmax / softplus for stats::optim).
 
-# Draw random local coords for comparison.
-random_u <- function(n_par, n = 50L) {
-  matrix(stats::rnorm(n * n_par, sd = 2), nrow = n_par, ncol = n)
+# Check a coordinate matrix against the chart's own constraint declaration.
+expect_feasible <- function(ch, u_mat) {
+  expect_true(all(
+    u_mat >=
+      matrix(
+        ch$lower,
+        nrow(u_mat),
+        ncol(u_mat)
+      )
+  ))
+  if (!is.null(ch$heq)) {
+    for (i in seq_len(ncol(u_mat))) {
+      expect_equal(ch$heq(u_mat[, i]), 0, tolerance = 1e-12)
+    }
+  }
 }
 
 # --- The chart identity -------------------------------------------------------
 
-test_that("the base chart reproduces polytope_region's chart exactly", {
+test_that("the chart is the linear generator map on a polytope", {
   square <- polytope_region(
     vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
   vertices <- square@vertices
-  old_to_theta <- function(u) as.vector(vertices %*% softmax0(u))
-  old_jacobian <- function(u) vertices %*% softmax0_jacobian(softmax0(u))
 
   ch <- chart(square)
-  expect_identical(ch$n_par, 3L)
+  # One coordinate per vertex: the simplex constraint is declared, not
+  # substituted out.
+  expect_identical(ch$n_par, 4L)
+  expect_identical(ch$lower, rep(0, 4L))
   set.seed(1)
-  u_mat <- random_u(ch$n_par)
+  u_mat <- ch$seed(50L)
+  expect_feasible(ch, u_mat)
   for (i in seq_len(ncol(u_mat))) {
-    expect_identical(ch$to_theta(u_mat[, i]), old_to_theta(u_mat[, i]))
-    expect_identical(ch$jacobian(u_mat[, i]), old_jacobian(u_mat[, i]))
+    u <- u_mat[, i]
+    expect_equal(ch$to_theta(u), as.vector(vertices %*% u))
+    # The map is linear, so the jacobian is the generator matrix itself.
+    expect_equal(ch$jacobian(u), vertices)
   }
-  expect_identical(
-    ch$to_theta_batch(u_mat),
-    vertices %*%
-      vapply(seq_len(ncol(u_mat)), \(i) softmax0(u_mat[, i]), numeric(4))
-  )
+  expect_equal(ch$to_theta_batch(u_mat), vertices %*% u_mat)
+  # Barycentric coordinates hit the vertices exactly.
+  for (j in 1:4) {
+    expect_identical(ch$to_theta(diag(4)[, j]), vertices[, j])
+  }
 })
 
 
-test_that("the base chart reproduces simplex_region's chart exactly", {
+test_that("the chart is the linear generator map on a simplex", {
   plurality <- simplex_region(
     vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
   )
   vertices <- plurality@vertices
 
   ch <- chart(plurality)
-  expect_identical(ch$n_par, 2L)
+  expect_identical(ch$n_par, 3L)
   set.seed(2)
-  u_mat <- random_u(ch$n_par)
+  u_mat <- ch$seed(50L)
+  expect_feasible(ch, u_mat)
   for (i in seq_len(ncol(u_mat))) {
     u <- u_mat[, i]
-    expect_identical(ch$to_theta(u), as.vector(vertices %*% softmax0(u)))
-    expect_identical(
-      ch$jacobian(u),
-      vertices %*% softmax0_jacobian(softmax0(u))
-    )
+    expect_equal(ch$to_theta(u), as.vector(vertices %*% u))
+    expect_equal(ch$jacobian(u), vertices)
   }
 })
 
 
-test_that("the base chart reproduces halfspace_region's chart exactly", {
+test_that("the chart anchors a halfspace and frees its hyperplane", {
   for (space in list(
     halfspace_region(normal = c(1, -1), offset = 0),
     halfspace_region(normal = c(1, -1, 0), offset = 2),
@@ -66,24 +84,29 @@ test_that("the base chart reproduces halfspace_region's chart exactly", {
     anchor <- space@anchor
     basis <- space@basis
     unit <- space@unit
-    old_to_theta <- function(u) {
-      anchor + as.vector(basis %*% u[-d]) - softplus(u[d]) * unit
+    # Coordinates are (z, c): the position on the bounding hyperplane and the
+    # distance inward along the one ray. A lone vertex contributes no
+    # coordinate of its own.
+    to_theta <- function(u) {
+      anchor + as.vector(basis %*% u[-d]) - u[d] * unit
     }
-    old_jacobian <- function(u) cbind(basis, -sigmoid(u[d]) * unit)
 
     ch <- chart(space)
     expect_identical(ch$n_par, d)
+    expect_identical(ch$lower, c(rep(-Inf, d - 1L), 0))
+    expect_null(ch$heq)
     set.seed(3)
-    u_mat <- random_u(ch$n_par)
+    u_mat <- ch$seed(50L)
+    expect_feasible(ch, u_mat)
     for (i in seq_len(ncol(u_mat))) {
-      expect_identical(ch$to_theta(u_mat[, i]), old_to_theta(u_mat[, i]))
-      expect_identical(ch$jacobian(u_mat[, i]), old_jacobian(u_mat[, i]))
+      expect_equal(ch$to_theta(u_mat[, i]), to_theta(u_mat[, i]))
+      expect_equal(ch$jacobian(u_mat[, i]), cbind(basis, -unit))
     }
   }
 })
 
 
-test_that("the base chart reproduces point_region's chart exactly", {
+test_that("the chart of a point region is empty", {
   theta <- c(0.5, 0.3, 0.2)
   space <- point_region(theta = theta)
 
@@ -96,18 +119,42 @@ test_that("the base chart reproduces point_region's chart exactly", {
 })
 
 
-test_that("the base chart reproduces unconstrained_region's chart exactly", {
+test_that("the chart of an unconstrained region is the identity", {
   space <- unconstrained_region(3L)
 
   ch <- chart(space)
   expect_identical(ch$n_par, 3L)
+  expect_identical(ch$lower, rep(-Inf, 3L))
+  expect_null(ch$heq)
   set.seed(4)
-  u_mat <- random_u(ch$n_par)
+  u_mat <- ch$seed(50L)
   for (i in seq_len(ncol(u_mat))) {
-    expect_identical(ch$to_theta(u_mat[, i]), u_mat[, i])
-    expect_identical(ch$jacobian(u_mat[, i]), diag(3L))
+    expect_equal(ch$to_theta(u_mat[, i]), u_mat[, i])
+    expect_equal(ch$jacobian(u_mat[, i]), diag(3L))
   }
-  expect_identical(ch$to_theta_batch(u_mat), u_mat)
+  expect_equal(ch$to_theta_batch(u_mat), u_mat)
+})
+
+
+test_that("from_theta returns feasible coordinates, exactly at a vertex", {
+  # The optimiser is seeded from `from_theta` of the current atoms, so the
+  # coordinates must satisfy the declared constraints; SLSQP starts from them.
+  s <- simplex_region(
+    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  ch <- chart(s)
+  interior <- as.vector(s@vertices %*% c(0.2, 0.5, 0.3))
+  expect_feasible(ch, matrix(ch$from_theta(interior), ncol = 1L))
+
+  # A vertex is a boundary point the old softmax chart could only approach:
+  # its recovery clamped an exact zero to an eps. The direct chart represents
+  # it, so the recovery is exact up to the floating point of the
+  # least-squares solve rather than short of the boundary by design.
+  vertex <- s@vertices[, 2L]
+  u <- ch$from_theta(vertex)
+  expect_equal(u, c(0, 1, 0), tolerance = 1e-12)
+  expect_equal(ch$to_theta(u), vertex, tolerance = 1e-12)
+  expect_feasible(ch, matrix(u, ncol = 1L))
 })
 
 
@@ -237,43 +284,29 @@ test_that("the parent validator runs through every subclass constructor", {
 
 # --- from_theta: the constrained recovery -------------------------------------
 
-test_that("from_theta round-trips on polytopes outside the probability simplex", {
-  # The old pseudo-inverse recovery never constrained `sum(alpha) = 1`, which
-  # is invisible inside the probability simplex and wrong by ~0.27 on a unit
-  # square. These are the shapes where the constrained solve earns its keep.
-  square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
-  )
-  hexagon <- polytope_region(
-    vertices = vapply(
-      0:5,
-      \(k) c(cos(k * pi / 3), sin(k * pi / 3)),
-      numeric(2)
-    )
-  )
+test_that("the chart round-trips both ways on a full polyhedron", {
+  # One region exercising every generator block at once: four vertices, two
+  # rays and two lines in R^7, in general position so the seven free
+  # directions are independent and the coordinates are identifiable. That
+  # makes the round-trip two-sided: coordinates survive to_theta then
+  # from_theta, and points survive from_theta then to_theta.
   set.seed(5)
-  for (space in list(square, hexagon)) {
-    ch <- chart(space)
-    for (i in seq_len(20L)) {
-      u <- stats::rnorm(ch$n_par)
-      theta <- ch$to_theta(u)
-      round_trip <- ch$to_theta(ch$from_theta(theta))
-      expect_true(all(is.finite(round_trip)))
-      expect_equal(round_trip, theta, tolerance = 1e-9)
-    }
-  }
-})
-
-
-test_that("from_theta round-trips on an offset halfspace", {
-  # Exact for an offset halfspace, where a plain pseudo-inverse over
-  # `cbind(V, L, R)` is rank-deficient and lands far away.
-  space <- halfspace_region(normal = c(0, 1), offset = 2)
+  space <- polyhedron_region(
+    vertices = matrix(round(stats::rnorm(7 * 4), 1), nrow = 7),
+    rays = matrix(round(stats::rnorm(7 * 2), 1), nrow = 7),
+    lines = matrix(round(stats::rnorm(7 * 2), 1), nrow = 7)
+  )
   ch <- chart(space)
-  set.seed(6)
-  for (i in seq_len(20L)) {
-    theta <- ch$to_theta(stats::rnorm(ch$n_par))
-    expect_equal(ch$to_theta(ch$from_theta(theta)), theta, tolerance = 1e-9)
+  expect_identical(ch$n_par, 8L)
+
+  u_mat <- ch$seed(20L)
+  expect_feasible(ch, u_mat)
+  for (i in seq_len(ncol(u_mat))) {
+    u <- u_mat[, i]
+    theta <- ch$to_theta(u)
+    u_rt <- ch$from_theta(theta)
+    expect_equal(u_rt, u, tolerance = 1e-9)
+    expect_equal(ch$to_theta(u_rt), theta, tolerance = 1e-9)
   }
 })
 

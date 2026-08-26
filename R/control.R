@@ -15,7 +15,8 @@ NULL
 #' that alter the returned mixture (e.g. pruning) belong to [ripr_finish()].
 #'
 #' @param n_seeds Random chart seeds per oracle call.
-#' @param n_restarts Number of top seeds to be refined by BFGS per oracle call.
+#' @param n_restarts Number of top seeds to be refined by SLSQP per oracle
+#'   call.
 #' @param snapshot How often to record the fitted mixture alongside the trace.
 #'   `"none"` (default) never records the state; `"step"` records the atoms and
 #'   weights once per step call (e.g. [fw_step()]); `"all"` once per iteration

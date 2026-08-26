@@ -763,9 +763,11 @@ em_atom_step <- function(state, ld, wt) {
       # `0 * -Inf` is `NaN` rather than the 0 the term is worth under the usual
       # `0 log 0 = 0` convention. Dropping those nodes changes no value, since
       # responsibilities are held fixed through the M-step, and keeps the
-      # objective finite for any family whose support moves with the parameter,
-      # where the density is `-Inf` over a region of the parameter space rather
-      # than at an isolated boundary point.
+      # objective finite where an atom sits on the boundary of its support --
+      # which the chart represents exactly, and where an M-step optimum
+      # genuinely lands whenever a category's responsibility-weighted counts
+      # are all zero -- as well as for any family whose support moves with the
+      # parameter.
       keep <- wt[, c_i] > 0
       w_c <- wt[keep, c_i]
       nodes_c <- engine@nodes[keep, , drop = FALSE]

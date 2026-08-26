@@ -515,6 +515,11 @@
       "Maintainer": "Lionel Henry <lionel@posit.co>",
       "Repository": "RSPM"
     },
+    "nloptr": {
+      "Package": "nloptr",
+      "Version": "2.2.1",
+      "Source": "Repository"
+    },
     "otel": {
       "Package": "otel",
       "Version": "0.2.0",

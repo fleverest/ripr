@@ -152,10 +152,14 @@ test_that("maximise_over finds a maximum interior to the chart", {
   expect_true(contains(s, res$theta, tol = 1e-6))
 })
 
-test_that("a maximum at a vertex is approached but not attained", {
-  # Documents the limitation rather than working around it: this is why
-  # maximise_over returns a lower bound on the supremum, and why a certified
-  # upper bound cannot come from this search.
+test_that("a maximum at a vertex is attained exactly", {
+  # The old softmax chart covered only the relative interior, so a vertex
+  # maximum was approached and never reached. The direct chart represents the
+  # vertex and SLSQP's active constraints pin it exactly. The objective here
+  # is concave, so the multistart is guaranteed the right basin and the test
+  # is deterministic; for a non-convex oracle the exactness holds only once
+  # the search finds the right face, and maximise_over remains a lower bound
+  # on the supremum.
   s <- plurality_simplex(3, 2)
   target <- s@vertices[, 1L] # vertex weight (1, 0, 0)
   obj <- objective(
@@ -165,17 +169,16 @@ test_that("a maximum at a vertex is approached but not attained", {
   set.seed(12)
   res <- maximise_over(s, obj, n_seeds = 50L, n_restarts = 5L)
 
-  expect_lt(res$value, 0) # never reaches the supremum of 0
-  expect_gt(res$value, -1e-3) # but gets close
+  expect_equal(res$value, 0, tolerance = 1e-12)
+  expect_equal(res$theta, target, tolerance = 1e-9)
   expect_true(contains(s, res$theta, tol = 1e-6))
 })
 
 test_that("maximise_over is at least as good as the chart image of its seeds", {
   # The guarantee the duality gap leans on. Stated against the chart image of
-  # the seed, not the seed itself: from_theta then to_theta loses O(eps) through
-  # the softmax guard, so the search cannot promise to match a seed sitting
-  # exactly on a vertex. That residual is why a correctly seeded gap can still
-  # come out very slightly negative.
+  # the seed, not the seed itself: the direct chart makes the two agree to
+  # floating point, but the guarantee is about what the search was actually
+  # given, so the statement stays in this form.
   s <- plurality_simplex(4, 2)
   peak <- as.vector(s@vertices %*% c(0.7, 0.1, 0.1, 0.1))
   obj <- objective(
@@ -197,19 +200,21 @@ test_that("maximise_over is at least as good as the chart image of its seeds", {
   expect_gte(res$value, obj$value(seed_image) - 1e-10)
 })
 
-test_that("the chart round-trip is lossless in the interior and lossy at a vertex", {
-  # Quantifies the O(eps) above, so a change to the softmax guard shows up here
-  # rather than as a mysterious negative gap much later.
+test_that("the chart round-trip is lossless in the interior and at a vertex", {
+  # The direct chart represents boundary points exactly -- there is no softmax
+  # guard losing O(eps) at a vertex, so a correctly seeded gap can no longer
+  # come out negative through the round-trip.
   s <- plurality_simplex(4, 2)
   ch <- chart(s)
 
   interior <- as.vector(s@vertices %*% rep(0.25, 4))
   expect_equal(ch$to_theta(ch$from_theta(interior)), interior, tolerance = 1e-9)
 
+  # Exact up to the floating point of the least-squares recovery: bit-identical
+  # on some vertex matrices, an ulp or two off on others, and BLAS-dependent
+  # either way -- so tested at 1e-12, not identical().
   vertex <- s@vertices[, 1L]
-  round_tripped <- ch$to_theta(ch$from_theta(vertex))
-  expect_false(isTRUE(all.equal(round_tripped, vertex, tolerance = 0)))
-  expect_equal(round_tripped, vertex, tolerance = 1e-6)
+  expect_equal(ch$to_theta(ch$from_theta(vertex)), vertex, tolerance = 1e-12)
 })
 
 test_that("maximise_over accepts seeds lying outside the part", {
@@ -390,8 +395,8 @@ test_that("the real region's chart is the identity", {
 })
 
 test_that("maximise_over finds an interior optimum on a real region", {
-  # The one geometry here whose chart covers the whole set, so the supremum is
-  # attained rather than approached.
+  # An interior optimum on an unbounded region: no constraint is active, so
+  # this exercises the plain quasi-Newton behaviour of the refinement.
   set.seed(1)
   target <- c(1.5, -0.5)
   obj <- objective(

@@ -107,9 +107,9 @@ importFrom(matrixStats,
   logSumExp,
   rowLogSumExps
 )
+importFrom(nloptr,slsqp)
 importFrom(stats,
   family,
-  optim,
   optimise,
   rgamma,
   rmultinom,

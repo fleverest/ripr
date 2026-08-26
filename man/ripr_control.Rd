@@ -15,7 +15,8 @@ ripr_control(
 \arguments{
 \item{n_seeds}{Random chart seeds per oracle call.}
 
-\item{n_restarts}{Number of top seeds to be refined by BFGS per oracle call.}
+\item{n_restarts}{Number of top seeds to be refined by SLSQP per oracle
+call.}
 
 \item{lb_fc_tol}{Convergence tolerance for a corrective weight solve in
 the Li--Barron greedy oracle inner loop.}

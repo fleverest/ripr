@@ -101,7 +101,7 @@ fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #>           kl          gap        atoms 
-#> 2.824752e-02 1.342457e-04 3.000000e+01
+#> 2.824749e-02 1.342759e-04 3.000000e+01
 ```
 
 <div class="figure" style="text-align: center">
@@ -143,7 +143,7 @@ outcomes <- rbind(
   c(8L, 7L, 5L)
 )
 X(outcomes)
-#> [1] 0.8470669 1.0779197
+#> [1] 0.8470766 1.0779181
 ```
 
 Finally, we may use `certify()` to prove an upper bound on the null
@@ -159,7 +159,7 @@ c(
   width = cert$sup_ub - cert$sup_lb
 )
 #>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 5.691188e-10
+#> 1.000134e+00 1.000134e+00 9.360834e-10
 ```
 
 The bound lands just above one: it precisely bounds `1 + gap`, with
@@ -168,7 +168,7 @@ The bound lands just above one: it precisely bounds `1 + gap`, with
 ``` r
 c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
 #> bound_minus_one      fitted_gap 
-#>    0.0001342463    0.0001342457
+#>    0.0001342768    0.0001342759
 ```
 
 The re-scaled random variable `E = X / cert$sup_ub` is then a genuine
@@ -180,7 +180,7 @@ print(E)
 #> <random_variable> Q / P* / 1.000134 
 #>   on count_space, dimension 3
 print(E(outcomes))
-#> [1] 0.8469532 1.0777750
+#> [1] 0.8469629 1.0777734
 ```
 
 ### The correction does not need a good fit
@@ -218,7 +218,7 @@ E_gr <- growth(E, Q)
 
 c(good = E_gr, bad = growth(X_bad / cert_bad$sup_ub, Q))
 #>        good         bad 
-#>  0.02811329 -1.99396747
+#>  0.02811323 -1.99396747
 ```
 
 A negative growth rate means that we lose evidence on average even when
@@ -245,7 +245,7 @@ c(
   width = fit$kl - E_gr
 )
 #>        lower        upper        width 
-#> 0.0281132877 0.0282475250 0.0001342373
+#> 0.0281132266 0.0282474943 0.0001342678
 ```
 
 ## A different multinomial null
@@ -309,7 +309,7 @@ X_medial <- likelihood(Q_maj, label = "Q") /
 
 c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 #>        kl     upper 
-#> 0.3845766 1.0007045
+#> 0.3845872 1.0072202
 ```
 
 <div class="figure" style="text-align: center">
@@ -334,7 +334,7 @@ difficult to reach via gradient ascent.
 ``` r
 c(searched = sup_lb(X, plurality)$sup_lb, certified = cert$sup_ub)
 #>  searched certified 
-#>  1.000077  1.000134
+#>  1.000134  1.000134
 ```
 
 Where no bounding method has been implemented, `certify()` refuses:

@@ -2,7 +2,7 @@
 % Please edit documentation in R/region.R
 \name{chart}
 \alias{chart}
-\title{Unconstrained coordinate chart for a parameter space}
+\title{Coordinate chart for a parameter space}
 \usage{
 chart(space)
 }
@@ -10,33 +10,47 @@ chart(space)
 \item{space}{A \link{convex_region}.}
 }
 \value{
-A list of closures comprising:
+A list comprising:
 \describe{
 \item{\code{n_par}}{dimension of the coordinate space.}
-\item{\code{to_theta(u)}}{coordinates to a parameter vector in the space.}
+\item{\code{to_theta(u)}}{maps coordinates to the parameter vector.}
 \item{\code{to_theta_batch(u_mat)}}{\verb{(n_par, N)} coordinates to \verb{(d, N)}
 parameters.}
-\item{\code{from_theta(theta)}}{Reparemetrised coordinates for a point in the
-space.}
+\item{\code{from_theta(theta)}}{Coordinates for a point in the parameter space,
+satisfying the constraints.}
 \item{\code{jacobian(u)}}{\verb{(d, n_par)} derivative of \code{to_theta} at \code{u}.}
-\item{\code{seed(n)}}{\verb{(n_par, n)} random coordinates for a multi-start search,
-drawn to suit the space's own geometry.}
+\item{\code{lower}}{length-\code{n_par} lower bounds on the coordinates; \code{-Inf}
+where a coordinate is free.}
+\item{\code{heq(u)}, \code{heqjac(u)}}{equality constraint (\code{heq(u) = 0} on the
+feasible set) and its Jacobian, or \code{NULL} when there is none.}
+\item{\code{seed(n)}}{\verb{(n_par, n)} random feasible coordinates for a
+multi-start search, drawn to suit the space's own geometry.}
 }
 }
 \description{
 Returns a list of closures that define mappings between the parameter space
-and an unconstrained coordinate space, which is what lets BFGS run on the
-constrained set.
-}
-\details{
-Charts for a compact space generally cover only the relative interior, so
-an optimiser never exactly solves a maximum attained at a vertex or at
-infinity, though at this point we are in the realm of numerical precision
-anyway.
+and a coordinate space, together with the coordinate constraints stated
+explicitly, which is what lets a constrained optimiser such as SLSQP run
+on the set.
 }
 \examples{
-s <- simplex_region(vertices = diag(3))
+# One part of the K = 3 plurality null: `theta_1 <= theta_2` in the simplex.
+s <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 ch <- chart(s)
 ch$n_par
-ch$to_theta(c(0, 0))
+
+# Coordinates are barycentric weights over the three vertices ...
+ch$to_theta(c(1 / 2, 1 / 4, 1 / 4))
+ch$from_theta(c(0.1, 0.6, 0.3))
+
+# ... constrained to the simplex.
+ch$lower
+ch$heq(c(1 / 2, 1 / 4, 1 / 4))
+
+# An unbounded region also has lineality and cone coordinates. The halfspace
+# `{theta_1 <= theta_2}` has one on its bounding hyperplane and one for the
+# distance inward, the latter bounded below:
+ch <- chart(halfspace_region(normal = c(1, -1), offset = 0))
+ch$lower
+ch$to_theta(c(0, sqrt(2)))
 }

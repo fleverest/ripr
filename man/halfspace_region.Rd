@@ -22,8 +22,8 @@ The unbounded case:
 \code{normal = e_1 - e_j}, \code{offset = 0}.
 }
 \details{
-Coordinates are \verb{(z, s)}: \code{z} positions a point on the bounding hyperplane in
-an orthonormal basis, and \code{softplus(s) >= 0} is the distance inward.
+Coordinates are \verb{(z, c)}: \code{z} positions a point on the bounding hyperplane
+in an orthonormal basis, and \code{c >= 0} is the distance inward.
 
 Having no vertices, a halfspace admits no certified gap bound. That is a
 property of the representation rather than a missing feature -- see

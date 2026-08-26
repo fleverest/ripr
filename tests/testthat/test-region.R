@@ -115,9 +115,10 @@ test_that("the subclass inherits every method unchanged", {
   cp <- chart(p)
   cs <- chart(s)
   expect_equal(cp$n_par, cs$n_par)
-  u <- c(0.3, -0.7)
+  u <- c(0.3, 0.5, 0.2)
   expect_equal(cp$to_theta(u), cs$to_theta(u))
   expect_equal(cp$jacobian(u), cs$jacobian(u))
+  expect_equal(cp$lower, cs$lower)
   theta <- c(0.2, 0.5, 0.3)
   expect_equal(cp$from_theta(theta), cs$from_theta(theta))
 

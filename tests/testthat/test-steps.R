@@ -583,69 +583,19 @@ test_that("an EM sweep preserves the identity", {
   )
 })
 
-# --- A family whose support depends on the parameter ---------------------------
-
-# A multinomial that cannot produce a category at all unless its probability
-# clears a floor. Artificial, but it is the smallest thing with the property
-# that matters here: the log density is `-Inf` over a *region* of the parameter
-# space rather than at a single boundary point. The multinomial cannot stand in,
-# because its chart maps into the relative interior -- `softmax0()` never
-# returns an exact zero -- so a fitted atom is always at a strictly positive
-# probability and its log density is large but finite.
-floored_family <- new_class(
-  "floored_family",
-  parent = parametric_family,
-  properties = list(
-    n_trials = class_numeric,
-    k = class_numeric,
-    floor = class_numeric
-  ),
-  constructor = function(n_trials, k, floor) {
-    new_object(
-      at_theta,
-      sample_space = count_space(n = n_trials, k = k),
-      parameter_space = simplex_region(vertices = diag(k)),
-      n_trials = n_trials,
-      k = k,
-      floor = floor
-    )
-  }
-)
-
-method(compile_loglik, floored_family) <- function(family, x) {
-  x <- as.matrix(x)
-  log_coef <- lgamma(family@n_trials + 1) - rowSums(lgamma(x + 1))
-  floor_at <- family@floor
-  function(theta_mat) {
-    theta_mat <- as.matrix(theta_mat)
-    out <- matrix(log_coef, nrow(x), ncol(theta_mat))
-    for (j in seq_len(ncol(x))) {
-      theta_j <- theta_mat[j, ]
-      block <- matrix(log(theta_j), nrow(x), ncol(theta_mat), byrow = TRUE) *
-        x[, j]
-      block[outer(x[, j] > 0, theta_j < floor_at, "&")] <- -Inf
-      out <- out + block
-    }
-    out
-  }
-}
-
-method(score, floored_family) <- function(family, theta, x) {
-  nan_to_zero(div_by_col(as.matrix(x), theta))
-}
-
-method(kernel_draw, floored_family) <- function(family, theta, n_obs) {
-  t(stats::rmultinom(n_obs, family@n_trials, theta))
-}
-
+# --- An atom on the boundary of the support -----------------------------------
 
 test_that("the EM M-step survives a node its atom gives zero probability", {
   # `0 * -Inf` is `NaN`, not the 0 the term is worth under `0 log 0 = 0`: a node
   # an atom cannot produce has both zero responsibility and `-Inf` log density,
   # for the same reason. Left unhandled it reaches `maximise_over`, which
   # compares `NaN < Inf` and errors with "missing value where TRUE/FALSE
-  # needed", naming nothing that points back here.
-  fam <- floored_family(n_trials = 10L, k = 3L, floor = 0.08)
+  # needed", naming nothing that points back here. The plain multinomial
+  # reaches this state because the chart covers the closed region: an atom
+  # with an exact zero coordinate gives zero probability to every outcome
+  # using that category, and EM genuinely produces such atoms whenever a
+  # responsibility-weighted optimum lies on a facet.
+  fam <- multinomial_family(n_trials = 10L, k = 3L)
   null <- null_model(
     fam,
     lapply(2:3, function(j) {
@@ -654,14 +604,14 @@ test_that("the EM M-step survives a node its atom gives zero probability", {
       simplex_region(vertices = v)
     })
   )
-  # One interior atom keeps KL finite; the second sits below the floor on its
-  # third coordinate, so it gives zero probability to every outcome using that
-  # category.
+  # One interior atom keeps KL finite; the second sits on the facet
+  # `theta_3 = 0` of its part, so it gives zero probability to every outcome
+  # using the third category.
   st <- ripr_init(
     fam(c(0.40, 0.35, 0.25)),
     null,
     atoms = list(
-      cbind(c(1 / 3, 1 / 3, 1 / 3), c(0.48, 0.48, 0.04)),
+      cbind(c(1 / 3, 1 / 3, 1 / 3), c(0.5, 0.5, 0)),
       cbind(c(1 / 3, 1 / 3, 1 / 3))
     )
   )

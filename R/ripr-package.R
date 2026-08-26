@@ -9,7 +9,8 @@
 #' @importFrom S7 class_list class_logical class_numeric
 #' @importFrom S7 method<- new_class new_generic new_object new_property
 #' @importFrom S7 S7_class S7_inherits S7_object
-#' @importFrom stats family optimise optim rgamma rmultinom rnorm sd weights
+#' @importFrom stats family optimise rgamma rmultinom rnorm sd weights
+#' @importFrom nloptr slsqp
 #' @importFrom utils combn
 ## usethis namespace: end
 NULL

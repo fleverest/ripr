@@ -112,8 +112,8 @@ n_cells <- function(space) length(cells(space))
 #' null's pieces may overlap.
 #'
 #' A `convex_region` object encodes the geometry: it encodes dimension,
-#' membership checking, projection, and a [chart()] that maps unconstrained
-#' coordinates to the region.
+#' membership checking, projection, and a [chart()] that maps constrained
+#' generator coordinates to the region.
 #'
 #' Not to be confused with [sample_space]. Outcomes from a sample space are
 #' only validated, but in this package parameters need coordinates for a
@@ -130,34 +130,49 @@ n_cells <- function(space) length(cells(space))
 convex_region <- new_class("convex_region", parent = region, abstract = TRUE)
 
 
-#' Unconstrained coordinate chart for a parameter space
+#' Coordinate chart for a parameter space
 #'
 #' Returns a list of closures that define mappings between the parameter space
-#' and an unconstrained coordinate space, which is what lets BFGS run on the
-#' constrained set.
-#'
-#' Charts for a compact space generally cover only the relative interior, so
-#' an optimiser never exactly solves a maximum attained at a vertex or at
-#' infinity, though at this point we are in the realm of numerical precision
-#' anyway.
+#' and a coordinate space, together with the coordinate constraints stated
+#' explicitly, which is what lets a constrained optimiser such as SLSQP run
+#' on the set.
 #' @param space A [convex_region].
-#' @return A list of closures comprising:
+#' @return A list comprising:
 #' \describe{
 #'   \item{`n_par`}{dimension of the coordinate space.}
-#'   \item{`to_theta(u)`}{coordinates to a parameter vector in the space.}
+#'   \item{`to_theta(u)`}{maps coordinates to the parameter vector.}
 #'   \item{`to_theta_batch(u_mat)`}{`(n_par, N)` coordinates to `(d, N)`
 #'   parameters.}
-#'   \item{`from_theta(theta)`}{Reparemetrised coordinates for a point in the
-#'   space.}
+#'   \item{`from_theta(theta)`}{Coordinates for a point in the parameter space,
+#'   satisfying the constraints.}
 #'   \item{`jacobian(u)`}{`(d, n_par)` derivative of `to_theta` at `u`.}
-#'   \item{`seed(n)`}{`(n_par, n)` random coordinates for a multi-start search,
-#'   drawn to suit the space's own geometry.}
+#'   \item{`lower`}{length-`n_par` lower bounds on the coordinates; `-Inf`
+#'   where a coordinate is free.}
+#'   \item{`heq(u)`, `heqjac(u)`}{equality constraint (`heq(u) = 0` on the
+#'   feasible set) and its Jacobian, or `NULL` when there is none.}
+#'   \item{`seed(n)`}{`(n_par, n)` random feasible coordinates for a
+#'   multi-start search, drawn to suit the space's own geometry.}
 #' }
 #' @examples
-#' s <- simplex_region(vertices = diag(3))
+#' # One part of the K = 3 plurality null: `theta_1 <= theta_2` in the simplex.
+#' s <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 #' ch <- chart(s)
 #' ch$n_par
-#' ch$to_theta(c(0, 0))
+#'
+#' # Coordinates are barycentric weights over the three vertices ...
+#' ch$to_theta(c(1 / 2, 1 / 4, 1 / 4))
+#' ch$from_theta(c(0.1, 0.6, 0.3))
+#'
+#' # ... constrained to the simplex.
+#' ch$lower
+#' ch$heq(c(1 / 2, 1 / 4, 1 / 4))
+#'
+#' # An unbounded region also has lineality and cone coordinates. The halfspace
+#' # `{theta_1 <= theta_2}` has one on its bounding hyperplane and one for the
+#' # distance inward, the latter bounded below:
+#' ch <- chart(halfspace_region(normal = c(1, -1), offset = 0))
+#' ch$lower
+#' ch$to_theta(c(0, sqrt(2)))
 #' @export
 chart <- new_generic("chart", "space", function(space) S7::S7_dispatch())
 
@@ -363,14 +378,15 @@ objective <- function(value, grad, value_batch = NULL) {
 
 #' Maximise an objective over a parameter space
 #'
-#' Multi-start BFGS in the space's own [chart()]: seed coordinates are scored in
-#' batch, the best `n_restarts` are refined, and the best refinement wins.
-#' Written once and shared by every geometry, since only the chart differs.
+#' Multi-start SLSQP in the space's own [chart()]: seed coordinates are scored
+#' in batch, the best `n_restarts` are refined under the chart's declared
+#' constraints, and the best refinement wins. Written once and shared by all
+#' geometries, since only the charts should differ.
 #'
 #' **The result is a lower bound on the true supremum, not the supremum.** The
-#' objective is generally non-convex, the search is heuristic, and charts cover
-#' only the relative interior, so a maximum at a vertex is approached and never
-#' attained. Anything needing an upper bound must obtain it elsewhere.
+#' objective is generally non-convex, so this search is a heuristic. Restarts
+#' will converge to local maxima. Anything needing an upper bound must obtain
+#' it some other way, e.g. via certification.
 #'
 #' `seeds` should always include the current mixture's atoms. Without them the
 #' returned value can fall below `max_j G(theta_j)`, which the mixture already
@@ -399,7 +415,7 @@ maximise_over <- function(
     return(list(theta = theta, value = obj$value(theta)))
   }
 
-  # optim() calls fn and gr separately at the same point, so cache the pair.
+  # slsqp() calls fn and gr separately at the same point, so cache the pair.
   last_u <- NULL
   last <- NULL
   fn_gr <- function(u) {
@@ -416,15 +432,25 @@ maximise_over <- function(
   }
 
   refine <- function(u0, fallback) {
-    tryCatch(
-      stats::optim(
-        u0,
-        fn = \(u) fn_gr(u)$value,
-        gr = \(u) fn_gr(u)$gradient,
-        method = "BFGS"
-      ),
+    res <- tryCatch(
+      {
+        fit <- nloptr::slsqp(
+          u0,
+          fn = \(u) fn_gr(u)$value,
+          gr = \(u) fn_gr(u)$gradient,
+          lower = ch$lower,
+          heq = ch$heq,
+          heqjac = ch$heqjac,
+          control = list(xtol_rel = 1e-8, maxeval = 1000L)
+        )
+        list(par = fit$par, value = fit$value)
+      },
       error = function(e) list(par = u0, value = fallback)
     )
+    if (!is.finite(res$value)) {
+      res <- list(par = u0, value = fallback)
+    }
+    res
   }
 
   starts <- ch$seed(n_seeds)
@@ -446,8 +472,9 @@ maximise_over <- function(
 
   best <- list(par = starts[, top[1L]], value = Inf)
   for (i in top) {
-    res <- refine(starts[, i], fallback = -scores[i])
-    if (res$value < best$value) best <- res
+    fallback <- if (is.finite(scores[i])) -scores[i] else Inf
+    res <- refine(starts[, i], fallback = fallback)
+    if (is.finite(res$value) && res$value < best$value) best <- res
   }
   list(theta = ch$to_theta(best$par), value = -best$value)
 }
@@ -466,46 +493,6 @@ project_simplex <- function(y) {
   rho <- max(which(u + (1 - css) / seq_along(u) > 0))
   pmax(y + (1 - css[rho]) / rho, 0)
 }
-
-
-#' Softmax of `c(0, u)`, a bijection from `R^{n-1}` to the simplex interior
-#' @keywords internal
-#' @noRd
-softmax0 <- function(u) {
-  e <- exp(c(0, u) - max(0, u))
-  e / sum(e)
-}
-
-
-#' Inverse of softmax0, with a guard against exact zeros
-#' @keywords internal
-#' @noRd
-softmax0_inv <- function(alpha, eps = 1e-12) {
-  log(alpha[-1L] + eps) - log(alpha[1L] + eps)
-}
-
-
-#' Jacobian `d alpha / d u` of softmax0, `(n, n-1)`
-#' @keywords internal
-#' @noRd
-softmax0_jacobian <- function(alpha) {
-  (diag(alpha) - outer(alpha, alpha))[, -1L, drop = FALSE]
-}
-
-
-#' @keywords internal
-#' @noRd
-softplus <- function(s) log1p(exp(-abs(s))) + pmax(s, 0)
-
-
-#' @keywords internal
-#' @noRd
-softplus_inv <- function(t) log(expm1(pmax(t, 1e-12)))
-
-
-#' @keywords internal
-#' @noRd
-sigmoid <- function(s) 1 / (1 + exp(-s))
 
 
 # --- Polyhedron region --------------------------------------------------------
@@ -569,13 +556,15 @@ derive_facets <- function(g, guard = 100L) {
 #' you know the generators themselves, or [h_region()] if you have the
 #' H-representation.
 #'
-#' The [chart()] is based directly on the generators:
-#' \deqn{\theta(u) = V\,\mathrm{softmax0}(u_v) + L u_l + R\,\mathrm{softplus}(u_r)}{
-#' theta(u) = V softmax0(u_v) + L u_l + R softplus(u_r)}
-#' with `n_par = (nv - 1) + nl + nr` coordinates ordered `(u_v, u_l, u_r)`:
-#' vertex weights, then lineality, then rays. That every polyhedron admits
-#' such a generator form, dually to its H-representation, is the Minkowski--Weyl
-#' theorem (Ziegler 1995, Theorem 1.2).
+#' The [chart()] defines the generator map:
+#' \deqn{\theta(u) = V a + L z + R c}{theta(u) = V a + L z + R c}
+#' with coordinates `u = (a, z, c)` ordered vertex weights, then lineality,
+#' then rays, and the constraints `a >= 0`, `sum(a) = 1` and `c >= 0` declared
+#' to the optimiser rather than substituted away. A lone vertex contributes no
+#' coordinate, so `n_par = nv + nl + nr` when `nv > 1` and `nl + nr`
+#' otherwise. That every polyhedron admits such a generator form, dually to
+#' its H-representation, is the Minkowski--Weyl theorem (Ziegler 1995,
+#' Theorem 1.2).
 #'
 #' @param vertices `(d, nv)` numeric matrix, one vertex per column, or `NULL`
 #'   for a cone anchored at the origin.
@@ -912,71 +901,50 @@ method(chart, polyhedron_region) <- function(space) {
   n_v <- ncol(v)
   n_l <- ncol(l)
   n_r <- ncol(r)
-  i_v <- seq_len(n_v - 1L)
-  i_l <- (n_v - 1L) + seq_len(n_l)
-  i_r <- (n_v - 1L) + n_l + seq_len(n_r)
-
-  to_theta <- function(u) {
-    as.numeric(v %*% softmax0(u[i_v]) + l %*% u[i_l] + r %*% softplus(u[i_r]))
-  }
+  # Direct generator coordinates `u = (a, z, c)`: barycentric weights over the
+  # vertices (constrained to the simplex), free lineality coordinates, and
+  # non-negative ray coefficients. A lone vertex v_1 contributes no free
+  # coordinate: `theta = v_1 + L z + R c`.
+  free_v <- if (n_v > 1L) n_v else 0L
+  i_v <- seq_len(free_v)
+  base <- if (free_v == 0L) as.numeric(v[, 1L]) else numeric(nrow(v))
+  jac <- cbind(v[, i_v, drop = FALSE], l, r)
+  n_par <- free_v + n_l + n_r
 
   list(
-    n_par = (n_v - 1L) + n_l + n_r,
-    to_theta = to_theta,
-    to_theta_batch = function(u_mat) {
-      alpha <- vapply(
-        seq_len(ncol(u_mat)),
-        \(i) softmax0(u_mat[i_v, i]),
-        numeric(n_v)
-      )
-      out <- v %*% matrix(alpha, nrow = n_v)
-      if (n_l > 0L) {
-        out <- out + l %*% u_mat[i_l, , drop = FALSE]
-      }
-      if (n_r > 0L) {
-        out <- out + r %*% softplus(u_mat[i_r, , drop = FALSE])
-      }
-      out
-    },
+    n_par = n_par,
+    to_theta = function(u) base + as.numeric(jac %*% u),
+    to_theta_batch = function(u_mat) jac %*% u_mat + base,
     from_theta = function(theta) {
       w <- generator_weights(g, theta)
-      c(softmax0_inv(w$a), w$z, softplus_inv(w$c))
+      c(if (free_v > 0L) w$a, w$z, w$c)
     },
-    jacobian = function(u) {
-      cbind(
-        v %*% softmax0_jacobian(softmax0(u[i_v])),
-        l,
-        r %*% diag(sigmoid(u[i_r]), nrow = n_r)
-      )
+    jacobian = function(u) jac,
+    # Bounds and constraints for a constrained optimiser (SLSQP): the
+    # barycentric block sums to one and is non-negative, the ray block is
+    # non-negative, the lineality block is free.
+    lower = c(rep(0, free_v), rep(-Inf, n_l), rep(0, n_r)),
+    heq = if (free_v > 0L) {
+      function(u) sum(u[i_v]) - 1
+    },
+    heqjac = if (free_v > 0L) {
+      function(u) matrix(c(rep(1, free_v), rep(0, n_l + n_r)), nrow = 1L)
     },
     # Seeding draws random coefficients for each of a, z and c:
     # a: a uniform Dirichlet over vertices V
     # z: standard normals along the lineality space
-    # c: boundary-biased normals on the rays
-    # It is really just a heuristic for the search space.
-    # The entire chart is heuristic, softmax/softplus parametrisation
-    # may not be ideal, but it permits unconstrained optimisers like BFGS to run
-    # without much thought.
+    # c: Exp(1) on the rays, boundary-biased with mean 1
     seed = function(n) {
-      u_v <- if (n_v > 1L) {
-        # Dirichlet draws
+      u_v <- if (free_v > 0L) {
         gm <- matrix(stats::rgamma(n * n_v, shape = 1), nrow = n_v)
-        alpha <- div_by_col(gm, colSums(gm))
-        matrix(
-          vapply(seq_len(n), \(i) softmax0_inv(alpha[, i]), numeric(n_v - 1L)),
-          nrow = n_v - 1L
-        )
+        div_by_col(gm, colSums(gm))
       } else {
         matrix(numeric(0), nrow = 0L, ncol = n)
       }
       rbind(
-        # Dirichlet for V coeffs
         u_v,
-        # Std normal for lineality space
         matrix(stats::rnorm(n * n_l), nrow = n_l, ncol = n),
-        # normal with mean -1, stdev 2 for rays
-        # (slightly biased toward 0 through softplus)
-        matrix(stats::rnorm(n * n_r, mean = -1, sd = 2), nrow = n_r, ncol = n)
+        matrix(stats::rgamma(n * n_r, shape = 1), nrow = n_r, ncol = n)
       )
     }
   )
@@ -1150,8 +1118,8 @@ method(contains, simplex_region) <- function(space, theta, tol = 1e-8) {
 #' \eqn{\{\theta : \theta_1 \le \theta_j\}}{{theta : theta_1 <= theta_j}} is
 #' `normal = e_1 - e_j`, `offset = 0`.
 #'
-#' Coordinates are `(z, s)`: `z` positions a point on the bounding hyperplane in
-#' an orthonormal basis, and `softplus(s) >= 0` is the distance inward.
+#' Coordinates are `(z, c)`: `z` positions a point on the bounding hyperplane
+#' in an orthonormal basis, and `c >= 0` is the distance inward.
 #'
 #' Having no vertices, a halfspace admits no certified gap bound. That is a
 #' property of the representation rather than a missing feature -- see

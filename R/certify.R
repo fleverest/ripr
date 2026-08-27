@@ -193,6 +193,10 @@ bernstein_compatible <- function(space, tol = 1e-9) {
 #' @noRd
 simplex_rcond <- function(v) {
   edges <- v[, -1L, drop = FALSE] - v[, 1L]
+  if (ncol(edges) == 0L) {
+    # A single vertex has no edges, so it is perfect fine
+    return(1)
+  }
   sv <- svd(edges, nu = 0L, nv = 0L)$d
   if (sv[1L] <= 0) {
     return(0)
@@ -449,13 +453,9 @@ evaluate_on_space <- function(x, family) {
 #' enclosure, no subdivision and no budget: the answer is one weighted sum over
 #' the sample space, and the search converges before it starts.
 #'
-#' The sum is in floating point, though, and a certificate may not rest on a
-#' value that round-to-nearest could have placed below the truth. So the bound
-#' carries a margin, in the same spirit as `rounding_slack()` and for the same
-#' reason. Two things it has to cover: the log-density's absolute error
-#' surviving `exp()` as a relative error of order `|log p| * eps`, and the
-#' accumulation of the sum itself over its terms. The `incumbent` reported is
-#' the sum without the margin, being what the evaluation actually attained.
+#' The sum is evaluated in floating point, like every bound in the package.
+#' The mathematics yields a guaranteed bound, but the arithmetic being IEEE
+#' double means we do not yield a strictly *proven* bound.
 #' @keywords internal
 #' @noRd
 point_bound <- function(x, family, cells, control) {
@@ -464,16 +464,11 @@ point_bound <- function(x, family, cells, control) {
   loglik <- compile_loglik(family, outcomes)
   lapply(cells, function(cell) {
     log_p <- as.vector(loglik(matrix(cell@theta, ncol = 1L)))
-    terms <- exp(log_p) * values
-    value <- sum(terms)
-    # A zero-probability outcome contributes an exact zero and a `-Inf` log,
-    # which is not an error term to account for.
-    depth <- max(abs(log_p[is.finite(log_p)]), 0)
-    slack <- .Machine$double.eps *
-      (length(terms) + depth) *
-      sum(abs(terms))
+    # A zero-probability outcome contributes an exact zero through a `-Inf`
+    # log; `exp(-Inf) * x` is a clean 0 for finite `x`.
+    value <- sum(exp(log_p) * values)
     list(
-      bound = value + slack,
+      bound = value,
       incumbent = value,
       theta = cell@theta,
       iterations = 0L,
@@ -778,6 +773,17 @@ certify_trace <- function(
 #' Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
 #'
 #' Unlike [sup_lb()] this is a proven bound.
+#'
+#' ## Numerical limitations
+#'
+#' The derived bounds are mathematically guaranteed, but evaluated in floating
+#' point arithmetic. The geometry underneath (triangulation, set algebra,
+#' emptiness) is exact via GMP rationals, so the cells genuinely tile the null
+#' and share facets with no gaps or overlaps. Still, the bounding arithmetic
+#' itself (Bernstein coefficients, point evaluation) uses ordinary IEEE double
+#' precision, and no accounting is made for its rounding, so a certificate here
+#' is a mathematical bound computed in floating point, not a formally proven
+#' one.
 #' @param x A [random_variable].
 #' @param null A [null_model].
 #' @param tol Stop once the bound is within `tol` of the best value found.

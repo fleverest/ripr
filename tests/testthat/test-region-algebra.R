@@ -130,6 +130,26 @@ test_that("setdiff() falls through to base R off regions", {
 })
 
 
+test_that("setdiff() subtracts every region it is given", {
+  ambient <- simplex_region(vertices = diag(3))
+  one_by_one <- setdiff(
+    ambient,
+    union_region(plurality_cell(3L, 2L), plurality_cell(3L, 3L))
+  )
+  through_dots <- setdiff(ambient, plurality_cell(3L, 2L), plurality_cell(3L, 3L))
+  expect_true(setequal(one_by_one, through_dots))
+})
+
+
+test_that("a positional max_cells is refused rather than subtracted", {
+  ambient <- simplex_region(vertices = diag(3))
+  expect_error(
+    setdiff(ambient, plurality_cell(3L, 2L), 10L),
+    "must be passed by name"
+  )
+})
+
+
 test_that("subtracting one plurality cell from the simplex gives one part", {
   # Every facet of the cell except its own boundary is a wall of the simplex,
   # dropped by the exact LP; what remains is the single cell where candidate 1

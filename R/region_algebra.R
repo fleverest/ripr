@@ -284,7 +284,9 @@ method(format, union_region) <- function(x, ...) {
 #' `y` a line segment) also subtracts nothing, becuase we compute only a closed
 #' difference and closure reverses the subtraction. Doing so will raise a
 #' warning. The decomposition is a product across the parts of `y`, guarded by
-#' `max_cells` (default `1000L`, passed through `...`).
+#' the named `max_cells` argument (default `1000L`). Further regions in `...`
+#' are subtracted too: `setdiff(x, y1, y2)` removes the union of the
+#' subtrahends.
 #'
 #' `setequal(x, y)` decides whether two regions are the same set, exactly.
 #' Containment each way is what it tests, and where the containing side is
@@ -298,7 +300,8 @@ method(format, union_region) <- function(x, ...) {
 #' `TRUE`.
 #'
 #' @param x,y [region]s, or anything the base R namesake accepts.
-#' @param ... Further regions.
+#' @param ... Further regions. For `setdiff()`, each is subtracted along with
+#'   `y`; `max_cells` must be passed by name.
 #' @return A [region], except from `setequal()`, which returns `TRUE` or
 #'   `FALSE`. `union()` returns what [union_region()] would.
 #'   `intersect()` returns a [union_region] of the surviving cells, the lone
@@ -411,7 +414,22 @@ setdiff.default <- function(x, y, ...) base::setdiff(x, y)
 
 
 method(setdiff, region) <- function(x, y, ..., max_cells = 1000L) {
-  y <- as_region(y)
+  dots <- list(...)
+  regionish <- vapply(
+    dots,
+    \(d) S7_inherits(d, region) || is.list(d),
+    logical(1)
+  )
+  if (!all(regionish)) {
+    stop(
+      "every argument in `...` must be a region to subtract; ",
+      "`max_cells` must be passed by name.",
+      call. = FALSE
+    )
+  }
+  # Everything in ... is subtracted: setdiff(x, y1, y2) removes the union of the
+  # yi's.
+  y <- as_region(c(list(y), dots))
   if (space_dim(x) != space_dim(y)) {
     stop(
       "every region must have the same ambient dimension; got ",

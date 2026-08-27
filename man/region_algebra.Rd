@@ -31,7 +31,8 @@ setequal(x, y, ...)
 \arguments{
 \item{x, y}{\link{region}s, or anything the base R namesake accepts.}
 
-\item{...}{Further regions.}
+\item{...}{Further regions. For \code{setdiff()}, each is subtracted along with
+\code{y}; \code{max_cells} must be passed by name.}
 }
 \value{
 A \link{region}, except from \code{setequal()}, which returns \code{TRUE} or
@@ -59,7 +60,9 @@ part \code{y} that meets \code{x} in a lower-dimensional slice (e.g. \code{x} is
 \code{y} a line segment) also subtracts nothing, becuase we compute only a closed
 difference and closure reverses the subtraction. Doing so will raise a
 warning. The decomposition is a product across the parts of \code{y}, guarded by
-\code{max_cells} (default \code{1000L}, passed through \code{...}).
+the named \code{max_cells} argument (default \code{1000L}). Further regions in \code{...}
+are subtracted too: \code{setdiff(x, y1, y2)} removes the union of the
+subtrahends.
 
 \code{setequal(x, y)} decides whether two regions are the same set, exactly.
 Containment each way is what it tests, and where the containing side is

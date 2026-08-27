@@ -514,31 +514,6 @@ q_facets <- function(v) {
 }
 
 
-#' The exact centroid of a representation's points
-#'
-#' The point that triangulation cones from. The centroid of a vertex set lies
-#' in the relative interior of its hull, which is what a cone decomposition
-#' uses.
-#'
-#' @param v An rcdd V-representation.
-#' @return A length-`d` character vector of rationals.
-#' @keywords internal
-#' @noRd
-q_centroid <- function(v) {
-  point <- v[, 2L] == "1"
-  if (!any(point)) {
-    stop("a representation with no points has no centroid.", call. = FALSE)
-  }
-  x <- v[point, -(1:2), drop = FALSE]
-  n <- as.character(nrow(x))
-  vapply(
-    seq_len(ncol(x)),
-    function(j) rcdd::qdq(rcdd::qsum(x[, j]), n),
-    character(1)
-  )
-}
-
-
 # --- The double description itself --------------------------------------------
 
 #' Convert a V list to a package-native H list
@@ -563,22 +538,3 @@ h_to_v <- function(h) {
 no_generators <- function(d) matrix(numeric(0), nrow = d, ncol = 0L)
 
 
-# --- Redundancy ---------------------------------------------------------------
-
-#' Drop vertices that are not extreme
-#'
-#' A thin wrapper on [rcdd::redundant()] for the vertex case: given one vertex
-#' per column, returns the subset that are actually vertices of the hull. An
-#' intersection produces redundant generators routinely, and carrying them
-#' costs every later conversion.
-#'
-#' @param v A `d` by `n` numeric matrix, one vertex per column.
-#' @return A `d` by `k` numeric matrix, a column subset of `v`.
-#' @keywords internal
-#' @noRd
-redundant_vertices <- function(v) {
-  d <- nrow(v)
-  from_vmatrix(q_nonredundant(as_vmatrix(
-    list(v = v, r = no_generators(d), l = no_generators(d))
-  )))$v
-}

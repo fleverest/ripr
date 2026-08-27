@@ -71,6 +71,16 @@ via a branch-and-bound algorithm that recursively subdivides the simplex
 Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
 
 Unlike \code{\link[=sup_lb]{sup_lb()}} this is a proven bound.
+\subsection{Numerical contract}{
+
+Bounds are proven in exact real arithmetic and evaluated in floating point.
+The geometry underneath — triangulation, set algebra, emptiness — is exact
+in GMP rationals, so cells tile and share facets with no gaps or overlaps.
+The bounding arithmetic itself (Bernstein coefficients, point evaluation)
+is ordinary IEEE double precision, and no accounting is made for its
+rounding: a certificate here is a mathematical bound computed in floating
+point, not a formally verified one.
+}
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

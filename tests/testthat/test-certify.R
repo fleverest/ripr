@@ -737,6 +737,9 @@ test_that("bernstein_compatible() accepts when certification is possible", {
     offset = 0
   )))
   expect_false(bernstein_compatible(unconstrained_region(3L)))
+
+  # The degenerate single vertex has no edges to condition
+  expect_true(bernstein_compatible(simplex_region(vertices = matrix(1))))
 })
 
 
@@ -893,9 +896,8 @@ test_that("a point null is certified by evaluation, exactly", {
 
   # The attained value is the evaluation itself, to the last bit.
   expect_identical(res$sup_lb, direct)
-  # The bound carries a rounding margin over it -- strictly above, and small.
-  expect_gt(res$sup_ub, res$sup_lb)
-  expect_lt(res$sup_ub - res$sup_lb, 1e-10 * abs(direct))
+  # A point's certificate is its value
+  expect_identical(res$sup_ub, res$sup_lb)
 })
 
 

@@ -1143,6 +1143,28 @@ test_that("an incumbent found in one cell prunes the searches over the rest", {
 })
 
 
+test_that("a dominated part reports its own bound, not the incumbent's", {
+  family <- multinomial_family(n_trials = 10L, k = 3L)
+  outcomes <- enumerate_space(family@sample_space)
+  x <- tabulated_rv(family, outcomes[, 1L]^2)
+  large <- simplex_region(
+    vertices = cbind(c(1, 0, 0), c(0.5, 0.5, 0), c(0.5, 0, 0.5))
+  )
+  small <- simplex_region(
+    vertices = cbind(c(0, 0, 1), c(0, 0.5, 0.5), c(0.5, 0, 0.5))
+  )
+  res <- certify(x, null_model(family, list(large, small)), tol = 1e-9)
+  alone <- certify(x, null_model(family, list(small)), tol = 1e-9)
+
+  # The large part's attained value dominates everything the poor part has.
+  expect_gt(res$incumbents[1L], alone$sup_ub)
+  # The small part still reports a valid bound on itself, far below the
+  # incumbent it was pruned against.
+  expect_gte(res$bounds[2L], alone$sup_lb)
+  expect_lt(res$bounds[2L], res$incumbents[1L])
+})
+
+
 test_that("the incumbent carries from one bound_fn group to the next", {
   # Nothing about the reduction stops a value attained under one method from
   # pruning a search under another: `sup_lb` is a maximum over every cell of

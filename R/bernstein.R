@@ -467,15 +467,14 @@ rounding_slack <- function(seeds, lat, round_slack) {
 
 #' The bound the run is currently entitled to claim
 #'
-#' Not simply the maximum over active nodes. Pruned nodes were discarded on the
-#' evidence that they sit below `incumbent + slack`, and that is all that is
-#' known about them, so they are accounted for by carrying that term here. A
-#' bound taken over active nodes alone is correct only for a run that never
-#' prunes, and wrong silently otherwise.
+#' Not simply the maximum over active nodes. A pruned node may still hold the
+#' supremum, so the largest upper bound pruning ever discarded is recorded
+#' along with the active maximum, and `attained` covers the run's own vertex
+#' evaluations.
 #' @keywords internal
 #' @noRd
-certified_bound <- function(incumbent, slack, active_ub, eta) {
-  max(incumbent + slack, active_ub) + eta
+certified_bound <- function(attained, active_ub, pruned_ub, eta) {
+  max(attained, active_ub, pruned_ub) + eta
 }
 
 
@@ -551,7 +550,8 @@ prune_active <- function(active, incumbent, slack, eta, keep_argmax) {
 #'   somewhere the caller will take a maximum over, e.g. another cell of the
 #'   same null. Allows us to prune nodes earlier, which is what makes a null
 #'   with many cells cost far less than it would otherwise. Many small cells
-#'   will be pruned immediately. Do not specify if `keep_argmax = TRUE`.
+#'   will be pruned immediately. It controls pruning and early stopping only.
+#'   Do not specify if `keep_argmax = TRUE`.
 #' @return `list(bound, incumbent, theta, active, rejected, iterations,
 #'   converged, budget_hit, trace)`. `converged` and `budget_hit` are mutually
 #'   exclusive and exactly one is `TRUE`: the search either pruned or closed the
@@ -590,12 +590,14 @@ certify_sup <- function(
   it <- 0L
   reason <- NULL
 
+  pruned_ub <- -Inf
+
   repeat {
     # What the run may prune against: its own best vertex, or a better one
     # already found elsewhere. The gap is measured against the same value.
     incumbent <- max(best$value, shared_incumbent)
     active_ub <- if (length(active)) max(node_ubs(active)) else -Inf
-    bound <- certified_bound(incumbent, slack, active_ub, eta)
+    bound <- certified_bound(best$value, active_ub, pruned_ub, eta)
 
     reason <- stop_reason(
       length(active),
@@ -634,6 +636,9 @@ certify_sup <- function(
 
     incumbent <- max(best$value, shared_incumbent)
     pruned <- prune_active(active, incumbent, slack, eta, keep_argmax)
+    if (length(pruned$drop)) {
+      pruned_ub <- max(pruned_ub, node_ubs(pruned$drop))
+    }
     rejected <- c(
       rejected,
       lapply(pruned$drop, function(b) {
@@ -646,7 +651,7 @@ certify_sup <- function(
       lapply(pruned$drop, node_stub, retired = it, fate = "pruned")
     )
     active <- pruned$keep
-    trace[it] <- certified_bound(incumbent, slack, pruned$kept_ub, eta)
+    trace[it] <- certified_bound(best$value, pruned$kept_ub, pruned_ub, eta)
     incumbent_trace[it] <- best$value
   }
 

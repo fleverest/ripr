@@ -801,11 +801,7 @@ test_that("the rounding slack is added and is non-negative", {
   expect_equal(with_eta$incumbent, without$incumbent)
 })
 
-test_that("pruned nodes stay accounted for in the bound", {
-  # `bound = max(incumbent + slack, u) + eta` is what makes the pruning safe:
-  # discarded boxes were only ever shown to sit below `incumbent + slack`. With
-  # a large slack most boxes are pruned, so a bound taken over active leaves
-  # alone would come back too small here.
+test_that("pruning nodes via slack doesn't hurt the bound", {
   set.seed(25)
   lat <- bernstein_lattice(6L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
@@ -823,7 +819,7 @@ test_that("pruned nodes stay accounted for in the bound", {
     slack = 0.5
   )
   expect_gte(res$bound, truth)
-  expect_gte(res$bound, res$incumbent + 0.5)
+  expect_lte(res$bound, res$incumbent + 0.5 + 1e-9)
 })
 
 test_that("keep_argmax retains an enclosure of the maximiser", {
@@ -889,7 +885,12 @@ test_that("a run that prunes all nodes converges rather than running out", {
   # which says the bound is loose when it is as tight as the method gets.
   set.seed(47)
   lat <- bernstein_lattice(6L, 3L)
-  seeds <- list(list(V = diag(3L), coef = stats::rnorm(lat$n_coef, sd = 2)))
+  # Picking coefficients that are not maximised on the vertices:
+  coef <- stats::rnorm(lat$n_coef, sd = 2)
+  while (max(coef) == boxes_best(list(seed_box(lat, coef)), lat)$value) {
+    coef[which.max(coef)] <- min(coef) - 1
+  }
+  seeds <- list(seed_box(lat, coef))
   res <- certify_sup(seeds, lat, tol = 0, max_iter = 500L, slack = 0.5)
 
   expect_length(res$active, 0L)

@@ -120,14 +120,17 @@ method(`[`, region) <- function(x, i, ...) {
 #'
 #' Contrast [parts()], which is what the region was declared as.
 #' @param space A [region].
+#' @param ... Passed on to the method. The triangulating method for
+#'   [polyhedron_region()] takes `max_cells` (default `1000L`), the point at
+#'   which it gives up.
 #' @return A list of [convex_region] objects whose union is `space`.
 #' @examples
 #' cells(simplex_region(vertices = diag(3)))
 #' @export
-cells <- new_generic("cells", "space", function(space) S7::S7_dispatch())
+cells <- new_generic("cells", "space", function(space, ...) S7::S7_dispatch())
 
 
-method(cells, region) <- function(space) list(space)
+method(cells, region) <- function(space, ...) list(space)
 
 
 #' Number of convex regions a region decomposes into

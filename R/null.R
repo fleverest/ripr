@@ -58,7 +58,21 @@ null_model <- new_class(
   ),
   constructor = function(family, region) {
     region <- as_region(region)
-    per_part <- lapply(parts(region), cells)
+    prts <- parts(region)
+    per_part <- lapply(seq_along(prts), function(i) {
+      tryCatch(
+        cells(prts[[i]]),
+        error = function(e) {
+          stop(
+            "could not decompose part ",
+            i,
+            " of the null: ",
+            conditionMessage(e),
+            call. = FALSE
+          )
+        }
+      )
+    })
     new_object(
       S7_object(),
       family = family,

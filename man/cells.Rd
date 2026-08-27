@@ -8,10 +8,15 @@
 \alias{cells,ripr::point_region-method}
 \title{The convex regions a region decomposes into for optimisation}
 \usage{
-cells(space)
+cells(space, ...)
 }
 \arguments{
 \item{space}{A \link{region}.}
+
+\item{...}{Passed on to the method. The triangulating method for
+\code{\link[=polyhedron_region]{polyhedron_region()}} takes \code{max_cells} (default \code{1000L}), the point at
+which it gives up rather than fan out a combinatorially large
+decomposition.}
 }
 \value{
 A list of \link{convex_region} objects whose union is \code{space}.

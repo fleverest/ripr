@@ -213,8 +213,8 @@ method(parts, union_region) <- function(space) space@parts
 #'   what was declared, the cells are what the algorithms run on.
 #' @rdname cells
 #' @usage NULL
-method(cells, union_region) <- function(space) {
-  unlist(lapply(space@parts, cells), recursive = FALSE)
+method(cells, union_region) <- function(space, ...) {
+  unlist(lapply(space@parts, cells, ...), recursive = FALSE)
 }
 
 

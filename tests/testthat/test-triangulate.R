@@ -194,3 +194,32 @@ test_that("cells keep facets exact rather than re-deriving them from doubles", {
   expect_equal(from_hmatrix(cell@q_cache$h)$a, cell@facets$a)
   expect_equal(from_hmatrix(cell@q_cache$h)$b, cell@facets$b)
 })
+
+
+test_that("triangulation refuses to fan past max_cells", {
+  # A pentagon fans into three triangles; a cap of two must refuse rather
+  # than return a truncated tiling.
+  pent <- polygon_region(5L)
+  expect_length(cells(pent), 3L)
+  expect_error(cells(pent, max_cells = 2L), "gave up after `max_cells = 2`")
+})
+
+
+test_that("a null names the part that failed to decompose", {
+  local_mocked_bindings(triangulate = function(space, ...) {
+    stop("boom", call. = FALSE)
+  })
+  fam <- multinomial_family(n_trials = 2L, k = 3L)
+  square <- polytope_region(
+    vertices = cbind(
+      c(0.5, 0.5, 0),
+      c(0, 0.5, 0.5),
+      c(0, 0, 1),
+      c(0.5, 0, 0.5)
+    )
+  )
+  expect_error(
+    null_model(fam, list(simplex_region(vertices = diag(3)), square)),
+    "part 2 of the null: boom"
+  )
+})

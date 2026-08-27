@@ -22,10 +22,13 @@ NULL
 #' itself.
 #'
 #' @param space A bounded [convex_region].
+#' @param max_cells Give up rather than produce more simplices than this. The
+#'   fan is combinatorial in the vertex count at worst, and a decomposition
+#'   past this size is probably not something we can afford to use downstream.
 #' @return A list of [simplex_region] objects.
 #' @keywords internal
 #' @noRd
-triangulate <- function(space) {
+triangulate <- function(space, max_cells = 1000L) {
   if (!is_bounded(space)) {
     stop(
       "only a bounded region can be triangulated; this `",
@@ -35,7 +38,10 @@ triangulate <- function(space) {
       call. = FALSE
     )
   }
-  lapply(fan_cells(q_nonredundant(q_vrep(space))), simplex_from_qv)
+  budget <- new.env(parent = emptyenv())
+  budget$left <- max_cells
+  budget$max_cells <- max_cells
+  lapply(fan_cells(q_nonredundant(q_vrep(space)), budget), simplex_from_qv)
 }
 
 
@@ -46,15 +52,28 @@ triangulate <- function(space) {
 #' recomputed.
 #' @param qv An rcdd V-representation of a bounded polyhedron, all rows
 #'   extreme points.
+#' @param budget An environment with `left`, the simplices still allowed, and
+#'   `max_cells`, the original cap for the error message. Every base-case
+#'   emission maps one-to-one onto a final cell -- coning preserves the count
+#'   -- so decrementing there counts the finished triangulation exactly.
 #' @return A list of rcdd V-representations, one per simplex.
 #' @keywords internal
 #' @noRd
-fan_cells <- function(qv) {
+fan_cells <- function(qv, budget) {
   facets <- q_facets(qv)
   # `scdd()` states the affine hull as equality rows, the ambient dimension
   # left over is the dimension of the hull itself.
   hull_dim <- (ncol(qv) - 2L) - sum(facets$h[, 1L] == "1")
   if (nrow(qv) == hull_dim + 1L) {
+    budget$left <- budget$left - 1L
+    if (budget$left < 0L) {
+      stop(
+        "triangulation gave up after `max_cells = ",
+        budget$max_cells,
+        "` simplices.",
+        call. = FALSE
+      )
+    }
     return(list(qv))
   }
   # At some point in the future we could add a rule for picking an apex
@@ -69,7 +88,10 @@ fan_cells <- function(qv) {
     }
     cells <- c(
       cells,
-      lapply(fan_cells(q_subrows(qv, on)), \(cell) q_rbind(apex, cell))
+      lapply(
+        fan_cells(q_subrows(qv, on), budget),
+        \(cell) q_rbind(apex, cell)
+      )
     )
   }
   cells
@@ -103,16 +125,16 @@ simplex_from_qv <- function(qv) {
 #'   already: [simplex_region()], or [point_region()], the degenerate one.
 #' @rdname cells
 #' @usage NULL
-method(cells, polyhedron_region) <- function(space) {
-  if (is_bounded(space)) triangulate(space) else list(space)
+method(cells, polyhedron_region) <- function(space, ..., max_cells = 1000L) {
+  if (is_bounded(space)) triangulate(space, max_cells) else list(space)
 }
 
 
 #' @rdname cells
 #' @usage NULL
-method(cells, simplex_region) <- function(space) list(space)
+method(cells, simplex_region) <- function(space, ...) list(space)
 
 
 #' @rdname cells
 #' @usage NULL
-method(cells, point_region) <- function(space) list(space)
+method(cells, point_region) <- function(space, ...) list(space)

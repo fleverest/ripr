@@ -680,48 +680,54 @@ test_that("search_null searches cells and reports the part they belong to", {
   )))
 })
 
-test_that("containing_cell picks a cell holding the point, or the nearest", {
-  null <- square_null()@null
-  for (cell in null@cells) {
-    inside <- rowMeans(cell@vertices)
-    expect_identical(containing_cell(null, inside, 1L), cell)
-  }
-
-  # A point on the diagonal the fan cut along is in both cells, and either
-  # answer is right; what matters is that one comes back.
-  shared <- (null@cells[[1L]]@vertices[, 1L] + null@cells[[2L]]@vertices[, 1L]) / 2
-  expect_true(S7_inherits(containing_cell(null, shared, 1L), simplex_region))
-
-  # A point a rounding outside every cell still gets one: the M-step has to
-  # run somewhere, and the nearest cell is where the atom was.
-  outside <- rowMeans(null@cells[[1L]]@vertices) + c(0, 0.4, -0.4)
-  expect_false(any(vapply(
-    null@cells,
-    \(cell) contains(cell, outside),
+test_that("the atom M-step crosses a fan diagonal when the optimum does", {
+  # Responsibilities concentrated on the outcome (0, 6, 6) put the M-step
+  # optimum at theta = (0, 0.5, 0.5), a vertex of exactly one of the square's
+  # two cells. An atom started deep inside the other cell must cross the fan's
+  # diagonal to reach it -- which confinement to a containing cell forbade.
+  st <- square_null()
+  target <- c(0, 0.5, 0.5)
+  holds <- vapply(
+    st@null@cells,
+    \(cell) contains(cell, target, tol = 1e-9),
     logical(1)
-  )))
-  near <- containing_cell(null, outside, 1L)
-  gaps <- vapply(
-    null@cells,
-    \(cell) sum((project(cell, outside) - outside)^2),
-    numeric(1)
   )
-  expect_equal(sum((project(near, outside) - outside)^2), min(gaps))
+  expect_identical(sum(holds), 1L)
+  far_cell <- st@null@cells[[which(!holds)[1L]]]
+  st@atoms[[1L]][, 1L] <- rowMeans(far_cell@vertices)
+
+  ld <- compile_engine(st@engine)
+  wt <- exp(st@engine@log_w) * em_responsibilities(st, ld)
+  hit <- st@engine@nodes[, 1L] == 0 & st@engine@nodes[, 2L] == 6
+  wt[, 1L] <- 0
+  wt[hit, 1L] <- 1
+
+  moved <- em_atom_step(st, ld, wt)
+  expect_equal(moved@atoms[[1L]][, 1L], target, tolerance = 1e-6)
+})
+
+test_that("an atom whose step finds nothing finite stays where it is", {
+  # Unreachable through the multinomial family, whose log-likelihood is finite
+  # on the interior; pinned with a synthetic log-density so the contract is a
+  # decision rather than an accident of seed ordering.
+  st <- square_null()
+  wt <- exp(st@engine@log_w) *
+    em_responsibilities(st, compile_engine(st@engine))
+  bottomless <- function(theta_mat) {
+    matrix(-Inf, nrow = nrow(st@engine@nodes), ncol = ncol(theta_mat))
+  }
+  moved <- em_atom_step(st, bottomless, wt)
+  expect_identical(flat_atoms(moved), flat_atoms(st))
 })
 
 test_that("an EM sweep over a triangulated part keeps its atoms in the part", {
-  # The M-step now optimises in a cell's chart rather than the hull's. An atom
-  # still may not leave the part, which is the invariant `state@atoms` rests
-  # on; staying inside one cell is the stronger thing it now also does.
+  # The M-step optimises over the whole part, so the only boundary an atom
+  # respects is the one `state@atoms` rests on: it may cross the fan's
+  # diagonals freely but may not leave its part.
   st <- fw_step(square_null(), 3L)
   moved <- em_sweep(st, compile_engine(st@engine))
   for (j in seq_len(ncol(moved@atoms[[1L]]))) {
     theta <- moved@atoms[[1L]][, j]
     expect_true(contains(parts(st@null@region)[[1L]], theta, tol = 1e-5))
-    expect_true(any(vapply(
-      st@null@cells,
-      \(cell) contains(cell, theta, tol = 1e-5),
-      logical(1)
-    )))
   }
 })

@@ -733,46 +733,12 @@ em_weight_step <- function(state, wt) {
 }
 
 
-#' The cell of a part that holds a point
-#'
-#' An atom is filed under a part, and a part may consist of several cells. The
-#' M-step optimises in a cell's chart, so it has to know which one, and the test
-#' is [contains()]: it checks the facets of a polyhedron, very cheap to run down
-#' a part's cells.
-#'
-#' Cells share their boundaries, and [contains()] is true on both sides of a
-#' shared facet; the first match wins, which is arbitrary but harmless, since
-#' the point really is in both.
-#'
-#' TODO:
-#' Perhaps in the future we could check the gradient at this point to decide,
-#' or do something smart?
-#' @keywords internal
-#' @noRd
-containing_cell <- function(null, theta, part) {
-  candidates <- which(null@cell_part == part)
-  if (length(candidates) == 1L) {
-    return(null@cells[[candidates]])
-  }
-  for (i in candidates) {
-    if (contains(null@cells[[i]], theta)) {
-      return(null@cells[[i]])
-    }
-  }
-  gaps <- vapply(
-    candidates,
-    \(i) sum((project(null@cells[[i]], theta) - theta)^2),
-    numeric(1)
-  )
-  null@cells[[candidates[[which.min(gaps)]]]]
-}
-
-
 #' The M-step for the atoms
 #'
 #' Each atom maximises its own responsibility-weighted log-likelihood over the
-#' cell that currently holds it, so an atom cannot migrate between parts or
-#' cells, sadly. (TODO?)
+#' part that holds it. Migrating between *parts* stays out of scope:
+#' `state@atoms` is part-indexed, and moving support across parts is the
+#' oracle's job.
 #'
 #' Local only: seeded at the current atom with no random starts. Exploration is
 #' the oracle's job, and a global search here would let atoms teleport between
@@ -817,13 +783,15 @@ em_atom_step <- function(state, ld, wt) {
           as.vector(crossprod(ld(theta_mat)[keep, , drop = FALSE], w_c))
         }
       )
-      maximise_over(
-        containing_cell(state@null, atoms_flat[, c_i], idx[c_i]),
+      res <- maximise_over(
+        parts(state@null@region)[[idx[c_i]]],
         obj,
         seeds = atoms_flat[, c_i, drop = FALSE],
         n_seeds = 0L,
         n_restarts = 1L
-      )$theta
+      )
+      # A step that found nothing finite learned nothing: keep the atom.
+      if (is.finite(res$value)) res$theta else atoms_flat[, c_i]
     },
     numeric(nrow(atoms_flat))
   )

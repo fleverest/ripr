@@ -74,10 +74,12 @@ test_that("intersect() distributes over the parts of unions", {
 
 
 test_that("a disjoint intersection is empty, not a degenerate cell", {
-  expect_null(intersect(
+  nothing <- intersect(
     point_region(theta = c(1, 0, 0)),
     point_region(theta = c(0, 1, 0))
-  ))
+  )
+  expect_true(S7_inherits(nothing, empty_region))
+  expect_identical(space_dim(nothing), 3L)
 
   # Cells meeting only in a shared face are not empty: the closed cells of a
   # cover genuinely intersect in that face.
@@ -85,7 +87,7 @@ test_that("a disjoint intersection is empty, not a degenerate cell", {
     simplex_region(vertices = cbind(c(0, 0), c(1, 0), c(0, 1))),
     simplex_region(vertices = cbind(c(1, 1), c(1, 0), c(0, 1)))
   )
-  expect_false(is.null(edge))
+  expect_false(is_empty(edge))
   expect_true(contains(edge, c(0.5, 0.5)))
   expect_false(contains(edge, c(0.25, 0.25)))
 })
@@ -244,10 +246,11 @@ test_that("a coarser ambient gives strictly more cells", {
 
 
 test_that("x inside y leaves nothing, and max_cells errors rather than hangs", {
-  expect_null(setdiff(
+  nothing <- setdiff(
     plurality_cell(3L, 2L),
     simplex_region(vertices = diag(3))
-  ))
+  )
+  expect_true(S7_inherits(nothing, empty_region))
 
   big <- polytope_region(
     vertices = 4 * cbind(c(-1, -1), c(1, -1), c(1, 1), c(-1, 1))
@@ -483,14 +486,14 @@ test_that("disjoin() covers the same set with parts that do not overlap", {
   expect_true(setequal(peeled, plurality))
   # The declared parts genuinely overlap; the peeled ones meet in nothing of
   # full dimension, which is what lets a measure be summed over them.
-  expect_false(is.null(intersect(
+  expect_false(is_empty(intersect(
     plurality_cell(3L, 2L),
     plurality_cell(3L, 3L)
   )))
   for (i in seq_len(n_parts(peeled) - 1L)) {
     for (j in (i + 1L):n_parts(peeled)) {
       shared <- intersect(peeled[[i]], peeled[[j]])
-      if (is.null(shared)) {
+      if (is_empty(shared)) {
         next
       }
       # They may meet, but only in a face: the plurality cells are

@@ -58,6 +58,12 @@ null_model <- new_class(
   ),
   constructor = function(family, region) {
     region <- as_region(region)
+    if (S7_inherits(region, empty_region)) {
+      stop(
+        "the null is empty: there is no hypothesis to fit or certify.",
+        call. = FALSE
+      )
+    }
     prts <- parts(region)
     per_part <- lapply(seq_along(prts), function(i) {
       tryCatch(

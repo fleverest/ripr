@@ -43,6 +43,7 @@ reference:
   - region
   - convex_region
   - union_region
+  - empty_region
   - polyhedron_region
   - h_region
   - polytope_region

@@ -20,7 +20,8 @@ A list of \link{convex_region} objects.
 What the caller asked for, unchanged. A convex region is its own only part.
 
 Subsetting with \code{[} returns a region again: the union of the
-selected parts, the lone part itself, or \code{NULL} for an empty selection.
+selected parts, the lone part itself, or an \code{empty_region} for an empty
+selection.
 }
 \details{
 Contrast \code{\link[=cells]{cells()}}, which is what the algorithms decompose a region into.

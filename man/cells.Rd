@@ -2,6 +2,7 @@
 % Please edit documentation in R/region.R, R/region_algebra.R, R/triangulate.R
 \name{cells}
 \alias{cells}
+\alias{cells,ripr::empty_region-method}
 \alias{cells,ripr::union_region-method}
 \alias{cells,ripr::polyhedron_region-method}
 \alias{cells,ripr::simplex_region-method}
@@ -26,6 +27,8 @@ a union of convex pieces returns those pieces here, and a geometry that can
 be triangulated will return its triangulation. Things that search or enclose
 then run on each convex cell, without needing to know which region it came
 from.
+
+An empty region has no cells.
 
 A union's cells are its parts' cells, flattened: the parts are
 what was declared, the cells are what the algorithms run on.

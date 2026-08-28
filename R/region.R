@@ -70,8 +70,8 @@ n_parts <- function(space) length(parts(space))
 
 # Every region is list-like over its parts, so the results of the set algebra
 # read uniformly whether one cell survived (a bare convex region), several (a
-# union), or none (NULL): `length()` is 1, n, or 0, and `x[[i]]`, `x[i]`,
-# `lapply()` work on all of them.
+# union), or none (an empty_region): `length()` is 1, n, or 0, and `x[[i]]`,
+# `x[i]`, `lapply()` work on all of them.
 
 #' @rdname parts
 #' @usage NULL
@@ -92,14 +92,15 @@ method(`[[`, region) <- function(x, i, ...) parts(x)[[i]]
 
 
 #' @description Subsetting with `[` returns a region again: the union of the
-#'   selected parts, the lone part itself, or `NULL` for an empty selection.
+#'   selected parts, the lone part itself, or an `empty_region` for an empty
+#'   selection.
 #' @rdname parts
 #' @usage NULL
 #' @export
 method(`[`, region) <- function(x, i, ...) {
   chosen <- parts(x)[i]
   if (length(chosen) == 0L) {
-    return(NULL)
+    return(empty_region(space_dim(x)))
   }
   union_region(chosen)
 }

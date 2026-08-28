@@ -32,6 +32,115 @@ region_from_qh <- function(qh) {
 }
 
 
+# --- Empty region -------------------------------------------------------------
+
+#' The region with nothing in it
+#'
+#' The set algebra returns empty when nothing remains, e.g. `intersect()` on
+#' disjoint regions, `setdiff()` of a covered one, or `x[integer(0)]`.
+#'
+#' It behaves like a list of length zero: [parts()] and [cells()] are empty,
+#' `length()` is `0`, `as.list()` is `list()`, and there is nothing to index.
+#' No point returns `TRUE` for [contains()], [is_empty()] is `TRUE`, and it is
+#' bounded.
+#'
+#' A null hypothesis may not be empty: [null_model()] refuses one.
+#'
+#' @param d The ambient dimension the region is empty in, a positive integer.
+#' @return An `empty_region`.
+#' @examples
+#' # Disjoint regions intersect in nothing:
+#' nothing <- intersect(
+#'   point_region(theta = c(1, 0, 0)),
+#'   point_region(theta = c(0, 1, 0))
+#' )
+#' is_empty(nothing)
+#' n_parts(nothing)
+#'
+#' # And the algebra keeps going from there:
+#' identical(
+#'   union(nothing, simplex_region(vertices = diag(3))),
+#'   simplex_region(vertices = diag(3))
+#' )
+#' @seealso [region_algebra]
+#' @export
+empty_region <- new_class(
+  "empty_region",
+  parent = region,
+  properties = list(n_dim = class_integer),
+  constructor = function(d) {
+    if (!is.numeric(d) || length(d) != 1L || !is.finite(d) || d < 1) {
+      stop("`d` must be a single positive integer.", call. = FALSE)
+    }
+    new_object(S7_object(), n_dim = as.integer(d))
+  }
+)
+
+
+method(space_dim, empty_region) <- function(space) space@n_dim
+
+
+method(parts, empty_region) <- function(space) list()
+
+
+#' @description An empty region has no cells.
+#' @rdname cells
+#' @usage NULL
+method(cells, empty_region) <- function(space, ...) list()
+
+
+method(contains, empty_region) <- function(space, theta, tol = 1e-8) FALSE
+
+
+method(is_empty, empty_region) <- function(space) TRUE
+
+
+method(is_bounded, empty_region) <- function(space) TRUE
+
+
+#' The refusal both representations owe an empty region
+#' @keywords internal
+#' @noRd
+refuse_empty <- function(what) {
+  stop(
+    "`",
+    what,
+    "()` is not defined for an `empty_region`: the empty set has no ",
+    "generators and no facet description to state.",
+    call. = FALSE
+  )
+}
+
+method(h_rep, empty_region) <- function(space) refuse_empty("h_rep")
+method(v_rep, empty_region) <- function(space) refuse_empty("v_rep")
+method(q_hrep, empty_region) <- function(space) refuse_empty("q_hrep")
+method(q_vrep, empty_region) <- function(space) refuse_empty("q_vrep")
+
+
+method(region_phrase, empty_region) <- function(space) {
+  sprintf("the empty region in dimension %d", space@n_dim)
+}
+
+
+#' @rdname empty_region
+#' @usage NULL
+method(format, empty_region) <- function(x, ...) {
+  sprintf("%s: %s", attr(S7_class(x), "name"), region_phrase(x))
+}
+
+
+#' @rdname empty_region
+#' @usage NULL
+method(print, empty_region) <- function(x, ...) {
+  cat(format(x), "\n", sep = "")
+  invisible(x)
+}
+
+
+# Any subset of nothing is nothing, whatever the index says.
+method(`[`, empty_region) <- function(x, i, ...) x
+
+
 # --- Union region -------------------------------------------------------------
 
 #' A finite union of convex regions
@@ -87,6 +196,26 @@ union_region <- new_class(
   properties = list(parts = class_list),
   constructor = function(...) {
     flat <- flatten_parts(list(...))
+    # An empty region contributes nothing to a union, but its dimension must
+    # still agree: dropping a mismatched empty would silently bless a union
+    # the validator refuses everywhere else.
+    empties <- vapply(flat, \(p) S7_inherits(p, empty_region), logical(1))
+    if (any(empties)) {
+      is_region <- vapply(flat, \(p) S7_inherits(p, region), logical(1))
+      dims <- unique(vapply(flat[is_region], space_dim, integer(1)))
+      if (length(dims) > 1L) {
+        stop(
+          "every element of `parts` must have the same ambient dimension; ",
+          "got ",
+          paste(dims, collapse = ", "),
+          call. = FALSE
+        )
+      }
+      if (all(empties)) {
+        return(empty_region(dims))
+      }
+      flat <- flat[!empties]
+    }
     if (length(flat) == 1L && S7_inherits(flat[[1L]], convex_region)) {
       return(flat[[1L]])
     }
@@ -293,8 +422,9 @@ method(format, union_region) <- function(x, ...) {
 #' @return A [region], except from `setequal()`, which returns `TRUE` or
 #'   `FALSE`. `union()` returns what [union_region()] would.
 #'   `intersect()` returns a [union_region] of the surviving cells, the lone
-#'   cell itself when a single one survives, or `NULL` when the intersection
-#'   is empty.
+#'   cell itself when a single one survives, or an [empty_region()] when the
+#'   intersection is empty; `setdiff()` likewise returns an [empty_region()]
+#'   when nothing remains.
 #' @examples
 #' # The K = 3 plurality null, by verb rather than constructor:
 #' union(
@@ -384,8 +514,11 @@ method(intersect, region) <- function(x, y, ...) {
     # V-representation computation.
     acc <- Filter(Negate(q_is_empty), acc)
     if (length(acc) == 0L) {
-      return(NULL)
+      return(empty_region(dims[[1L]]))
     }
+  }
+  if (length(acc) == 0L) {
+    return(empty_region(dims[[1L]]))
   }
   union_region(lapply(acc, region_from_qh))
 }
@@ -446,7 +579,7 @@ method(setdiff, region) <- function(x, y, ..., max_cells = 1000L) {
   }
   cells <- unlist(lapply(results, \(r) r$cells), recursive = FALSE)
   if (length(cells) == 0L) {
-    return(NULL)
+    return(empty_region(space_dim(x)))
   }
   union_region(lapply(cells, region_from_qh))
 }
@@ -556,7 +689,7 @@ region_subset <- function(inner, whole, max_cells = 1000L) {
 #' @param x A [region].
 #' @param ... Passed to `setdiff()`, e.g. `max_cells`.
 #' @return A [region] covering the same set, whose parts have disjoint
-#'   interiors, or `NULL` if `x` is empty.
+#'   interiors, or an [empty_region()] if `x` is empty.
 #' @examples
 #' # The two cells of the K = 3 plurality null overlap where candidate 1 trails
 #' # both others. Peeling them apart leaves that region in one of the two.
@@ -579,6 +712,11 @@ method(disjoin, convex_region) <- function(x, ...) x
 
 #' @rdname disjoin
 #' @usage NULL
+method(disjoin, empty_region) <- function(x, ...) x
+
+
+#' @rdname disjoin
+#' @usage NULL
 method(disjoin, union_region) <- function(x, ...) {
   kept <- list()
   for (part in x@parts) {
@@ -590,12 +728,12 @@ method(disjoin, union_region) <- function(x, ...) {
     # A part wholly covered by the ones before it contributes nothing, and an
     # empty one was never going to. Dropping them is the point: what comes back
     # is a cover with no redundant piece in it.
-    if (!is.null(remainder) && !is_empty(remainder)) {
+    if (!is_empty(remainder)) {
       kept <- c(kept, parts(remainder))
     }
   }
   if (length(kept) == 0L) {
-    return(NULL)
+    return(empty_region(space_dim(x)))
   }
   union_region(kept)
 }

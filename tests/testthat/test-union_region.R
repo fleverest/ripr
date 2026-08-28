@@ -242,10 +242,12 @@ test_that("every region is list-like over its parts", {
   expect_identical(length(s), 1L)
   expect_identical(s[[1L]], s)
 
-  # `[` stays a region: a union, the lone part, or NULL when nothing is left.
+  # `[` stays a region: a union, the lone part, or an empty region when
+  # nothing is left.
   expect_identical(u[1L], s)
   expect_identical(length(u[c(1L, 2L)]), 2L)
-  expect_null(u[integer(0)])
+  expect_true(S7_inherits(u[integer(0)], empty_region))
+  expect_identical(length(u[integer(0)]), 0L)
 
   # And lapply() reaches the parts through as.list().
   expect_identical(

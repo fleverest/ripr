@@ -3,6 +3,7 @@
 \name{disjoin}
 \alias{disjoin}
 \alias{disjoin,ripr::convex_region-method}
+\alias{disjoin,ripr::empty_region-method}
 \alias{disjoin,ripr::union_region-method}
 \title{Transform a region's parts into a disjoint cover of the union}
 \usage{
@@ -15,7 +16,7 @@ disjoin(x, ...)
 }
 \value{
 A \link{region} covering the same set, whose parts have disjoint
-interiors, or \code{NULL} if \code{x} is empty.
+interiors, or an \code{\link[=empty_region]{empty_region()}} if \code{x} is empty.
 }
 \description{
 Sequential differences: leave the first part as is, then subtract the first

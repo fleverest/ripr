@@ -38,8 +38,9 @@ setequal(x, y, ...)
 A \link{region}, except from \code{setequal()}, which returns \code{TRUE} or
 \code{FALSE}. \code{union()} returns what \code{\link[=union_region]{union_region()}} would.
 \code{intersect()} returns a \link{union_region} of the surviving cells, the lone
-cell itself when a single one survives, or \code{NULL} when the intersection
-is empty.
+cell itself when a single one survives, or an \code{\link[=empty_region]{empty_region()}} when the
+intersection is empty; \code{setdiff()} likewise returns an \code{\link[=empty_region]{empty_region()}}
+when nothing remains.
 }
 \description{
 Performs set union, intersection, asymmetric difference on two \link{region}s.

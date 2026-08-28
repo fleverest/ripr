@@ -1,0 +1,317 @@
+---
+title: "Regions and set algebra"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Regions and set algebra}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 4.5,
+  fig.height = 4,
+  out.width = "60%",
+  fig.align = "center",
+  dev = "svg"
+)
+```
+
+```{r helpers, include = FALSE}
+tri_xy <- function(theta) {
+  rbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0)) %*% as.matrix(theta)
+}
+
+plot_null <- function(
+  null,
+  points = NULL,
+  weights = NULL,
+  main = NULL,
+  fill = "#c96f5b",
+  bg = c("#2c6f9b", "white"),
+  alpha = 0.55
+) {
+  corners <- tri_xy(diag(3))
+  op <- par(mar = c(0.5, 0.5, if (is.null(main)) 0.5 else 2, 0.5))
+  on.exit(par(op), add = TRUE)
+  plot.new()
+  plot.window(c(-0.05, 1.05), c(-0.05, 0.92), asp = 1)
+  for (s in parts(null@region)) {
+    xy <- tri_xy(s@vertices)
+    polygon(
+      xy[1, ],
+      xy[2, ],
+      col = adjustcolor(fill, 0.45),
+      border = fill,
+      lwd = 1.5
+    )
+  }
+  polygon(corners[1, ], corners[2, ], border = "grey50")
+  text(
+    corners[1, ],
+    corners[2, ],
+    c(1, 2, 3),
+    pos = c(3, 1, 1),
+    cex = 0.8,
+    col = "grey40"
+  )
+  if (!is.null(points)) {
+    groups <- if (is.list(points)) points else list(points)
+    sizes <- if (is.list(weights)) weights else list(weights)
+    all_w <- unlist(sizes)
+    for (g in seq_along(groups)) {
+      xy <- tri_xy(groups[[g]])
+      w <- sizes[[min(g, length(sizes))]]
+      cex <- if (is.null(w)) 1.2 else pmax(0.35, 1.7 * sqrt(w / max(all_w)))
+      points(
+        xy[1, ],
+        xy[2, ],
+        pch = 21,
+        bg = adjustcolor(bg[[(g - 1L) %% length(bg) + 1L]], alpha),
+        col = "grey15",
+        cex = cex,
+        lwd = 1.1
+      )
+    }
+  }
+  if (!is.null(main)) {
+    title(main, font.main = 1, cex.main = 1)
+  }
+  invisible(NULL)
+}
+```
+
+```{r library, message = FALSE}
+library(ripr)
+```
+
+## Introduction
+
+A null hypothesis, or `null_model` in `ripr` comprises a `parametric_family` and a `region`: a subset of the family's `parameter_space`. `region` is abstract and splits in two.
+`convex_region`s are individual convex units that carry the geometry a fitting procedure needs: a `chart()` provides a coordinate system for optimisation, `contains()` encodes membership for the set, and `project()` moves outside points onto the region.
+The `union_region` is a finite union of convex regions and is generally *not* convex.
+
+```{r hierarchy}
+s <- simplex_region(vertices = diag(3))
+S7::S7_inherits(s, region)
+S7::S7_inherits(s, convex_region)
+
+u <- union_region(s, halfspace_region(normal = c(1, -1, 0)))
+S7::S7_inherits(u, region)
+S7::S7_inherits(u, convex_region)
+```
+
+There are two methods that all unions support: `parts()` and `cells()`.
+`parts()` returns all the convex pieces that the region was *declared* as, whereas `cells()` returns a triangulation.
+The two agree for a `union_region`, but not for a `polytope_region` that isn't already a simplex: the certification routine needs simplices while fitting can operate directly on polytopes, so a square region has one part and two triangular cells, each filling different roles in the package.
+
+```{r cells-vs-parts}
+square <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+n_parts(square)
+n_cells(square)
+```
+
+## Convex geometries
+
+Every convex region in the package is, underneath, a `polyhedron_region()`: the Minkowski--Weyl generator form `conv(V) + cone(R) + span(L)` (or its dual facet description, if you build one from `h_region()` instead).
+`simplex_region()`, `polytope_region()`, `point_region()`, `unconstrained_region()` and `halfspace_region()` special cases of convex polyhedra, we provide them as convenient constructors for more familiar objects, with validation.
+`simplex_region()` and `halfspace_region()` are the two you've already seen in `vignette("ripr")`. Here are the rest:
+
+```{r geometries}
+# The convex hull of a vertex set. A simplex_region is the special case when
+# the vertices are affinely independent.
+polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+
+# A single parameter point, e.g. to specify a simple null theta = (0.5 0.3 0.2)'
+point_region(theta = c(0.5, 0.3, 0.2))
+
+# All of R^2
+unconstrained_region(2L)
+```
+
+## Set algebra
+
+`region`s can be composes with `union()`, `intersect()`, `setdiff()`, `setequal()` and `disjoin()`, all working in exact rational arithmetic so overlaps and boundaries are decided precisely rather than approximately.
+The plurality null from `vignette("ripr")` was constructed from two overlapping triangles.
+
+```{r plurality-setup}
+K <- 3L
+plurality_part <- function(j) {
+  vertices <- diag(K)
+  vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+  simplex_region(vertices = vertices)
+}
+plurality <- union(plurality_part(2), plurality_part(3))
+plurality
+```
+
+Calling `intersect()` instead yields the region where the two parts overlap: the wedge where `theta_1 <= theta_2, theta_3`.
+
+```{r intersect-verb}
+intersect(plurality_part(2), plurality_part(3))
+```
+
+`setdiff(x, y)` is the closure of `x` minus `y`.
+The closed complement of the plurality null within the full simplex is the region where `theta_1 >= theta_2, theta_3`.
+It is not quite the alternative because it includes the boundary where `theta_1 = theta_2` or `theta_1 = theta_3`.
+
+```{r setdiff-verb}
+leader <- setdiff(simplex_region(vertices = diag(K)), plurality)
+leader
+```
+
+The plurality null's two parts overlap, which is fine for fitting and certification (a supremum over a union is a supremum over any cover of it), but sometimes you may wish for a disjoint cover instead.
+For instance, to sum a measure over the null without double-counting the overlap.
+`disjoin()` peels a union apart sequentially: it leaves the first part as is, then subtracts the first part from the second, and so on.
+
+```{r disjoin-verb}
+peeled <- disjoin(plurality)
+n_parts(plurality)
+n_parts(peeled)
+plurality[2]
+peeled[2]
+```
+
+`setequal()` decides whether two regions describe the same set.
+This is computed exactly, regardless of how each set is decomposed into parts.
+
+```{r setequal-verb}
+setequal(peeled, plurality)
+setequal(square, union_region(cells(square)))
+setequal(square, cells(square)[[1]])
+```
+
+When nothing is left, the algebra says so rather than erroring out.
+`intersect()` of disjoint regions, or a `setdiff()` that removes everything, is an `empty_region()`: it behaves like a list of length zero, and `union()` drops it without a trace.
+
+```{r empty-region}
+nothing <- intersect(
+  point_region(theta = c(1, 0, 0)),
+  point_region(theta = c(0, 1, 0))
+)
+is_empty(nothing)
+identical(union(nothing, s), s)
+```
+
+## A Sierpinski-like null
+
+`vignette("ripr")` builds the *medial* null for a three-category multinomial: the null region is where no candidate holds a majority, `H0: theta_1, theta_2, theta_3 <= 1/2`.
+Geometrically it is the medial triangle of the 2-simplex, the one you get by joining the midpoints of each edge. The alternative is the union of the three corner triangles.
+
+The corners themselves are easily obtained by taking the complement of the null within the full simplex via `setdiff()`:
+
+```{r medial-corners}
+medial_of <- function(triangle) {
+  v <- triangle@vertices
+  simplex_region(
+    vertices = cbind(
+      (v[, 1] + v[, 2]) / 2,
+      (v[, 1] + v[, 3]) / 2,
+      (v[, 2] + v[, 3]) / 2
+    )
+  )
+}
+
+full <- simplex_region(vertices = diag(3))
+medial <- medial_of(full)
+corners <- parts(setdiff(full, medial))
+length(corners)
+```
+
+Repeating the same split inside each corner (take its own medial triangle, add that to the null) a few times yields a Sierpinski approximation built entirely from `union()` and `setdiff()`:
+
+```{r sierpinski-null}
+sierpinski_null <- function(triangle, depth) {
+  medial <- medial_of(triangle)
+  if (depth <= 1L) {
+    return(medial)
+  }
+  corners <- parts(setdiff(triangle, medial))
+  union(medial, lapply(corners, sierpinski_null, depth = depth - 1L))
+}
+
+depth <- 3L
+geometry <- sierpinski_null(full, depth)
+n_parts(geometry)
+```
+
+The finest, still-uncovered corners are the natural place to put an
+alternative -- one dirac per leftover triangle, exactly as `vignette("ripr")`
+puts one per corner of the plain medial null, just at finer resolution:
+
+```{r sierpinski-leaves}
+leaf_corners <- function(triangle, depth) {
+  if (depth <= 0L) {
+    return(list(triangle))
+  }
+  corners <- parts(setdiff(triangle, medial_of(triangle)))
+  unlist(lapply(corners, leaf_corners, depth = depth - 1L), recursive = FALSE)
+}
+
+leaves <- leaf_corners(full, depth)
+length(leaves)
+
+centroids <- vapply(leaves, \(cell) rowMeans(cell@vertices), numeric(3))
+W_alt <- finite_mixing(
+  components = centroids,
+  weights = rep(1 / length(leaves), length(leaves))
+)
+```
+
+```{r plot-sierpinski-null, echo = FALSE, fig.cap = "A depth-3 Sierpinski-like null, with the support of the alternative -- one dirac per leftover corner."}
+family <- multinomial_family(n_trials = 20L, k = 3L)
+sierpinski <- null_model(family, geometry)
+Q_alt <- family(W_alt)
+plot_null(
+  sierpinski,
+  points = atoms(Q_alt@mixing),
+  weights = weights(Q_alt@mixing) / 4,
+  bg = "white"
+)
+```
+
+Every part of `geometry` is still just a `simplex_region`, so nothing about
+fitting or certification needs to know it came from a recursive construction
+rather than being typed out by hand as two parts:
+
+```{r sierpinski-fit}
+hybrid_step <- function(state, times) {
+  for (iter in seq_len(times)) {
+    state <- state |> fw_step() |> em_step()
+  }
+  state
+}
+
+set.seed(3)
+fit <- ripr_init(Q_alt, sierpinski) |>
+  hybrid_step(times = 40L) |>
+  ripr_finish(reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+
+c(kl = fit$kl, atoms = n_atoms(fit$W0))
+```
+
+```{r plot-sierpinski-fit, echo = FALSE, fig.cap = "The same null, with the support of the alternative and the fitted null mixture W0."}
+plot_null(
+  sierpinski,
+  points = list(atoms(fit$W0), atoms(Q_alt@mixing)),
+  weights = list(weights(fit$W0), weights(Q_alt@mixing) / 4)
+)
+```
+
+```{r sierpinski-certify}
+X <- likelihood(Q_alt, label = "Q") /
+  likelihood(fit$P_star, label = "P*")
+cert <- certify(X, sierpinski, tol = 1e-9)
+c(upper = cert$sup_ub, attained = cert$sup_lb)
+```
+
+`certify()` proves the same kind of bound it did for the two-part plurality null in `vignette("ripr")`, over a `union_region` of `r n_parts(geometry)` parts built by a few lines of recursive set algebra rather than declared by hand.
+`E <- X / cert$sup_ub` is a genuine e-variable for `sierpinski`, exactly as before.
+The gap is quite large, however, which indicates that it is probably quite a poor fit.
+
+## Where next
+
+`vignette("ripr")` covers the other half: fitting a projection, why validity survives a deliberately bad one, and what `certify()` refuses to do without a bounding method.
+If you're implementing a new convex geometry rather than composing the built-in ones, `?convex_region` and its generics (`chart()`, `contains()`, `project()`, `init_point()`) describe the interface it must satisfy.

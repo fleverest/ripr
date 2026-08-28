@@ -91,18 +91,9 @@ library(ripr)
 
 ## Introduction
 
-`ripr` computes reverse information projections onto nulls that take the form
-of a union of convex parts, and then proves an upper bound on the expectation
-over the null of whatever random variable you hand it.
-The package targets the growth-rate optimal e-variable of safe testing
-[@GrunwaldDeHeideKoolen2024], approximating the reverse information
-projection (RIPr) of a fixed alternative `Q` onto a composite null `H0`.
+`ripr` targets the growth-rate optimal e-variable of safe testing [@GrunwaldDeHeideKoolen2024], approximating the reverse information projection (RIPr) of a fixed alternative `Q` onto a composite null `H0` that takes the form of a union of convex parts.
 
-The idea it rests on is simpler than the projection itself. For any
-non-negative, bounded random variable `X`, if `b` is any number at least
-`sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at
-most one -- that is, `E = X / b` is an e-variable. Nothing here requires `X`
-to be the true minimiser of KL divergence.
+The idea it rests on is simpler than the projection itself. For any non-negative, bounded random variable `X`, if `b` is any number at least `sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at most one. Specifically, `E = X / b` is an *e-variable*.
 
 **This means the projection need not be fit exactly:** any approximation can
 be used, so long as the resulting likelihood ratio is corrected against a
@@ -416,9 +407,12 @@ than just using the package:
   implement: `compile_loglik()`, `score()` and `kernel_draw()`. `?sample_space`
   and `?convex_region` describe the two sets it maps between, and
   `?distribution` the laws `fam(theta)` returns.
-- `?convex_region` and its generics (`chart()`, `contains()`, `project()`)
-  describe the interface a new convex geometry must implement; `?simplex_region`
-  and `?halfspace_region` are the two built-in examples.
+- `vignette("regions")` tours the region interface and the set algebra
+  (`union()`, `intersect()`, `setdiff()`, `disjoin()`, ...) used to build a
+  null out of convex pieces. `?convex_region` and its generics (`chart()`,
+  `contains()`, `project()`) describe the interface a new convex geometry must
+  implement; `?simplex_region` and `?halfspace_region` are the two built-in
+  examples covered there.
 - `?quadrature`, `?exact_engine`, `?mc_engine` and `?gh_engine` describe how
   expectations under the alternative are approximated, and how to add a new
   rule.

@@ -81,6 +81,13 @@ method(space_dim, empty_region) <- function(space) {
 }
 
 
+#' @description The empty region has affine dimension -1: strictly below a
+#'   point, which is a region with a member.
+#' @rdname region_dim
+#' @usage NULL
+method(region_dim, empty_region) <- function(space) -1L
+
+
 method(parts, empty_region) <- function(space) list()
 
 
@@ -277,6 +284,15 @@ method(space_dim, union_region) <- function(space) {
   # The validator has already established that there is at least one part and
   # that they agree, so the first one speaks for all of them.
   space_dim(space@parts[[1L]])
+}
+
+
+#' @description A union's affine dimension is the largest among its parts:
+#'   a lower-dimensional part adds nothing to the hull of the largest.
+#' @rdname region_dim
+#' @usage NULL
+method(region_dim, union_region) <- function(space) {
+  max(vapply(space@parts, region_dim, integer(1)))
 }
 
 

@@ -400,6 +400,26 @@ test_that("every region reports the dimension of the parameters it holds", {
   expect_equal(space_dim(unconstrained_region(3L)), 3L)
 })
 
+test_that("region_dim is the affine dimension, at most the ambient", {
+  # `space_dim` is how many coordinates a point carries; `region_dim` is what
+  # the geometry spans. Constraints separate the two.
+  expect_identical(region_dim(point_region(theta = c(0.5, 0.3, 0.2))), 0L)
+  segment <- polytope_region(vertices = cbind(c(0, 0, 0), c(1, 1, 1)))
+  expect_identical(region_dim(segment), 1L)
+  expect_identical(region_dim(simplex_region(vertices = diag(3))), 2L)
+  expect_identical(region_dim(halfspace_region(normal = c(1, -1, 0))), 3L)
+  expect_identical(region_dim(unconstrained_region(2L)), 2L)
+
+  # A union spans what its largest part spans.
+  tri <- simplex_region(
+    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  expect_identical(region_dim(union_region(segment, tri)), 2L)
+
+  # The empty set sits strictly below a point.
+  expect_identical(region_dim(empty_region()), -1L)
+})
+
 test_that("a region of the wrong dimension is refused at construction", {
   # Without this the comparison inside `contains()` recycles instead of
   # complaining, and `in_null()` returns TRUE for a parameter it never checked:

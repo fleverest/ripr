@@ -800,6 +800,34 @@ method(space_dim, polyhedron_region) <- function(space) {
 }
 
 
+#' The dimension of a region's affine hull
+#'
+#' An [empty_region()] has dimension -1, a point has dimension 0, a segment 1,
+#' and so on.
+#'
+#' Contrast [space_dim()], which is the number of coordinates a point of the
+#' region carries. That ambient dimension belongs to the family's parameter
+#' space; the affine dimension belongs to the region's own geometry. It is
+#' most the ambient dimension, but may be lower when the region imposes extra
+#' constraints (e.g. a lower-dimension null may set theta1 = theta2).
+#'
+#' @param space A [region].
+#' @return An integer between -1 and `space_dim(space)`.
+#' @examples
+#' region_dim(point_region(theta = c(0.5, 0.3, 0.2)))
+#' region_dim(simplex_region(vertices = diag(3)))
+#' region_dim(unconstrained_region(3L))
+#' @export
+region_dim <- new_generic("region_dim", "space", function(space) {
+  S7::S7_dispatch()
+})
+
+
+method(region_dim, convex_region) <- function(space) {
+  as.integer(q_dim(q_vrep(space)))
+}
+
+
 method(v_rep, polyhedron_region) <- function(space) {
   # The generators as declared, not as cddlib would return them: a redundant
   # vertex stays.

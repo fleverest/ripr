@@ -59,6 +59,7 @@ reference:
   - n_parts
   - cells
   - n_cells
+  - region_dim
   - is_empty
   - is_bounded
 

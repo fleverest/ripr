@@ -87,7 +87,9 @@ method(parts, empty_region) <- function(space) list()
 #' @description An empty region has no cells.
 #' @rdname cells
 #' @usage NULL
-method(cells, empty_region) <- function(space, ...) list()
+method(cells, empty_region) <- function(space, max_cells = 1000L, .budget = NULL) {
+  list()
+}
 
 
 method(contains, empty_region) <- function(space, theta, tol = 1e-8) FALSE
@@ -316,11 +318,16 @@ method(parts, union_region) <- function(space) space@parts
 
 
 #' @description A union's cells are its parts' cells, flattened: the parts are
-#'   what was declared, the cells are what the algorithms run on.
+#'   what was declared, the cells are what the algorithms run on. The parts
+#'   share one `max_cells` budget, so the cap is on the union's total.
 #' @rdname cells
 #' @usage NULL
-method(cells, union_region) <- function(space, ...) {
-  unlist(lapply(space@parts, cells, ...), recursive = FALSE)
+method(cells, union_region) <- function(space, max_cells = 1000L, .budget = NULL) {
+  budget <- if (is.null(.budget)) cell_budget(max_cells) else .budget
+  unlist(
+    lapply(space@parts, \(p) cells(p, .budget = budget)),
+    recursive = FALSE
+  )
 }
 
 
@@ -531,13 +538,26 @@ method(setdiff, region) <- function(x, y, ..., max_cells = 1000L) {
   dots <- list(...)
   regionish <- vapply(
     dots,
-    \(d) S7_inherits(d, region) || is.list(d),
+    \(d) {
+      all(vapply(flatten_parts(d), \(p) S7_inherits(p, region), logical(1)))
+    },
     logical(1)
   )
   if (!all(regionish)) {
+    i <- which(!regionish)[[1L]]
+    nm <- names(dots)[i]
+    label <- if (!is.null(nm) && nzchar(nm)) {
+      paste0("`", nm, "`")
+    } else {
+      paste0("argument ", i, " in `...`")
+    }
     stop(
-      "every argument in `...` must be a region to subtract; ",
-      "`max_cells` must be passed by name.",
+      "every argument in `...` must be a region, or a list of regions, to ",
+      "subtract; ",
+      label,
+      " is of class `",
+      class(dots[[i]])[1L],
+      "`. `max_cells` must be passed by name.",
       call. = FALSE
     )
   }

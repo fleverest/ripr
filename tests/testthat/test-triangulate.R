@@ -205,6 +205,14 @@ test_that("triangulation refuses to fan past max_cells", {
 })
 
 
+test_that("max_cells caps a union's triangulation in total, not per part", {
+  pent <- polygon_region(5L) # three triangles each
+  u <- union_region(pent, pent)
+  expect_length(cells(u, max_cells = 6L), 6L)
+  expect_error(cells(u, max_cells = 5L), "gave up after `max_cells = 5`")
+})
+
+
 test_that("a null names the part that failed to decompose", {
   local_mocked_bindings(triangulate = function(space, ...) {
     stop("boom", call. = FALSE)

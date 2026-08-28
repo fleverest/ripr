@@ -9,14 +9,16 @@
 \alias{cells,ripr::point_region-method}
 \title{The convex regions a region decomposes into for optimisation}
 \usage{
-cells(space, ...)
+cells(space, max_cells = 1000L, .budget = NULL)
 }
 \arguments{
 \item{space}{A \link{region}.}
 
-\item{...}{Passed on to the method. The triangulating method for
-\code{\link[=polyhedron_region]{polyhedron_region()}} takes \code{max_cells} (default \code{1000L}), the point at
-which it gives up.}
+\item{max_cells}{The number of simplices triangulation may produce before
+giving up (default \code{1000L}).}
+
+\item{.budget}{Internal: the shared budget a union hands its parts. Leave
+it \code{NULL}.}
 }
 \value{
 A list of \link{convex_region} objects whose union is \code{space}.
@@ -31,7 +33,8 @@ from.
 An empty region has no cells.
 
 A union's cells are its parts' cells, flattened: the parts are
-what was declared, the cells are what the algorithms run on.
+what was declared, the cells are what the algorithms run on. The parts
+share one \code{max_cells} budget, so the cap is on the union's total.
 
 A polyhedron's cells are its triangulation: the fan of
 simplices described in \code{\link[=polytope_region]{polytope_region()}}. Boundedness is what decides

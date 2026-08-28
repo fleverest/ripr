@@ -120,17 +120,35 @@ method(`[`, region) <- function(x, i, ...) {
 #'
 #' Contrast [parts()], which is what the region was declared as.
 #' @param space A [region].
-#' @param ... Passed on to the method. The triangulating method for
-#'   [polyhedron_region()] takes `max_cells` (default `1000L`), the point at
-#'   which it gives up.
+#' @param max_cells The number of simplices triangulation may produce before
+#'   giving up (default `1000L`).
+#' @param .budget Internal: the shared budget a union hands its parts. Leave
+#'   it `NULL`.
 #' @return A list of [convex_region] objects whose union is `space`.
 #' @examples
 #' cells(simplex_region(vertices = diag(3)))
 #' @export
-cells <- new_generic("cells", "space", function(space, ...) S7::S7_dispatch())
+cells <- new_generic(
+  "cells",
+  "space",
+  function(space, max_cells = 1000L, .budget = NULL) S7::S7_dispatch()
+)
 
 
-method(cells, region) <- function(space, ...) list(space)
+#' The simplex budget one `cells()` call runs under
+#' @keywords internal
+#' @noRd
+cell_budget <- function(max_cells) {
+  budget <- new.env(parent = emptyenv())
+  budget$left <- max_cells
+  budget$max_cells <- max_cells
+  budget
+}
+
+
+method(cells, region) <- function(space, max_cells = 1000L, .budget = NULL) {
+  list(space)
+}
 
 
 #' Number of convex regions a region decomposes into

@@ -137,7 +137,11 @@ test_that("setdiff() subtracts every region it is given", {
     ambient,
     union_region(plurality_cell(3L, 2L), plurality_cell(3L, 3L))
   )
-  through_dots <- setdiff(ambient, plurality_cell(3L, 2L), plurality_cell(3L, 3L))
+  through_dots <- setdiff(
+    ambient,
+    plurality_cell(3L, 2L),
+    plurality_cell(3L, 3L)
+  )
   expect_true(setequal(one_by_one, through_dots))
 })
 

@@ -25,10 +25,12 @@ NULL
 #' @param max_cells Give up rather than produce more simplices than this. The
 #'   fan is combinatorial in the vertex count at worst, and a decomposition
 #'   past this size is probably not something we can afford to use downstream.
+#' @param budget An existing `cell_budget()` to draw from instead of a fresh
+#'   `max_cells` one, which is how a union caps its parts' total.
 #' @return A list of [simplex_region] objects.
 #' @keywords internal
 #' @noRd
-triangulate <- function(space, max_cells = 1000L) {
+triangulate <- function(space, max_cells = 1000L, budget = NULL) {
   if (!is_bounded(space)) {
     stop(
       "only a bounded region can be triangulated; this `",
@@ -38,9 +40,9 @@ triangulate <- function(space, max_cells = 1000L) {
       call. = FALSE
     )
   }
-  budget <- new.env(parent = emptyenv())
-  budget$left <- max_cells
-  budget$max_cells <- max_cells
+  if (is.null(budget)) {
+    budget <- cell_budget(max_cells)
+  }
   lapply(fan_cells(q_nonredundant(q_vrep(space)), budget), simplex_from_qv)
 }
 
@@ -119,16 +121,32 @@ simplex_from_qv <- function(qv) {
 #'   already: [simplex_region()], or [point_region()], the degenerate one.
 #' @rdname cells
 #' @usage NULL
-method(cells, polyhedron_region) <- function(space, ..., max_cells = 1000L) {
-  if (is_bounded(space)) triangulate(space, max_cells) else list(space)
+method(cells, polyhedron_region) <- function(
+  space,
+  max_cells = 1000L,
+  .budget = NULL
+) {
+  if (is_bounded(space)) triangulate(space, max_cells, .budget) else list(space)
 }
 
 
 #' @rdname cells
 #' @usage NULL
-method(cells, simplex_region) <- function(space, ...) list(space)
+method(cells, simplex_region) <- function(
+  space,
+  max_cells = 1000L,
+  .budget = NULL
+) {
+  list(space)
+}
 
 
 #' @rdname cells
 #' @usage NULL
-method(cells, point_region) <- function(space, ...) list(space)
+method(cells, point_region) <- function(
+  space,
+  max_cells = 1000L,
+  .budget = NULL
+) {
+  list(space)
+}

@@ -860,7 +860,7 @@ test_that("the point method takes any family whose sample space is enumerable", 
     certify(y, null_model(gaussian, point_region(theta = c(0, 0)))),
     error = conditionMessage
   )
-  expect_match(msg, "Exact evaluation at a point")
+  expect_match(msg, "Evaluation at a point")
   expect_match(msg, "an integral over a `real_space`")
   expect_false(grepl("No bounding method is implemented", msg))
 })

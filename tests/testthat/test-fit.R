@@ -144,8 +144,8 @@ test_that("the identity survives every verb", {
     function(s) lb_step(s, 1L)
   )) {
     st <- advance(st)
-    expect_equal(weighted_gain(st), 1, tolerance = 1e-10)
-    expect_equal(sum(flat_weights(st)), 1, tolerance = 1e-12)
+    expect_equal(weighted_gain(st), 1, tolerance = rounding_tol(1))
+    expect_equal(sum(flat_weights(st)), 1, tolerance = rounding_tol(1))
     expect_true(all(flat_weights(st) >= 0))
   }
 })
@@ -263,7 +263,7 @@ test_that("oracle_theta is the atom the step added", {
   for (i in seq_len(nrow(rows))) {
     block <- st@atoms[[rows$part[i]]]
     gaps <- sqrt(colSums((block - rows$oracle_theta[[i]])^2))
-    expect_equal(min(gaps), 0, tolerance = 1e-12)
+    expect_identical(min(gaps), 0)
   }
 })
 
@@ -341,7 +341,7 @@ test_that("verbs compose in any order", {
     fw_step(2L) |>
     weight_step(3L) |>
     em_step(2L)
-  expect_equal(weighted_gain(st), 1, tolerance = 1e-10)
+  expect_equal(weighted_gain(st), 1, tolerance = rounding_tol(1))
   expect_true(in_own_part(st))
 })
 
@@ -445,14 +445,14 @@ test_that("the returned mixture is a distribution", {
   fit <- ripr_finish(fw_step(plurality(), 4L))
   expect_true(S7_inherits(fit$W0, finite_mixing))
   expect_true(S7_inherits(fit$P_star, induced_distribution))
-  expect_equal(sum(weights(fit$W0)), 1, tolerance = 1e-12)
+  expect_equal(sum(weights(fit$W0)), 1, tolerance = rounding_tol(1))
   expect_equal(
     sum(exp(log_density(
       fit$P_star,
       enumerate_space(fit$P_star@family@sample_space)
     ))),
     1,
-    tolerance = 1e-10
+    tolerance = rounding_tol(1)
   )
 })
 

@@ -85,7 +85,12 @@ test_that("sup_ub is never below a dense grid search", {
       10
     )
     res <- certify(tabulated_rv(null@family, values), null, tol = 1e-9)
-    expect_gte(res$sup_ub, null_grid_max(null, values))
+    # The bound and the grid evaluate the same expectations in different
+    # orders, so the two can disagree in rounding.
+    expect_gte(
+      res$sup_ub + rounding_tol(res$sup_ub),
+      null_grid_max(null, values)
+    )
   }
 })
 
@@ -104,7 +109,7 @@ test_that("sup_ub stays valid when the node budget is exhausted", {
     function(m) certify(x, null, tol = 0, max_nodes = m)$sup_ub,
     numeric(1L)
   )
-  expect_true(all(bounds >= truth))
+  expect_true(all(bounds + rounding_tol(truth) >= truth))
   expect_false(is.unsorted(rev(bounds))) # non-increasing in the budget
 })
 
@@ -120,7 +125,7 @@ test_that("sup_ub brackets sup_lb", {
   # the supremum, so if the two meet one may round higher than the other, hence
   # the floating-point slack.
   expect_gte(
-    res$sup_ub + 1e-8,
+    res$sup_ub + rounding_tol(res$sup_ub),
     sup_lb(x, null, n_seeds = 100L, n_restarts = 10L)$sup_lb
   )
 })
@@ -153,7 +158,7 @@ test_that("dividing by the bound gives an e-variable", {
   for (s in parts(null@region)) {
     weights <- matrix(stats::rgamma(4L * 200L, shape = 1), nrow = 4L)
     theta <- s@vertices %*% div_by_col(weights, colSums(weights))
-    expect_lte(max(expectations(theta)), 1)
+    expect_lte(max(expectations(theta)), 1 + rounding_tol(1))
   }
 
   tight <- c(
@@ -167,10 +172,10 @@ test_that("dividing by the bound gives an e-variable", {
       ncol = 1L
     ))
   )
-  expect_lte(max(tight), 1 + 1e-9)
+  expect_lte(max(tight), 1 + rounding_tol(1))
   expect_gt(max(tight), 1 - 1e-3)
   expect_gt(res$sup_lb / res$sup_ub, 1 - 1e-6)
-  expect_lte(res$sup_lb / res$sup_ub, 1 + 1e-9)
+  expect_lte(res$sup_lb / res$sup_ub, 1)
 })
 
 test_that("a constant variable certifies to its own value", {
@@ -181,7 +186,7 @@ test_that("a constant variable certifies to its own value", {
   )
   res <- certify(x, null, tol = 1e-9)
   expect_equal(res$sup_lb, 3.5)
-  expect_lt(res$sup_ub - 3.5, 1e-12)
+  expect_lt(res$sup_ub - 3.5, rounding_tol(3.5))
   expect_true(all(res$iterations == 0L))
 })
 
@@ -415,13 +420,14 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
     # under it whichever cell of the part they came from.
     expect_lte(
       max(rows$upper[rows$fate != "split"]),
-      bounds[[unique(rows$part)]] + 1e-9
+      bounds[[unique(rows$part)]]
     )
 
     parents <- rows[match(rows$parent, rows$id), ]
     has_parent <- !is.na(rows$parent)
     expect_true(all(
-      rows$upper[has_parent] <= parents$upper[has_parent] + 1e-12
+      rows$upper[has_parent] <=
+        parents$upper[has_parent] + rounding_tol(parents$upper[has_parent])
     ))
   }
 })

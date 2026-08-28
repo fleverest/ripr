@@ -31,10 +31,9 @@ test_that("H and V representations round trip", {
     back <- h_to_v(h_rep(s))
     expect_equal(ncol(back$r), 0L)
     expect_equal(ncol(back$l), 0L)
-    expect_equal(
+    expect_identical(
       sorted_cols(back$v),
-      sorted_cols(s@vertices),
-      tolerance = 1e-12
+      sorted_cols(s@vertices)
     )
   }
 })
@@ -56,10 +55,10 @@ test_that("h_rep of a simplex holds its own vertices and excludes outside points
   h <- h_rep(s)
 
   for (j in seq_len(ncol(s@vertices))) {
-    expect_true(all(h$a %*% s@vertices[, j] <= h$b + 1e-9))
+    expect_true(all(h$a %*% s@vertices[, j] <= h$b + rounding_tol(1)))
   }
   # Reflecting the region through the origin would admit this one.
-  expect_false(all(h$a %*% c(2, -1, 0) <= h$b + 1e-9))
+  expect_false(all(h$a %*% c(2, -1, 0) <= h$b + rounding_tol(1)))
 })
 
 
@@ -129,7 +128,7 @@ test_that("halfspace_region's own generators agree with cddlib's", {
   expect_true(contains(s, ours$v[, 1L]))
   expect_true(contains(s, theirs$v[, 1L]))
 
-  expect_equal(projector(theirs$l), projector(ours$l), tolerance = 1e-12)
+  expect_equal(projector(theirs$l), projector(ours$l), tolerance = rounding_tol(1))
 
   # A ray is only determined modulo the lineality space, so compare the two
   # after projecting the lineality directions out.
@@ -139,7 +138,7 @@ test_that("halfspace_region's own generators agree with cddlib's", {
   expect_equal(
     ray_theirs / sqrt(sum(ray_theirs^2)),
     ray_ours / sqrt(sum(ray_ours^2)),
-    tolerance = 1e-12
+    tolerance = rounding_tol(1)
   )
 })
 
@@ -209,8 +208,8 @@ test_that("a double H-representation is a lossy intermediate for derived facets"
 
   # It is a perturbation, not a wrong answer: every reported vertex is on the
   # region, and the region still holds the points that generated it.
-  expect_lt(max(h$a %*% back$v - h$b), 1e-12)
-  expect_lt(max(h$a %*% v - h$b), 1e-12)
+  expect_lt(max(h$a %*% back$v - h$b), rounding_tol(1))
+  expect_lt(max(h$a %*% v - h$b), rounding_tol(1))
 })
 
 

@@ -20,7 +20,7 @@ expect_feasible <- function(ch, u_mat) {
   ))
   if (!is.null(ch$heq)) {
     for (i in seq_len(ncol(u_mat))) {
-      expect_equal(ch$heq(u_mat[, i]), 0, tolerance = 1e-12)
+      expect_equal(ch$heq(u_mat[, i]), 0, tolerance = rounding_tol(1))
     }
   }
 }
@@ -152,8 +152,8 @@ test_that("from_theta returns feasible coordinates, exactly at a vertex", {
   # least-squares solve rather than short of the boundary by design.
   vertex <- s@vertices[, 2L]
   u <- ch$from_theta(vertex)
-  expect_equal(u, c(0, 1, 0), tolerance = 1e-12)
-  expect_equal(ch$to_theta(u), vertex, tolerance = 1e-12)
+  expect_equal(u, c(0, 1, 0), tolerance = rounding_tol(1))
+  expect_equal(ch$to_theta(u), vertex, tolerance = rounding_tol(1))
   expect_feasible(ch, matrix(u, ncol = 1L))
 })
 

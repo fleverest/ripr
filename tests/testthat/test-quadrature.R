@@ -21,8 +21,8 @@ test_that("quadrature weights sum to one for every engine", {
   set.seed(1)
   mc <- resolve_engine(mc_engine(500L), s$Q, s$family)
 
-  expect_equal(sum(exp(exact@log_w)), 1, tolerance = 1e-12)
-  expect_equal(sum(exp(mc@log_w)), 1, tolerance = 1e-12)
+  expect_lt(abs(sum(exp(exact@log_w)) - 1), rounding_tol(1))
+  expect_lt(abs(sum(exp(mc@log_w)) - 1), rounding_tol(1))
 })
 
 test_that("E_Q[1] = 1 under every engine", {
@@ -36,8 +36,8 @@ test_that("E_Q[1] = 1 under every engine", {
       resolve_engine(mc_engine(500L), s$Q, s$family)
     }
   )) {
-    expect_equal(expect_q(eng, rep(1, n_nodes(eng))), 1, tolerance = 1e-12)
-    expect_equal(log_expect_q(eng, rep(0, n_nodes(eng))), 0, tolerance = 1e-12)
+    expect_lt(abs(expect_q(eng, rep(1, n_nodes(eng))) - 1), rounding_tol(1))
+    expect_lt(abs(log_expect_q(eng, rep(0, n_nodes(eng)))), rounding_tol(0))
   }
 })
 
@@ -68,7 +68,7 @@ test_that("the exact engine integrates against the true Q", {
   x <- enumerate_space(s$family@sample_space)
 
   # E_Q[X_1] for Binomial(10, 0.75) is 7.5.
-  expect_equal(expect_q(eng, x[, 1]), 7.5, tolerance = 1e-10)
+  expect_lt(abs(expect_q(eng, x[, 1]) - 7.5), rounding_tol(7.5))
   expect_true(deterministic(eng))
   expect_equal(expect_se(eng, x[, 1]), 0)
 })
@@ -82,7 +82,7 @@ test_that("the exact engine drops nodes carrying no Q mass", {
 
   expect_equal(n_nodes(eng), 1L)
   expect_equal(eng@nodes[1, ], c(4, 0))
-  expect_equal(sum(exp(eng@log_w)), 1, tolerance = 1e-12)
+  expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
   expect_true(all(is.finite(eng@log_q)))
 })
 
@@ -93,7 +93,10 @@ test_that("the exact engine refuses a family with no enumerable support", {
     resolve_engine(
       exact_engine(),
       direct(sample_space = real_space(1L)),
-      toy(sample_space = real_space(1L), parameter_space = unconstrained_region(1L))
+      toy(
+        sample_space = real_space(1L),
+        parameter_space = unconstrained_region(1L)
+      )
     ),
     "cannot be enumerated"
   )
@@ -137,7 +140,10 @@ test_that("expect_se is the standard error of the mean under Monte Carlo", {
   set.seed(6)
   eng <- resolve_engine(mc_engine(400L), s$Q, s$family)
   v <- eng@nodes[, 1]
-  expect_equal(expect_se(eng, v), sd(v) / sqrt(400), tolerance = 1e-12)
+  expect_lt(
+    abs(expect_se(eng, v) - sd(v) / sqrt(400)),
+    rounding_tol(sd(v) / sqrt(400))
+  )
 })
 
 # --- Agreement between engines ------------------------------------------------
@@ -165,10 +171,9 @@ test_that("the exact engine reproduces a closed-form likelihood ratio", {
   eng <- resolve_engine(exact_engine(), s$Q, s$family)
   closed <- (q * a / b + (1 - q) * (1 - a) / (1 - b))^n
 
-  expect_equal(
-    ratio_between(eng, c(a, 1 - a), c(b, 1 - b)),
-    closed,
-    tolerance = 1e-10
+  expect_lt(
+    abs(ratio_between(eng, c(a, 1 - a), c(b, 1 - b)) - closed),
+    rounding_tol(closed)
   )
 })
 
@@ -201,12 +206,12 @@ test_that("log_expect_q beats exponentiating before integrating", {
 
   log_v <- rep(1000, n_nodes(eng))
   expect_true(is.infinite(log(expect_q(eng, exp(log_v)))))
-  expect_equal(log_expect_q(eng, log_v), 1000, tolerance = 1e-10)
+  expect_lt(abs(log_expect_q(eng, log_v) - 1000), rounding_tol(1000))
 
   # And the same in the underflow direction, where the naive route gives -Inf.
   log_v <- rep(-1000, n_nodes(eng))
   expect_equal(log(expect_q(eng, exp(log_v))), -Inf)
-  expect_equal(log_expect_q(eng, log_v), -1000, tolerance = 1e-10)
+  expect_lt(abs(log_expect_q(eng, log_v) + 1000), rounding_tol(1000))
 })
 
 test_that("log_expect_q is -Inf when the integrand is everywhere zero", {
@@ -222,7 +227,10 @@ test_that("compile_engine evaluates the family at the engine's own nodes", {
   eng <- resolve_engine(exact_engine(), s$Q, s$family)
   ld <- compile_engine(eng)
   theta_mat <- cbind(c(0.5, 0.5), c(0.25, 0.75))
-  expect_equal(ld(theta_mat), kernel_loglik_batch(s$family, theta_mat, eng@nodes))
+  expect_equal(
+    ld(theta_mat),
+    kernel_loglik_batch(s$family, theta_mat, eng@nodes)
+  )
 })
 
 test_that("compile_engine is consistent across repeated compilations", {
@@ -271,13 +279,16 @@ q_gaussian <- function(d = 1, mean = NULL, sigma = NULL) {
   if (is.null(mean)) {
     mean <- rep(0, d)
   }
-  list(family = fam, Q = induced_distribution(fam, point_mixing(theta_star = mean)))
+  list(
+    family = fam,
+    Q = induced_distribution(fam, point_mixing(theta_star = mean))
+  )
 }
 
 test_that("Gauss-Hermite weights sum to one", {
   s <- q_gaussian(d = 1)
   eng <- resolve_engine(gh_engine(20L), s$Q, s$family)
-  expect_equal(sum(exp(eng@log_w)), 1, tolerance = 1e-12)
+  expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
   expect_true(deterministic(eng))
   expect_equal(n_nodes(eng), 20L)
 })
@@ -288,9 +299,12 @@ test_that("Gauss-Hermite integrates low-order polynomials exactly", {
   s <- q_gaussian(d = 1, mean = 1.5, sigma = matrix(4))
   eng <- resolve_engine(gh_engine(10L), s$Q, s$family)
   x <- eng@nodes[, 1]
-  expect_equal(expect_q(eng, x), 1.5, tolerance = 1e-10)
-  expect_equal(expect_q(eng, x^2), 1.5^2 + 4, tolerance = 1e-10)
-  expect_equal(expect_q(eng, x^3), 1.5^3 + 3 * 1.5 * 4, tolerance = 1e-9)
+  expect_lt(abs(expect_q(eng, x) - 1.5), rounding_tol(1.5))
+  expect_lt(abs(expect_q(eng, x^2) - (1.5^2 + 4)), rounding_tol(1.5^2 + 4))
+  expect_lt(
+    abs(expect_q(eng, x^3) - (1.5^3 + 3 * 1.5 * 4)),
+    rounding_tol(1.5^3 + 3 * 1.5 * 4)
+  )
 })
 
 test_that("Gauss-Hermite handles a correlated bivariate alternative", {
@@ -299,14 +313,13 @@ test_that("Gauss-Hermite handles a correlated bivariate alternative", {
   eng <- resolve_engine(gh_engine(15L), s$Q, s$family)
 
   expect_equal(n_nodes(eng), 15L^2)
-  expect_equal(sum(exp(eng@log_w)), 1, tolerance = 1e-12)
+  expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
   w <- exp(eng@log_w)
-  expect_equal(colSums(w * eng@nodes), c(0.5, -1), tolerance = 1e-9)
+  expect_lt(max(abs(colSums(w * eng@nodes) - c(0.5, -1))), rounding_tol(1))
   centred <- eng@nodes - rep(c(0.5, -1), each = n_nodes(eng))
-  expect_equal(
-    crossprod(centred * sqrt(w), centred * sqrt(w)),
-    sigma,
-    tolerance = 1e-9
+  expect_lt(
+    max(abs(crossprod(centred * sqrt(w), centred * sqrt(w)) - sigma)),
+    rounding_tol(2)
   )
 })
 
@@ -348,23 +361,31 @@ test_that("Gauss-Hermite refuses a grid larger than max_nodes", {
 
 test_that("Gauss-Hermite works for a Gaussian-prior alternative", {
   fam <- gaussian_family(dim = 1, sigma = matrix(1))
-  Q <- induced_distribution(fam, gaussian_mixing(prior_mean = 0.5, prior_cov = matrix(2)))
+  Q <- induced_distribution(
+    fam,
+    gaussian_mixing(prior_mean = 0.5, prior_cov = matrix(2))
+  )
   eng <- resolve_engine(gh_engine(25L), Q, fam)
   # The induced mixture is N(0.5, 1 + 2), so its variance is 3.
   x <- eng@nodes[, 1]
-  expect_equal(expect_q(eng, x), 0.5, tolerance = 1e-10)
-  expect_equal(expect_q(eng, (x - 0.5)^2), 3, tolerance = 1e-10)
+  expect_lt(abs(expect_q(eng, x) - 0.5), rounding_tol(0.5))
+  expect_lt(abs(expect_q(eng, (x - 0.5)^2) - 3), rounding_tol(3))
 })
 
 test_that("gauss_hermite reproduces known nodes and weights", {
   gh <- gauss_hermite(3L)
-  expect_equal(gh$nodes, c(-sqrt(3 / 2), 0, sqrt(3 / 2)), tolerance = 1e-12)
-  expect_equal(
-    gh$weights,
-    sqrt(pi) * c(1 / 6, 2 / 3, 1 / 6),
-    tolerance = 1e-12
+  expect_lt(
+    max(abs(gh$nodes - c(-sqrt(3 / 2), 0, sqrt(3 / 2)))),
+    rounding_tol(sqrt(3 / 2))
   )
-  expect_equal(sum(gauss_hermite(12L)$weights), sqrt(pi), tolerance = 1e-12)
+  expect_lt(
+    max(abs(gh$weights - sqrt(pi) * c(1 / 6, 2 / 3, 1 / 6))),
+    rounding_tol(sqrt(pi))
+  )
+  expect_lt(
+    abs(sum(gauss_hermite(12L)$weights) - sqrt(pi)),
+    rounding_tol(sqrt(pi))
+  )
 })
 
 test_that("gh_engine rejects a non-positive node count", {

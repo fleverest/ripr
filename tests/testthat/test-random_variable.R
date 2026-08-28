@@ -85,7 +85,7 @@ test_that("a ratio integrates to 1 against its own denominator", {
   expect_equal(
     sum(exp(log_density(f$P, outcomes)) * R(outcomes)),
     1,
-    tolerance = 1e-12
+    tolerance = rounding_tol(1)
   )
 })
 

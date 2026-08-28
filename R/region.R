@@ -517,7 +517,12 @@ maximise_over <- function(
     res <- refine(starts[, i], fallback = fallback)
     if (is.finite(res$value) && res$value < best$value) best <- res
   }
-  list(theta = ch$to_theta(best$par), value = -best$value)
+  # SLSQP constraints hold only to its own tolerance, so the final iterate can
+  # lie just outside the space, and its objective value marginally above the
+  # supremum over the space. Here we just project the result back in and
+  # re-evaluate, so the value is attained at a point of the space.
+  theta <- project(space, ch$to_theta(best$par))
+  list(theta = theta, value = obj$value(theta))
 }
 
 

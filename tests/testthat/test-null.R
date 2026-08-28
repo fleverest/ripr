@@ -34,7 +34,7 @@ test_that("a chart round-trips points in the part", {
       u <- ch$seed(1L)[, 1L]
       theta <- ch$to_theta(u)
       expect_true(contains(s, theta))
-      expect_equal(ch$to_theta(ch$from_theta(theta)), theta, tolerance = 1e-6)
+      expect_equal(ch$to_theta(ch$from_theta(theta)), theta, tolerance = rounding_tol(1))
     }
   }
 })
@@ -89,7 +89,7 @@ test_that("projection is idempotent and lands in the part", {
       theta <- theta / sum(theta)
       p <- project(s, theta)
       expect_true(contains(s, p))
-      expect_equal(project(s, p), p, tolerance = 1e-7)
+      expect_equal(project(s, p), p, tolerance = rounding_tol(1))
     }
   }
 })
@@ -169,7 +169,7 @@ test_that("a maximum at a vertex is attained exactly", {
   set.seed(12)
   res <- maximise_over(s, obj, n_seeds = 50L, n_restarts = 5L)
 
-  expect_equal(res$value, 0, tolerance = 1e-12)
+  expect_equal(res$value, 0, tolerance = rounding_tol(0))
   expect_equal(res$theta, target, tolerance = 1e-9)
   expect_true(contains(s, res$theta, tol = 1e-6))
 })
@@ -208,13 +208,13 @@ test_that("the chart round-trip is lossless in the interior and at a vertex", {
   ch <- chart(s)
 
   interior <- as.vector(s@vertices %*% rep(0.25, 4))
-  expect_equal(ch$to_theta(ch$from_theta(interior)), interior, tolerance = 1e-9)
+  expect_equal(ch$to_theta(ch$from_theta(interior)), interior, tolerance = rounding_tol(1))
 
   # Exact up to the floating point of the least-squares recovery: bit-identical
   # on some vertex matrices, an ulp or two off on others, and BLAS-dependent
   # either way -- so tested at 1e-12, not identical().
   vertex <- s@vertices[, 1L]
-  expect_equal(ch$to_theta(ch$from_theta(vertex)), vertex, tolerance = 1e-12)
+  expect_equal(ch$to_theta(ch$from_theta(vertex)), vertex, tolerance = rounding_tol(1))
 })
 
 test_that("maximise_over accepts seeds lying outside the part", {

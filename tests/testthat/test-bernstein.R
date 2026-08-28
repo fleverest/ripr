@@ -663,7 +663,7 @@ test_that("reparametrise_to() reaches sub-simplices with no vertex in common", {
       },
       numeric(1L)
     ))),
-    1e-13
+    rounding_tol(max(abs(coef)))
   )
 })
 
@@ -687,8 +687,8 @@ test_that("reparametrise_to() preserves the enclosure on an interior sub-simplex
     for (rep in 1:40) {
       mu <- rand_lambda(K)
       value <- bern_eval(coef, lat, as.vector(V %*% mu))
-      expect_lte(value, max(out) + 1e-12)
-      expect_gte(value, min(out) - 1e-12)
+      expect_lte(value, max(out) + rounding_tol(max(abs(out))))
+      expect_gte(value, min(out) - rounding_tol(max(abs(out))))
     }
   }
 })
@@ -786,19 +786,7 @@ test_that("certify_sup() stops within tol of the incumbent", {
     max_iter = 10000L
   )
   expect_lt(res$iterations, 10000L)
-  # `eta` is added to the reported bound after the stopping test.
-  expect_lte(res$bound - res$incumbent, tol + 1e-12)
-})
-
-test_that("the rounding slack is added and is non-negative", {
-  set.seed(24)
-  lat <- bernstein_lattice(5L, 3L)
-  coef <- stats::rnorm(lat$n_coef, sd = 2)
-  args <- list(list(seed_box(lat, coef)), lat, tol = 1e-9, max_iter = 2000L)
-  with_eta <- do.call(certify_sup, c(args, list(round_slack = TRUE)))
-  without <- do.call(certify_sup, c(args, list(round_slack = FALSE)))
-  expect_gte(with_eta$bound, without$bound)
-  expect_equal(with_eta$incumbent, without$incumbent)
+  expect_lte(res$bound - res$incumbent, tol)
 })
 
 test_that("pruning nodes via slack doesn't hurt the bound", {
@@ -838,7 +826,7 @@ test_that("keep_argmax retains an enclosure of the maximiser", {
   # must bound it from above.
   expect_gte(
     max(vapply(res$active, box_bound, numeric(1L))),
-    res$incumbent - 1e-9
+    res$incumbent - rounding_tol(res$incumbent)
   )
 })
 
@@ -860,7 +848,7 @@ test_that("a constant polynomial is certified without any subdivision", {
   res <- certify_sup(list(seed_box(lat, rep(2.5, lat$n_coef))), lat, tol = 1e-9)
   expect_identical(res$iterations, 0L)
   expect_equal(res$incumbent, 2.5)
-  expect_lt(res$bound - 2.5, 1e-12)
+  expect_equal(res$bound, 2.5)
 })
 
 test_that("several seeds are certified as their union", {
@@ -910,8 +898,8 @@ test_that("pruning discards nodes that only tie the incumbent", {
   }
   nodes <- list(flat(1), flat(5), flat(9))
 
-  expect_length(prune_active(nodes, 5, 0, 0, keep_argmax = FALSE)$keep, 1L)
-  expect_length(prune_active(nodes, 5, 0, 0, keep_argmax = TRUE)$keep, 2L)
+  expect_length(prune_active(nodes, 5, 0, keep_argmax = FALSE)$keep, 1L)
+  expect_length(prune_active(nodes, 5, 0, keep_argmax = TRUE)$keep, 2L)
 })
 
 # --- Regression ---------------------------------------------------------------

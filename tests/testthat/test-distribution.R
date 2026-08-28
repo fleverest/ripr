@@ -21,7 +21,7 @@ test_that("an induced mixture is itself a probability distribution", {
   expect_equal(
     sum(exp(log_density(p, enumerate_space(fam@sample_space)))),
     1,
-    tolerance = 1e-12
+    tolerance = rounding_tol(1)
   )
 })
 
@@ -37,7 +37,7 @@ test_that("a finite mixture is the weighted sum of its components", {
       exp(kernel_loglik(fam, comp[, 1], x)) +
       w[2] * exp(kernel_loglik(fam, comp[, 2], x))
   )
-  expect_equal(log_density(p, x), manual, tolerance = 1e-12)
+  expect_equal(log_density(p, x), manual, tolerance = rounding_tol(1))
 })
 
 test_that("a degenerate finite mixing agrees with the point mixing", {
@@ -70,7 +70,7 @@ test_that("a mixture carrying a boundary atom stays finite where it should", {
     ))
   ld <- log_density(p, enumerate_space(fam@sample_space))
   expect_true(all(is.finite(ld)))
-  expect_equal(sum(exp(ld)), 1, tolerance = 1e-12)
+  expect_equal(sum(exp(ld)), 1, tolerance = rounding_tol(1))
 })
 
 test_that("log_density accepts a bare vector as one outcome", {

@@ -153,7 +153,7 @@ test_that("KL is zero when the mixture is the alternative", {
     snapshots = list(),
     iters = c(fw = 0L, lb = 0L, em = 0L, weight = 0L)
   )
-  expect_equal(kl_divergence(st), 0, tolerance = 1e-12)
+  expect_equal(kl_divergence(st), 0, tolerance = rounding_tol(1))
 })
 
 test_that("kl_divergence accepts a precomputed log_p", {

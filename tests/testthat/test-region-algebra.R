@@ -177,7 +177,7 @@ test_that("the complement of the plurality null is the candidate-1-wins region",
   for (cell in parts(wins)) {
     h <- h_rep(cell)
     expect_identical(sum(h$eq), 1L)
-    expect_true(max(abs(colSums(v_rep(cell)$v) - 1)) <= 1e-12)
+    expect_true(max(abs(colSums(v_rep(cell)$v) - 1)) <= rounding_tol(1))
   }
 })
 

@@ -444,27 +444,6 @@ node_stub <- function(box, retired, fate) {
 node_ubs <- function(nodes) vapply(nodes, function(b) b$ub, numeric(1L))
 
 
-#' Floating-point margin covering the whole run
-#'
-#' DC is just convex combinations so it is numerically stable (PBP 10.4), but
-#' round-to-nearest can place the computed maximum marginally *below* the true
-#' one, which is the unsafe direction for a validity claim.
-#'
-#' Computed once from the seeds, and valid for every node the run can reach:
-#' children's coefficients are convex combinations of their parent's, so the
-#' seed maximum bounds `|coef|` over every box that will ever be created.
-#' @keywords internal
-#' @noRd
-rounding_slack <- function(seeds, lat, round_slack) {
-  if (!round_slack) {
-    return(0)
-  }
-  lat$n *
-    .Machine$double.eps *
-    max(vapply(seeds, function(b) max(abs(b$coef)), numeric(1L)))
-}
-
-
 #' The bound the run is currently entitled to claim
 #'
 #' Not simply the maximum over active nodes. A pruned node may still hold the
@@ -473,8 +452,8 @@ rounding_slack <- function(seeds, lat, round_slack) {
 #' evaluations.
 #' @keywords internal
 #' @noRd
-certified_bound <- function(attained, active_ub, pruned_ub, eta) {
-  max(attained, active_ub, pruned_ub) + eta
+certified_bound <- function(attained, active_ub, pruned_ub) {
+  max(attained, active_ub, pruned_ub)
 }
 
 
@@ -511,10 +490,10 @@ stop_reason <- function(n_active, gap, tol, it, max_iter) {
 #' discards such nodes.
 #' @keywords internal
 #' @noRd
-prune_active <- function(active, incumbent, slack, eta, keep_argmax) {
+prune_active <- function(active, incumbent, slack, keep_argmax) {
   ubs <- node_ubs(active)
   keep <- if (keep_argmax) {
-    ubs >= incumbent - eta - 8 * .Machine$double.eps * max(1, abs(incumbent))
+    ubs >= incumbent - 8 * .Machine$double.eps * max(1, abs(incumbent))
   } else {
     ubs > incumbent + slack
   }
@@ -542,10 +521,6 @@ prune_active <- function(active, incumbent, slack, eta, keep_argmax) {
 #'   that `active` is a certified enclosure of every maximiser. Forces
 #'   `slack = 0`; the two modes are mutually exclusive. `shared_incumbent` must
 #'   be left at its default (`-Inf`).
-#' @param round_slack Add `n * eps * max|coef|` to the reported bound. de
-#'   Casteljau is all convex combinations and so is stable, but round-to-nearest
-#'   can put the computed maximum coefficient marginally *below* the true one,
-#'   which is the unsafe direction for a validity claim.
 #' @param shared_incumbent A value already attained (hence a valid lower bound)
 #'   somewhere the caller will take a maximum over, e.g. another cell of the
 #'   same null. Allows us to prune nodes earlier, which is what makes a null
@@ -565,7 +540,6 @@ certify_sup <- function(
   max_iter = 500L,
   slack = 0,
   keep_argmax = FALSE,
-  round_slack = TRUE,
   shared_incumbent = -Inf
 ) {
   if (keep_argmax && slack > 0) {
@@ -582,7 +556,6 @@ certify_sup <- function(
   active <- lapply(seq_along(seeds), function(i) node(seeds[[i]], id = i))
   next_id <- length(seeds) + 1L
   best <- boxes_best(active, lat)
-  eta <- rounding_slack(seeds, lat, round_slack)
   rejected <- list()
   incumbent_trace <- numeric(max_iter)
   retired_nodes <- list()
@@ -597,11 +570,11 @@ certify_sup <- function(
     # already found elsewhere. The gap is measured against the same value.
     incumbent <- max(best$value, shared_incumbent)
     active_ub <- if (length(active)) max(node_ubs(active)) else -Inf
-    bound <- certified_bound(best$value, active_ub, pruned_ub, eta)
+    bound <- certified_bound(best$value, active_ub, pruned_ub)
 
     reason <- stop_reason(
       length(active),
-      bound - eta - incumbent,
+      bound - incumbent,
       tol,
       it,
       max_iter
@@ -635,7 +608,7 @@ certify_sup <- function(
     }
 
     incumbent <- max(best$value, shared_incumbent)
-    pruned <- prune_active(active, incumbent, slack, eta, keep_argmax)
+    pruned <- prune_active(active, incumbent, slack, keep_argmax)
     if (length(pruned$drop)) {
       pruned_ub <- max(pruned_ub, node_ubs(pruned$drop))
     }
@@ -651,7 +624,7 @@ certify_sup <- function(
       lapply(pruned$drop, node_stub, retired = it, fate = "pruned")
     )
     active <- pruned$keep
-    trace[it] <- certified_bound(best$value, pruned$kept_ub, pruned_ub, eta)
+    trace[it] <- certified_bound(best$value, pruned$kept_ub, pruned_ub)
     incumbent_trace[it] <- best$value
   }
 

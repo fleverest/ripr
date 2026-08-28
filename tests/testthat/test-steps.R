@@ -60,7 +60,7 @@ test_that("weighted Gs sum to 1 at any weights", {
     expect_equal(
       sum(w * Gs(cand$ld_all, w, cand$engine)),
       1,
-      tolerance = 1e-10
+      tolerance = rounding_tol(1)
     )
   }
 })
@@ -82,8 +82,8 @@ test_that("every path stays on the simplex", {
   for (p in paths) {
     for (gamma in seq(0, p$gamma_max, length.out = 5L)) {
       w <- p$w_of(gamma)
-      expect_equal(sum(w), 1, tolerance = 1e-12)
-      expect_true(all(w >= -1e-12))
+      expect_equal(sum(w), 1, tolerance = rounding_tol(1))
+      expect_true(all(w >= -rounding_tol(1)))
     }
   }
 })
@@ -190,7 +190,7 @@ test_that("pairwise and away empty the worst atom at their cap", {
       cand$log_p,
       cand$engine
     )[[1L]]
-    expect_equal(p$w_of(p$gamma_max)[worst], 0, tolerance = 1e-12)
+    expect_equal(p$w_of(p$gamma_max)[worst], 0, tolerance = rounding_tol(1))
   }
 })
 
@@ -229,8 +229,8 @@ test_that("the fixed schedule is capped at the path's own maximum", {
     size = "fixed",
     gamma_fixed = 1
   )
-  expect_equal(sum(res$weights), 1, tolerance = 1e-12)
-  expect_true(all(res$weights >= -1e-12))
+  expect_equal(sum(res$weights), 1, tolerance = rounding_tol(1))
+  expect_true(all(res$weights >= 0))
 })
 
 test_that("apply_step takes whichever offered direction reaches the lowest KL", {
@@ -290,9 +290,9 @@ test_that("a weight sweep is monotone and preserves the identity", {
   kl <- expect_q(st@engine, st@engine@log_q - mixture_log_p(ld_all, w))
   for (i in 1:5) {
     w <- weight_sweep(ld_all, w, mixture_log_p(ld_all, w), st@engine)$weights
-    expect_equal(sum(w), 1, tolerance = 1e-12)
+    expect_equal(sum(w), 1, tolerance = rounding_tol(1))
     kl_new <- expect_q(st@engine, st@engine@log_q - mixture_log_p(ld_all, w))
-    expect_true(kl_new <= kl + 1e-14)
+    expect_true(kl_new <= kl + rounding_tol(kl))
     kl <- kl_new
   }
 })
@@ -315,7 +315,7 @@ test_that("solve_weights respects both its budget and its tolerance", {
   tight <- solve_weights(ld_all, w0, st@engine, tol = 0, max_iter = 20L)
   loose <- solve_weights(ld_all, w0, st@engine, tol = 1e10, max_iter = 20L)
   expect_equal(loose, w0)
-  expect_equal(sum(tight), 1, tolerance = 1e-12)
+  expect_equal(sum(tight), 1, tolerance = rounding_tol(1))
 })
 
 # --- Oracles ------------------------------------------------------------------
@@ -498,7 +498,7 @@ test_that("the downdate survives an atom carrying nearly all the mass", {
   # And the whole pass must come through with usable weights.
   identified <- identify_support(ld_all, heavy, st@engine)
   expect_true(all(!is.na(identified)))
-  expect_equal(sum(identified), 1, tolerance = 1e-12)
+  expect_equal(sum(identified), 1, tolerance = rounding_tol(1))
 })
 
 test_that("the downdate is finite at a weight of exactly 1", {
@@ -520,10 +520,10 @@ test_that("identify_support does not increase KL", {
   w <- flat_weights(st)
   before <- expect_q(st@engine, st@engine@log_q - mixture_log_p(ld_all, w))
   after_w <- identify_support(ld_all, w, st@engine)
-  expect_equal(sum(after_w), 1, tolerance = 1e-12)
+  expect_equal(sum(after_w), 1, tolerance = rounding_tol(1))
   expect_true(
     expect_q(st@engine, st@engine@log_q - mixture_log_p(ld_all, after_w)) <=
-      before + 1e-14
+      before + rounding_tol(before)
   )
 })
 
@@ -579,7 +579,7 @@ test_that("an EM sweep preserves the identity", {
   expect_equal(
     sum(w * Gs(ld(flat_atoms(moved)), w, moved@engine)),
     1,
-    tolerance = 1e-10
+    tolerance = rounding_tol(1)
   )
 })
 
@@ -689,7 +689,7 @@ test_that("the atom M-step crosses a fan diagonal when the optimum does", {
   target <- c(0, 0.5, 0.5)
   holds <- vapply(
     st@null@cells,
-    \(cell) contains(cell, target, tol = 1e-9),
+    \(cell) contains(cell, target, tol = rounding_tol(1)),
     logical(1)
   )
   expect_identical(sum(holds), 1L)

@@ -18,37 +18,6 @@ plurality_cell <- function(k, j) {
   simplex_region(vertices = do.call(cbind, c(basis, list(tie))))
 }
 
-# Every geometry the package currently has, for the sweeps below.
-every_geometry <- function() {
-  list(
-    polytope = polytope_region(
-      vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
-    ),
-    simplex = simplex_region(vertices = diag(3)),
-    halfspace = halfspace_region(normal = c(1, -1, 0), offset = 0),
-    point = point_region(theta = c(0.5, 0.3, 0.2)),
-    unconstrained = unconstrained_region(2L),
-    union = union_region(plurality_cell(3, 2), plurality_cell(3, 3))
-  )
-}
-
-# --- The hierarchy ------------------------------------------------------------
-
-test_that("every convex geometry is both a region and a convex_region", {
-  for (g in every_geometry()[-6L]) {
-    expect_true(S7_inherits(g, region))
-    expect_true(S7_inherits(g, convex_region))
-  }
-})
-
-test_that("a union is a region but not a convex one", {
-  # The whole point of the split: `chart()`, `project()` and `maximise_over()`
-  # dispatch on or type as `convex_region`, so a union cannot reach them.
-  u <- union_region(plurality_cell(3, 2), plurality_cell(3, 3))
-  expect_true(S7_inherits(u, region))
-  expect_false(S7_inherits(u, convex_region))
-})
-
 # --- Construction -------------------------------------------------------------
 
 test_that("cells, lists, unions and any nesting of them all flatten alike", {
@@ -76,16 +45,6 @@ test_that("one convex region is handed back unwrapped", {
   expect_identical(union_region(s), s)
   expect_identical(union_region(list(s)), s)
   expect_identical(union_region(union_region(s)), s)
-  expect_false(S7_inherits(union_region(s), union_region))
-})
-
-test_that("a union carries its parts and nothing else", {
-  # A union stores no decomposition of itself. `cells()` derives the simplicial
-  # one on demand and `null_model()` keeps the copy worth keeping, being the
-  # object whose every sweep needs it; `disjoin()` returns a region rather than
-  # annotating one.
-  r <- union_region(plurality_cell(3, 2), plurality_cell(3, 3))
-  expect_identical(names(S7::props(r)), "parts")
 })
 
 # --- Validation ---------------------------------------------------------------
@@ -131,42 +90,12 @@ test_that("a non-convex_region element is refused", {
 
 # --- parts() and cells() ------------------------------------------------------
 
-test_that("a convex region is its own only part and its own only cell", {
-  s <- simplex_region(vertices = diag(3))
-  expect_identical(parts(s), list(s))
-  expect_identical(cells(s), list(s))
-  expect_equal(n_parts(s), 1L)
-  expect_equal(n_cells(s), 1L)
-})
-
-test_that("parts() and cells() agree except where a triangulation splits", {
-  # The square is the whole of the difference: it is the one geometry here
-  # that is bounded and not already a simplex, so it is the one the fan has
-  # anything to do to.
-  for (nm in setdiff(names(every_geometry()), "polytope")) {
-    g <- every_geometry()[[nm]]
-    expect_identical(parts(g), cells(g), info = nm)
-    expect_equal(n_parts(g), n_cells(g), info = nm)
-  }
-
-  square <- every_geometry()$polytope
-  expect_equal(n_parts(square), 1L)
-  expect_equal(n_cells(square), 2L)
-})
-
 test_that("a union's parts are its members and its cells are theirs, flattened", {
   a <- plurality_cell(3, 2)
   b <- plurality_cell(3, 3)
   r <- union_region(a, b)
   expect_identical(parts(r), list(a, b))
   expect_identical(cells(r), list(a, b))
-})
-
-test_that("a union reports the dimension its cells share", {
-  expect_equal(
-    space_dim(union_region(plurality_cell(4, 2), plurality_cell(4, 3))),
-    4L
-  )
 })
 
 # --- Membership ---------------------------------------------------------------

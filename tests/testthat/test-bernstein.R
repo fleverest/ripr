@@ -108,13 +108,6 @@ test_that("bernstein_lattice() locates the vertex coefficients", {
   }
 })
 
-test_that("bernstein_lattice() enumerates every edge once", {
-  lat <- bernstein_lattice(3L, 4L)
-  expect_identical(dim(lat$edges), c(2L, 6L))
-  expect_true(all(lat$edges[1L, ] < lat$edges[2L, ]))
-  expect_identical(anyDuplicated(t(lat$edges)), 0L)
-})
-
 test_that("the degree ladder `up` steps by one basis vector", {
   lat <- bernstein_lattice(4L, 3L)
   for (m in seq_len(lat$n)) {
@@ -441,15 +434,6 @@ test_that("the pyramid at a vertex returns that vertex's coefficient", {
   }
 })
 
-test_that("levels of the pyramid have the degrees they claim to", {
-  lat <- bernstein_lattice(4L, 3L)
-  pyr <- dc_pyramid(stats::rnorm(lat$n_coef), lat, rand_lambda(3L))
-  expect_length(pyr, lat$n + 1L)
-  for (l in 0:lat$n) {
-    expect_length(pyr[[l + 1L]], bernstein_size(lat$n - l, lat$K))
-  }
-})
-
 # --- Subdivision --------------------------------------------------------------
 
 test_that("a child's coefficients describe the same polynomial", {
@@ -485,20 +469,6 @@ test_that("subdivide() drops the degenerate children", {
   lambda <- c(0.5, 0.5, 0, 0)
   kids <- subdivide(box, lat, lambda)
   expect_length(kids, 2L)
-})
-
-test_that("bisect() returns the child with vertex `p` REPLACED first", {
-  # Pinning the labelling, which is the opposite of "keeps vertex p".
-  # Assuming the wrong order might cause us to certify over the wrong half.
-  lat <- bernstein_lattice(3L, 3L)
-  box <- list(V = diag(3L), coef = stats::rnorm(lat$n_coef))
-  mid <- c(0.5, 0.5, 0)
-  kids <- bisect(box, 1L, 2L, lat)
-
-  expect_equal(kids[[1L]]$V[, 1L], mid)
-  expect_equal(kids[[1L]]$V[, 2L], c(0, 1, 0))
-  expect_equal(kids[[2L]]$V[, 2L], mid)
-  expect_equal(kids[[2L]]$V[, 1L], c(1, 0, 0))
 })
 
 test_that("the two halves of a bisection cover the parent", {

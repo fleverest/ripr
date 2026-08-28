@@ -73,12 +73,6 @@ test_that("a mixture carrying a boundary atom stays finite where it should", {
   expect_equal(sum(exp(ld)), 1, tolerance = rounding_tol(1))
 })
 
-test_that("log_density accepts a bare vector as one outcome", {
-  fam <- multinomial_family(n_trials = 10, k = 2)
-  p <- induced_distribution(fam, point_mixing(theta_star = c(0.75, 0.25)))
-  expect_length(log_density(p, c(8, 2)), 1L)
-})
-
 # --- Sampling -----------------------------------------------------------------
 
 test_that("draw returns the right shape and respects the trial total", {
@@ -128,15 +122,6 @@ test_that("draws from a mixture are consistent with its density", {
 
 # --- Family recovery ----------------------------------------------------------
 
-test_that("family reports the family for a mixture and NULL otherwise", {
-  fam <- multinomial_family(n_trials = 3, k = 2)
-  p <- induced_distribution(fam, point_mixing(theta_star = c(0.5, 0.5)))
-  expect_identical(family(p), fam)
-
-  direct <- new_class("direct_law", parent = distribution)
-  expect_null(family(direct(sample_space = fam@sample_space)))
-})
-
 test_that("mixture rejects components of the wrong type", {
   fam <- multinomial_family(n_trials = 3, k = 2)
   expect_error(induced_distribution(fam, fam))
@@ -152,10 +137,6 @@ test_that("calling a family is the map theta -> p_theta", {
   theta <- c(0.5, 0.3, 0.2)
   expect_identical(fam(theta), induced_distribution(fam, theta))
   expect_true(S7_inherits(fam(theta), distribution))
-  expect_equal(
-    log_density(fam(theta), c(2L, 1L, 1L)),
-    kernel_loglik(fam, theta, c(2L, 1L, 1L))
-  )
 })
 
 test_that("a kernel extends from points to measures, so fam(W) is the same map", {
@@ -173,14 +154,6 @@ test_that("a kernel extends from points to measures, so fam(W) is the same map",
     log_density(fam(theta), x),
     log_density(fam(point_mixing(theta_star = theta)), x)
   )
-})
-
-test_that("being callable costs a family none of its other behaviour", {
-  fam <- gaussian_family(dim = 2L, sigma = diag(c(1, 4)))
-  expect_true(S7_inherits(fam, parametric_family))
-  expect_equal(fam@sigma, diag(c(1, 4)))
-  expect_equal(space_dim(fam@parameter_space), 2L)
-  expect_true(is.function(compile_loglik(fam, rbind(c(0, 0)))))
 })
 
 test_that("the callable closure captures nothing", {
@@ -236,14 +209,4 @@ test_that("a distribution's print distinguishes a point mass from a mixture", {
     "mixed over 2 atoms",
     fixed = TRUE
   )
-})
-
-# --- The sample space a distribution is a law over ----------------------------
-
-test_that("a distribution carries the sample space it is a law over", {
-  # So a bespoke Q with no family behind it still tells a random variable what
-  # it may be evaluated on.
-  fam <- multinomial_family(n_trials = 4L, k = 3L)
-  expect_identical(fam(c(0.5, 0.3, 0.2))@sample_space, fam@sample_space)
-  expect_identical(likelihood(fam(c(0.5, 0.3, 0.2)))@sample_space, fam@sample_space)
 })

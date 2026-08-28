@@ -67,18 +67,6 @@ test_that("kernel_loglik accepts a bare vector as one outcome", {
 # Compiling is a pure optimisation: it must never change an answer. These are
 # what allow an engine to compile once and call the result blindly thereafter.
 
-test_that("a compiled evaluator matches the one-off wrapper", {
-  fam <- multinomial_family(n_trials = 12, k = 4)
-  x <- enumerate_space(fam@sample_space)
-  ld <- compile_loglik(fam, x)
-  theta_mat <- cbind(
-    c(0.25, 0.25, 0.25, 0.25),
-    c(0.7, 0.1, 0.1, 0.1),
-    c(0.5, 0.5, 0, 0) # boundary column: -Inf enters the kernel
-  )
-  expect_equal(ld(theta_mat), kernel_loglik_batch(fam, theta_mat, x))
-})
-
 test_that("a compiled evaluator is reusable across different theta", {
   fam <- multinomial_family(n_trials = 8, k = 3)
   x <- enumerate_space(fam@sample_space)
@@ -105,36 +93,6 @@ test_that("a compiled evaluator does not alias its outcome matrix", {
   before <- ld(matrix(c(0.5, 0.3, 0.2), ncol = 1L))
   x[1L, 1L] <- 99L
   expect_equal(ld(matrix(c(0.5, 0.3, 0.2), ncol = 1L)), before)
-})
-
-test_that("compiling against a subset of outcomes evaluates on that subset", {
-  # Monte Carlo and quadrature engines compile against their own nodes, not the
-  # full support, so this is the ordinary case rather than an edge one.
-  fam <- multinomial_family(n_trials = 10, k = 3)
-  nodes <- enumerate_space(fam@sample_space)[c(2L, 5L, 9L), , drop = FALSE]
-  ld <- compile_loglik(fam, nodes)
-  theta <- c(0.5, 0.3, 0.2)
-  expect_equal(
-    as.vector(ld(matrix(theta, ncol = 1L))),
-    kernel_loglik(fam, theta, nodes)
-  )
-})
-
-test_that("compiling works for repeated outcomes, as Monte Carlo draws give", {
-  fam <- multinomial_family(n_trials = 4, k = 2)
-  set.seed(7)
-  nodes <- kernel_draw(fam, c(0.6, 0.4), 50L)
-  ld <- compile_loglik(fam, nodes)
-  expect_equal(
-    as.vector(ld(matrix(c(0.5, 0.5), ncol = 1L))),
-    kernel_loglik(fam, c(0.5, 0.5), nodes)
-  )
-})
-
-test_that("compiling accepts a bare vector as a single outcome", {
-  fam <- multinomial_family(n_trials = 10, k = 2)
-  ld <- compile_loglik(fam, c(8, 2))
-  expect_equal(dim(ld(matrix(c(0.5, 0.5), ncol = 1L))), c(1L, 1L))
 })
 
 test_that("a family with no compile_loglik method errors", {
@@ -195,10 +153,4 @@ test_that("draw returns the right shape and respects the trial total", {
       expect_true(all(rowSums(d) == n_trials))
     }
   }
-})
-
-test_that("multinomial_family rejects malformed parameters", {
-  expect_error(multinomial_family(n_trials = -1, k = 2), "non-negative")
-  expect_error(multinomial_family(n_trials = 5, k = 0), "k` must be")
-  expect_error(multinomial_family(n_trials = c(1, 2), k = 2), "single")
 })

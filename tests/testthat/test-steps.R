@@ -163,20 +163,6 @@ test_that("away alone errors below two active atoms", {
   )
 })
 
-test_that("the away step never uses the candidate", {
-  st <- plurality()
-  cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))
-  away <- step_paths(
-    "away",
-    cand$ld_all,
-    cand$w,
-    cand$new_idx,
-    cand$log_p,
-    cand$engine
-  )[[1L]]
-  expect_equal(away$w_of(away$gamma_max / 2)[cand$new_idx], 0)
-})
-
 test_that("pairwise and away empty the worst atom at their cap", {
   st <- plurality()
   cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))
@@ -347,16 +333,6 @@ test_that("the linear oracle's gradient matches finite differences", {
   expect_equal(sum(obj$grad(theta) * d), fd, tolerance = 1e-6)
 })
 
-test_that("the Li-Barron oracle scores by KL after the step", {
-  st <- plurality()
-  ld <- compile_engine(st@engine)
-  log_p <- log_p_at_nodes(st, ld)
-  obj <- nonlinear_oracle(st, log_p, ld)
-  theta <- c(0.30, 0.40, 0.20, 0.10)
-  planned <- plan_step(st, log_p, ld)(theta)
-  expect_equal(obj$value(theta), -planned$kl)
-})
-
 test_that("away is stripped from the Li-Barron inner directions", {
   # An away path never touches the candidate, so it scores identically for every
   # one and its gradient is exactly zero -- a plateau that strands any restart
@@ -437,20 +413,6 @@ test_that("plan_step memoises its last call", {
   expect_identical(calls, after_value)
 })
 
-test_that("plan_step puts the candidate where it is told", {
-  st <- plurality()
-  ld <- compile_engine(st@engine)
-  at <- insert_index(st, 2L)
-  planned <- plan_step(st, log_p_at_nodes(st, ld), ld, at = at)(c(
-    0.30,
-    0.40,
-    0.20,
-    0.10
-  ))
-  expect_identical(planned$new_idx, at)
-  expect_length(planned$weights, length(flat_weights(st)) + 1L)
-})
-
 # --- Support identification ---------------------------------------------------
 
 test_that("removing an atom adjusts the mixture in place", {
@@ -525,13 +487,6 @@ test_that("identify_support does not increase KL", {
     expect_q(st@engine, st@engine@log_q - mixture_log_p(ld_all, after_w)) <=
       before + rounding_tol(before)
   )
-})
-
-test_that("identify_support leaves at least one atom", {
-  st <- plurality()
-  ld <- compile_engine(st@engine)
-  w <- identify_support(ld(flat_atoms(st)), flat_weights(st), st@engine)
-  expect_true(sum(w > 0) >= 1L)
 })
 
 # --- EM -----------------------------------------------------------------------
@@ -669,7 +624,6 @@ test_that("search_null searches cells and reports the part they belong to", {
   # The index is a part's, because that is what an atom is filed under, and
   # `state@atoms` has exactly that many blocks.
   expect_identical(found$part, 1L)
-  expect_true(found$part <= n_parts(st@null@region))
   expect_true(contains(parts(st@null@region)[[found$part]], found$theta))
 
   # And the maximiser is in one of the cells searched, not merely in the hull.

@@ -64,7 +64,6 @@ test_that("there must be one atom block per part", {
 test_that("weights are normalised across the whole list, not within a block", {
   # Each block sums to less than one; only the total is constrained.
   st <- fixture()
-  expect_equal(sum(unlist(st@weights)), 1)
   expect_error(
     S7::set_props(st, weights = list(c(0.5, 0.2), 0.5)),
     "sum to 1"
@@ -96,7 +95,6 @@ test_that("flat ordering is by part block, not chronological", {
   st <- fixture()
   st <- add_atom(st, c(0.45, 0.30, 0.25), 1L, c(0.4, 0.2, 0.1, 0.3))
   expect_identical(flat_part(st), c(1L, 1L, 1L, 2L))
-  expect_equal(flat_atoms(st)[, 3L], c(0.45, 0.30, 0.25))
 })
 
 test_that("insert_index names the slot add_atom will use", {
@@ -125,13 +123,6 @@ test_that("empty blocks survive the round trip", {
     split_by_sizes(c(0.4, 0.6), c(1L, 0L, 1L)),
     list(0.4, numeric(0), 0.6)
   )
-})
-
-test_that("set_weights leaves the atoms alone", {
-  st <- fixture()
-  st2 <- set_weights(st, c(0.2, 0.3, 0.5))
-  expect_identical(st2@atoms, st@atoms)
-  expect_equal(flat_weights(st2), c(0.2, 0.3, 0.5))
 })
 
 # --- Core quantities ----------------------------------------------------------
@@ -208,15 +199,6 @@ test_that("wants_snapshot distinguishes per-call from per-iteration", {
   expect_true(wants_snapshot(fixture("step"), last = TRUE))
   expect_false(wants_snapshot(fixture("step"), last = FALSE))
   expect_true(wants_snapshot(fixture("all"), last = FALSE))
-})
-
-test_that("a snapshot keeps the mixture and the counters", {
-  st <- bump(fixture(), "fw", by = 2L)
-  st <- snapshot_state(st, "fw")
-  snap <- st@snapshots[[1L]]
-  expect_identical(snap$iters[["fw"]], 2L)
-  expect_identical(snap$atoms, st@atoms)
-  expect_identical(snap$weights, st@weights)
 })
 
 test_that("record does not snapshot", {

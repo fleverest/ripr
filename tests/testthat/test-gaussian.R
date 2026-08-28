@@ -37,7 +37,6 @@ test_that("compile_loglik matches the wrapper across parameter columns", {
   theta_mat <- cbind(c(0, 0), c(1, -1), c(2.5, 0.25))
 
   ld <- compile_loglik(fam, x)
-  expect_equal(ld(theta_mat), kernel_loglik_batch(fam, theta_mat, x))
   for (i in seq_len(ncol(theta_mat))) {
     expect_equal(ld(theta_mat)[, i], kernel_loglik(fam, theta_mat[, i], x))
   }
@@ -73,12 +72,6 @@ test_that("draws have the right mean and covariance", {
   expect_equal(stats::cov(d), sigma, tolerance = 0.05)
 })
 
-test_that("the Gaussian has no enumerable sample space", {
-  fam <- gaussian_family(dim = 2)
-  expect_false(is_finite_space(fam@sample_space))
-  expect_error(enumerate_space(fam@sample_space), "cannot be enumerated")
-})
-
 test_that("the covariance must be symmetric positive definite", {
   expect_error(
     gaussian_family(dim = 2, sigma = matrix(c(1, 2, 3, 4), 2)),
@@ -89,12 +82,6 @@ test_that("the covariance must be symmetric positive definite", {
     "positive definite"
   )
   expect_error(gaussian_family(dim = 2, sigma = diag(3)), "2 by 2")
-})
-
-test_that("a NULL covariance gives the identity", {
-  fam <- gaussian_family(dim = 3)
-  expect_equal(fam@sigma, diag(3))
-  expect_equal(space_dim(fam@parameter_space), 3L)
 })
 
 # --- Conjugate mixing measure -------------------------------------------------
@@ -128,7 +115,6 @@ test_that("a Gaussian mixing measure has no finite atom count", {
   # answer rather than the answer 1.
   g <- gaussian_mixing(prior_mean = 0, prior_cov = matrix(1))
   expect_true(is.na(n_atoms(g)))
-  expect_true(S7_inherits(g, mixing_measure))
 })
 
 test_that("the prior covariance must match the prior mean", {

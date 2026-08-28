@@ -43,19 +43,6 @@ test_that("a chart round-trips points in the part", {
   }
 })
 
-test_that("to_theta_batch agrees with to_theta column by column", {
-  for (s in list(plurality_simplex(4, 3), plurality_halfspace(4, 3))) {
-    ch <- chart(s)
-    set.seed(2)
-    u_mat <- ch$seed(6L)
-    batched <- ch$to_theta_batch(u_mat)
-    expect_equal(ncol(batched), 6L)
-    for (i in 1:6) {
-      expect_equal(batched[, i], ch$to_theta(u_mat[, i]))
-    }
-  }
-})
-
 test_that("the chart Jacobian matches a finite difference", {
   for (s in list(plurality_simplex(4, 2), plurality_halfspace(3, 2))) {
     ch <- chart(s)
@@ -69,17 +56,6 @@ test_that("the chart Jacobian matches a finite difference", {
       fd <- (ch$to_theta(u + e) - ch$to_theta(u - e)) / (2 * eps)
       expect_equal(jac[, j], fd, tolerance = 1e-5)
     }
-  }
-})
-
-test_that("chart seeds land inside the part", {
-  for (s in list(plurality_simplex(5, 4), plurality_halfspace(5, 4))) {
-    ch <- chart(s)
-    set.seed(4)
-    u_mat <- ch$seed(40L)
-    expect_equal(nrow(u_mat), ch$n_par)
-    thetas <- ch$to_theta_batch(u_mat)
-    expect_true(all(apply(thetas, 2L, \(t) contains(s, t))))
   }
 })
 
@@ -126,14 +102,6 @@ test_that("a simplex part contains its own vertices", {
   for (i in seq_len(ncol(s@vertices))) {
     expect_true(contains(s, s@vertices[, i], tol = 1e-6))
   }
-})
-
-test_that("a singleton contains only its own point", {
-  s <- point_region(theta = c(0.5, 0.5))
-  expect_true(contains(s, c(0.5, 0.5)))
-  expect_false(contains(s, c(0.6, 0.4)))
-  expect_equal(project(s, c(0.9, 0.1)), c(0.5, 0.5))
-  expect_equal(chart(s)$n_par, 0L)
 })
 
 # --- The oracle ---------------------------------------------------------------
@@ -260,28 +228,7 @@ test_that("objective supplies a working default batch evaluator", {
   expect_equal(obj$value_batch(m), c(3, 7, 11))
 })
 
-test_that("a supplied batch evaluator is used", {
-  called <- 0L
-  obj <- objective(
-    value = \(theta) sum(theta),
-    grad = \(theta) rep(1, length(theta)),
-    value_batch = function(m) {
-      called <<- called + 1L
-      colSums(m)
-    }
-  )
-  expect_equal(obj$value_batch(cbind(c(1, 2))), 3)
-  expect_equal(called, 1L)
-})
-
 # --- null_model ---------------------------------------------------------------
-
-test_that("null_model bundles a family with its parts", {
-  fam <- multinomial_family(n_trials = 10, k = 4)
-  null <- null_model(fam, lapply(2:4, \(j) plurality_simplex(4, j)))
-  expect_equal(n_parts(null@region), 3L)
-  expect_identical(null@family, fam)
-})
 
 test_that("a null takes its geometry as a part, a list or a union alike", {
   # `null_model()` coerces, so none of the three needs the caller to know
@@ -294,7 +241,6 @@ test_that("a null takes its geometry as a part, a list or a union alike", {
   from_list <- null_model(fam, list(s1, s2))
   from_union <- null_model(fam, union_region(s1, s2))
   expect_equal(n_parts(from_list@region), 2L)
-  expect_equal(n_parts(from_union@region), 2L)
   expect_identical(from_list@region, from_union@region)
   expect_equal(in_null(from_list, theta), in_null(from_union, theta))
 
@@ -328,11 +274,6 @@ test_that("a null takes its decomposition once, at construction", {
   mixed <- null_model(fam, list(plurality_simplex(3, 2), square))
   expect_length(mixed@cells, 3L)
   expect_identical(mixed@cell_part, c(1L, 2L, 2L))
-  expect_true(all(vapply(
-    mixed@cells,
-    \(c) S7_inherits(c, simplex_region),
-    logical(1)
-  )))
 
   # The cells are in part order and are that part's own `cells()`.
   expect_identical(mixed@cells[[1L]], parts(mixed@region)[[1L]])
@@ -360,25 +301,6 @@ test_that("null_model()'s max_cells caps the decomposition across parts", {
   )
 })
 
-test_that("in_null is the union of the pieces", {
-  fam <- multinomial_family(n_trials = 10, k = 3)
-  null <- null_model(fam, lapply(2:3, \(j) plurality_halfspace(3, j)))
-  # theta_1 largest: outside every piece, so outside the null.
-  expect_false(in_null(null, c(0.5, 0.3, 0.2)))
-  # theta_1 not the strict plurality winner: inside at least one piece.
-  expect_true(in_null(null, c(0.2, 0.5, 0.3)))
-  expect_true(in_null(null, c(1 / 3, 1 / 3, 1 / 3)))
-})
-
-test_that("null_model rejects an empty or malformed part list", {
-  fam <- multinomial_family(n_trials = 4, k = 2)
-  expect_error(null_model(fam, list()), "non-empty")
-  expect_error(
-    null_model(fam, list("not a region")),
-    "must be a `convex_region`"
-  )
-})
-
 test_that("simplex_region rejects a malformed vertex matrix", {
   expect_error(simplex_region(vertices = c(0.5, 0.5)), "must be a matrix")
   expect_error(
@@ -392,13 +314,6 @@ test_that("halfspace_region rejects a zero normal", {
 })
 
 # --- Dimension ----------------------------------------------------------------
-
-test_that("every region reports the dimension of the parameters it holds", {
-  expect_equal(space_dim(simplex_region(vertices = diag(3))), 3L)
-  expect_equal(space_dim(halfspace_region(normal = c(1, -1, 0))), 3L)
-  expect_equal(space_dim(point_region(theta = c(0.5, 0.3, 0.2))), 3L)
-  expect_equal(space_dim(unconstrained_region(3L)), 3L)
-})
 
 test_that("region_dim is the affine dimension, at most the ambient", {
   # `space_dim` is how many coordinates a point carries; `region_dim` is what

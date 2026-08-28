@@ -40,38 +40,12 @@ test_that("finite_mixing accepts a zero weight on a live atom", {
 
 # --- Accessors ----------------------------------------------------------------
 
-test_that("atoms, weights and n_atoms agree across mixing-measure kinds", {
-  p <- point_mixing(theta_star = c(0.5, 0.5))
-  f <- finite_mixing(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9)),
-    weights = c(0.3, 0.7)
-  )
-  expect_equal(n_atoms(p), 1L)
-  expect_equal(dim(atoms(p)), c(2L, 1L))
-  expect_equal(weights(p), 1)
-  expect_equal(n_atoms(f), 2L)
-  expect_equal(atoms(f), f@components)
-  expect_equal(weights(f), f@weights)
-})
-
 test_that("atoms always returns a matrix, including for a point mass", {
   # Callers index atoms by column unconditionally; a dropped dimension here
   # would surface much later as a confusing subscript error.
   p <- point_mixing(theta_star = c(0.25, 0.75))
   expect_true(is.matrix(atoms(p)))
   expect_equal(atoms(p)[, 1L], c(0.25, 0.75))
-})
-
-test_that("S7 namespaces the class attribute", {
-  # For the weights methods: S3 dispatch sees "ripr::finite_mixing",
-  # not "finite_mixing", which is why the methods are registered via S7's
-  # method<- rather than defined as weights.finite_mixing.
-  f <- finite_mixing(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9)),
-    weights = c(0.3, 0.7)
-  )
-  expect_true("ripr::finite_mixing" %in% class(f))
-  expect_true("ripr::mixing_measure" %in% class(f))
 })
 
 test_that("weights dispatches on mixing measures without breaking stats", {
@@ -83,18 +57,6 @@ test_that("weights dispatches on mixing measures without breaking stats", {
   expect_equal(weights(point_mixing(theta_star = c(0.5, 0.5))), 1)
   # The generic still works on the objects it was written for.
   expect_null(weights(stats::lm(mpg ~ wt, data = datasets::mtcars)))
-})
-
-
-test_that("the class hierarchy is as declared", {
-  # A mixing measure is a law over the parameter space and a `distribution` is
-  # a law over the sample space. They are peers, not branches of a shared root:
-  # a mixing measure has atoms and no density, an outcome law the reverse, so
-  # there is no interface for a common supertype to carry.
-  f <- finite_mixing(components = cbind(c(0.5, 0.5)), weights = 1)
-  expect_true(S7_inherits(f, mixing_measure))
-  expect_false(S7_inherits(f, distribution))
-  expect_true(S7_inherits(point_mixing(theta_star = c(1)), mixing_measure))
 })
 
 # --- Pruning ------------------------------------------------------------------

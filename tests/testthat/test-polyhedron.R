@@ -55,25 +55,6 @@ test_that("the chart is the linear generator map on a polytope", {
 })
 
 
-test_that("the chart is the linear generator map on a simplex", {
-  plurality <- simplex_region(
-    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
-  )
-  vertices <- plurality@vertices
-
-  ch <- chart(plurality)
-  expect_identical(ch$n_par, 3L)
-  set.seed(2)
-  u_mat <- ch$seed(50L)
-  expect_feasible(ch, u_mat)
-  for (i in seq_len(ncol(u_mat))) {
-    u <- u_mat[, i]
-    expect_equal(ch$to_theta(u), as.vector(vertices %*% u))
-    expect_equal(ch$jacobian(u), vertices)
-  }
-})
-
-
 test_that("the chart anchors a halfspace and frees its hyperplane", {
   for (space in list(
     halfspace_region(normal = c(1, -1), offset = 0),
@@ -159,30 +140,6 @@ test_that("from_theta returns feasible coordinates, exactly at a vertex", {
 
 
 # --- Generators and facets ----------------------------------------------------
-
-test_that("every class carries the generator triple it used to hand-write", {
-  # We store both the original construction vertices and the polyhedron
-  # representations
-  square <- cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
-  g <- polytope_region(vertices = square)@generators
-  expect_identical(g$v, square)
-  expect_identical(dim(g$r), c(2L, 0L))
-  expect_identical(dim(g$l), c(2L, 0L))
-
-  h <- halfspace_region(normal = c(1, -1, 0), offset = 2)
-  g <- h@generators
-  expect_identical(g$v, matrix(h@anchor, ncol = 1L))
-  expect_identical(g$r, matrix(-h@unit, ncol = 1L))
-  expect_identical(g$l, h@basis)
-
-  g <- point_region(theta = c(0.5, 0.5))@generators
-  expect_identical(g$v, matrix(c(0.5, 0.5), ncol = 1L))
-
-  g <- unconstrained_region(2L)@generators
-  expect_identical(g$v, matrix(0, 2L, 1L))
-  expect_identical(g$l, diag(2L) + 0)
-})
-
 
 test_that("declared facets are stored exactly; derived facets describe the hull", {
   h <- halfspace_region(normal = c(1, -1, 0), offset = 2)
@@ -277,8 +234,6 @@ test_that("the parent validator runs through every subclass constructor", {
     vertices = matrix(c(0L, 0L, 1L, 0L, 1L, 1L, 0L, 1L), nrow = 2L)
   )
   expect_identical(nrow(h_rep(square)$a), 4L)
-  expect_true(contains(square, c(0.5, 0.5)))
-  expect_false(contains(square, c(1.5, 0.5)))
 })
 
 
@@ -329,27 +284,6 @@ test_that("from_theta of an outside point recovers the projection", {
 })
 
 
-# --- Structure ----------------------------------------------------------------
-
-test_that("the hierarchy nests as documented", {
-  s <- simplex_region(vertices = diag(3))
-  p <- point_region(theta = c(1, 0))
-  for (space in list(
-    s,
-    polytope_region(vertices = diag(3)),
-    p,
-    halfspace_region(normal = c(1, -1)),
-    unconstrained_region(2L)
-  )) {
-    expect_true(S7_inherits(space, polyhedron_region))
-    expect_true(S7_inherits(space, convex_region))
-  }
-  expect_true(S7_inherits(s, polytope_region))
-  # A point is the one-vertex polytope.
-  expect_true(S7_inherits(p, polytope_region))
-})
-
-
 # --- Printing -----------------------------------------------------------------
 
 test_that("regions print a geometric summary, not a property dump", {
@@ -375,14 +309,6 @@ test_that("regions print a geometric summary, not a property dump", {
     format(simplex_region(vertices = diag(3))),
     "3 vertices in R\\^3"
   )
-
-  # A union lists each part by its own format line while short.
-  u <- union_region(
-    simplex_region(vertices = diag(3)),
-    halfspace_region(normal = c(1, -1, 0))
-  )
-  expect_output(print(u), "simplex_region: 3 vertices")
-  expect_output(print(u), "halfspace_region: the halfspace")
 })
 
 

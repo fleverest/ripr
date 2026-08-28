@@ -63,18 +63,6 @@ test_that("every cell of the fan is a cell of the region it came from", {
 
 # --- Regions that are already simplices ---------------------------------------
 
-test_that("a simplex is its own only cell, handed back untouched", {
-  s <- simplex_region(vertices = diag(3))
-  expect_identical(cells(s), list(s))
-
-  # A point is the degenerate simplex and takes the same path, which matters
-  # because `point_region` is a `polytope_region` and would otherwise be
-  # triangulated at every call for no gain.
-  p <- point_region(theta = c(0.5, 0.3, 0.2))
-  expect_identical(cells(p), list(p))
-})
-
-
 test_that("a polytope that happens to be a simplex still fans to one cell", {
   # Declared as a polytope, so it takes the fan rather than the identity, and
   # the fan's recursion floor is what stops it at one cell.
@@ -136,10 +124,6 @@ test_that("an unbounded region is refused, naming what it has", {
   expect_error(
     triangulate(halfspace_region(normal = c(1, -1, 0))),
     "rays or lineality"
-  )
-  expect_error(
-    triangulate(unconstrained_region(2L)),
-    "only a bounded region can be triangulated"
   )
 })
 

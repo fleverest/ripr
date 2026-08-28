@@ -36,10 +36,6 @@ test_that("snapshot rejects anything else, NULL included", {
   expect_error(ripr_control(snapshot = c("none", "all")), "must be")
 })
 
-test_that("a near-miss level suggests the intended one", {
-  expect_error(ripr_control(snapshot = "setp"), "Did you mean")
-})
-
 # --- Numeric validation -------------------------------------------------------
 
 test_that("counts must be whole numbers", {

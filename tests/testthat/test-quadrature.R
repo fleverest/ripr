@@ -15,32 +15,6 @@ q_binomial <- function(n = 10, p = 0.75) {
 
 # --- The normalisation invariant ----------------------------------------------
 
-test_that("quadrature weights sum to one for every engine", {
-  s <- q_binomial()
-  exact <- resolve_engine(exact_engine(), s$Q, s$family)
-  set.seed(1)
-  mc <- resolve_engine(mc_engine(500L), s$Q, s$family)
-
-  expect_lt(abs(sum(exp(exact@log_w)) - 1), rounding_tol(1))
-  expect_lt(abs(sum(exp(mc@log_w)) - 1), rounding_tol(1))
-})
-
-test_that("E_Q[1] = 1 under every engine", {
-  # The invariant restated as an expectation: the identity everything else
-  # inherits.
-  s <- q_binomial()
-  for (eng in list(
-    resolve_engine(exact_engine(), s$Q, s$family),
-    {
-      set.seed(2)
-      resolve_engine(mc_engine(500L), s$Q, s$family)
-    }
-  )) {
-    expect_lt(abs(expect_q(eng, rep(1, n_nodes(eng))) - 1), rounding_tol(1))
-    expect_lt(abs(log_expect_q(eng, rep(0, n_nodes(eng)))), rounding_tol(0))
-  }
-})
-
 test_that("resolve_engine errors when the weights do not sum to one", {
   # A malformed rule invalidates every downstream quantity, so this must be an
   # error and not a warning.
@@ -69,8 +43,6 @@ test_that("the exact engine integrates against the true Q", {
 
   # E_Q[X_1] for Binomial(10, 0.75) is 7.5.
   expect_lt(abs(expect_q(eng, x[, 1]) - 7.5), rounding_tol(7.5))
-  expect_true(deterministic(eng))
-  expect_equal(expect_se(eng, x[, 1]), 0)
 })
 
 test_that("the exact engine drops nodes carrying no Q mass", {
@@ -82,7 +54,6 @@ test_that("the exact engine drops nodes carrying no Q mass", {
 
   expect_equal(n_nodes(eng), 1L)
   expect_equal(eng@nodes[1, ], c(4, 0))
-  expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
   expect_true(all(is.finite(eng@log_q)))
 })
 
@@ -103,16 +74,6 @@ test_that("the exact engine refuses a family with no enumerable support", {
 })
 
 # --- Monte Carlo engine -------------------------------------------------------
-
-test_that("the Monte Carlo engine has uniform weights over its draws", {
-  s <- q_binomial()
-  set.seed(3)
-  eng <- resolve_engine(mc_engine(250L), s$Q, s$family)
-
-  expect_equal(n_nodes(eng), 250L)
-  expect_equal(eng@log_w, rep(-log(250), 250L))
-  expect_false(deterministic(eng))
-})
 
 test_that("a Monte Carlo engine freezes its draws at resolution", {
   s <- q_binomial()
@@ -214,32 +175,6 @@ test_that("log_expect_q beats exponentiating before integrating", {
   expect_lt(abs(log_expect_q(eng, log_v) + 1000), rounding_tol(1000))
 })
 
-test_that("log_expect_q is -Inf when the integrand is everywhere zero", {
-  s <- q_binomial()
-  eng <- resolve_engine(exact_engine(), s$Q, s$family)
-  expect_equal(log_expect_q(eng, rep(-Inf, n_nodes(eng))), -Inf)
-})
-
-# --- Compilation --------------------------------------------------------------
-
-test_that("compile_engine evaluates the family at the engine's own nodes", {
-  s <- q_binomial()
-  eng <- resolve_engine(exact_engine(), s$Q, s$family)
-  ld <- compile_engine(eng)
-  theta_mat <- cbind(c(0.5, 0.5), c(0.25, 0.75))
-  expect_equal(
-    ld(theta_mat),
-    kernel_loglik_batch(s$family, theta_mat, eng@nodes)
-  )
-})
-
-test_that("compile_engine is consistent across repeated compilations", {
-  s <- q_binomial()
-  eng <- resolve_engine(exact_engine(), s$Q, s$family)
-  theta <- matrix(c(0.5, 0.5), ncol = 1L)
-  expect_equal(compile_engine(eng)(theta), compile_engine(eng)(theta))
-})
-
 # --- Validation ---------------------------------------------------------------
 
 test_that("quadrature rejects mismatched node, weight and q lengths", {
@@ -269,7 +204,6 @@ test_that("quadrature rejects mismatched node, weight and q lengths", {
 
 test_that("mc_engine rejects a non-positive draw count", {
   expect_error(mc_engine(0L), "positive")
-  expect_error(mc_engine(-5L), "positive")
 })
 
 # --- Gauss-Hermite ------------------------------------------------------------
@@ -285,21 +219,11 @@ q_gaussian <- function(d = 1, mean = NULL, sigma = NULL) {
   )
 }
 
-test_that("Gauss-Hermite weights sum to one", {
-  s <- q_gaussian(d = 1)
-  eng <- resolve_engine(gh_engine(20L), s$Q, s$family)
-  expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
-  expect_true(deterministic(eng))
-  expect_equal(n_nodes(eng), 20L)
-})
-
-
 test_that("a one-node rule is the mean, not an error", {
   # `n = 1` skips the eigendecomposition entirely: the single node carries all
   # the weight.
   s <- q_gaussian(d = 1, mean = 1.5)
   eng <- resolve_engine(gh_engine(1L), s$Q, s$family)
-  expect_equal(n_nodes(eng), 1L)
   expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
 })
 

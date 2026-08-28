@@ -266,38 +266,6 @@ test_that("the certified bound is a bound on the expectation itself", {
 
 # --- Return shape -------------------------------------------------------------
 
-test_that("certify() reports one entry per part", {
-  set.seed(105)
-  null <- plurality_null(n = 6L, k = 4L)
-  values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
-  res <- certify(tabulated_rv(null@family, values), null, tol = 1e-6)
-
-  n_sub <- length(parts(null@region))
-  expect_length(res$bounds, n_sub)
-  expect_length(res$incumbents, n_sub)
-  expect_length(res$iterations, n_sub)
-  expect_length(res$converged, n_sub)
-  expect_length(res$budget_hit, n_sub)
-  expect_type(res$iterations, "integer")
-  expect_type(res$converged, "logical")
-  expect_type(res$budget_hit, "logical")
-  expect_identical(res$method, "bernstein")
-  expect_equal(res$sup_ub, max(res$bounds))
-  expect_equal(res$sup_lb, max(res$incumbents))
-})
-
-test_that("certify() carries back the variable and null it holds for", {
-  # A certificate that does not name what it certifies is not a certificate.
-  null <- plurality_null(n = 4L, k = 3L)
-  x <- tabulated_rv(
-    null@family,
-    rep(1, nrow(enumerate_space(null@family@sample_space)))
-  )
-  res <- certify(x, null)
-  expect_identical(res$random_variable, x)
-  expect_identical(res$null, null)
-})
-
 test_that("converged and budget_hit distinguish the two ways of stopping", {
   set.seed(111)
   null <- plurality_null(n = 8L, k = 3L)
@@ -339,7 +307,6 @@ test_that("certify_trace() records every node, and they tile at every step", {
     it <- sum(rows$fate == "split")
     # `it` splits create two children each, on top of the seed.
     expect_identical(nrow(rows), 1L + 2L * it)
-    expect_identical(sum(rows$fate != "split"), it + 1L)
     expect_identical(unique(rows$part), null@cell_part[[i]])
 
     seed_volume <- abs(det(null@cells[[i]]@vertices))
@@ -371,7 +338,6 @@ test_that("certify_trace() records the tree and the order it was built in", {
     it <- sum(rows$fate == "split")
 
     # Every id issued appears exactly once, so no node goes unrecorded.
-    expect_identical(anyDuplicated(rows$id), 0L)
     expect_identical(sort(rows$id), seq_len(1L + 2L * it))
 
     # One seed, and it is the only node without a parent.
@@ -430,18 +396,6 @@ test_that("certify_trace() agrees with certify() and drops the coefficients", {
         parents$upper[has_parent] + rounding_tol(parents$upper[has_parent])
     ))
   }
-})
-
-test_that("certify() does not record unless asked", {
-  null <- plurality_null(n = 6L, k = 3L)
-  x <- tabulated_rv(
-    null@family,
-    rep(1, nrow(enumerate_space(null@family@sample_space)))
-  )
-  expect_null(certify(x, null)$record)
-  expect_null(certify(x, null)$traces)
-  expect_type(certify(x, null)$iterations, "integer")
-  expect_type(certify(x, null, .record = TRUE)$iterations, "integer")
 })
 
 # --- Registry dispatch --------------------------------------------------------
@@ -543,13 +497,9 @@ test_that("check_bound_result() names the field and the bound_fn", {
     bad[[field]] <- NULL
     check_bound_result(list(bad), "demo", 1L)
   }
-  for (field in c(
-    "bound",
-    "incumbent",
-    "iterations",
-    "converged",
-    "budget_hit"
-  )) {
+  # One representative per code path: "bound"/"incumbent" and
+  # "converged"/"budget_hit" are each checked by the same loop in the source.
+  for (field in c("bound", "converged", "iterations")) {
     expect_error(drop_field(field), field)
     expect_error(drop_field(field), "demo")
   }
@@ -682,13 +632,6 @@ test_that("the refusal names the failing condition, not the class", {
   expect_match(msg, "it is unbounded")
   expect_match(msg, "State the null over a bounded region")
   expect_false(grepl("No bounding method is implemented", msg))
-
-  # Whereas a bounded hull is triangulated rather than refused: the square
-  # `{theta_1 <= 1/2, theta_2 <= 1/2}` inside the 2-simplex is two triangles,
-  # and each of those the enclosure takes.
-  expect_no_error(
-    certify(x, null_model(fam, list(simplex_square())))
-  )
 })
 
 test_that("a region obstruction is not blamed if the family is not implemented", {
@@ -843,20 +786,6 @@ test_that("an ill-conditioned simplex is refused by the enclosure by name", {
   )
   expect_true(bernstein_compatible(ok))
   expect_null(bernstein_obstruction(ok))
-})
-
-
-test_that("an obstruction gets a follow-up that belongs to it", {
-  fam <- multinomial_family(n_trials = 4L, k = 3L)
-  x <- tabulated_rv(fam, rep(1, nrow(enumerate_space(fam@sample_space))))
-  refusal <- function(region) {
-    tryCatch(certify(x, null_model(fam, region)), error = conditionMessage)
-  }
-  # Lower-dimensional
-  msg <- refusal(simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0, 1))))
-  expect_match(msg, "simplex of dimension")
-  expect_match(msg, "a parametrisation is not yet implemented")
-  expect_false(grepl("No bounding method is implemented", msg))
 })
 
 

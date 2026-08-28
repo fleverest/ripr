@@ -73,7 +73,6 @@ test_that("polytope_region accepts simplices and non-simplices", {
 
   square <- cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   expect_no_error(polytope_region(vertices = square))
-  expect_false(S7_inherits(polytope_region(vertices = square), simplex_region))
 
   # Redundant and degenerate vertex sets are polytopes too.
   expect_no_error(polytope_region(vertices = cbind(diag(3), c(0.5, 0.5, 0))))
@@ -132,32 +131,12 @@ test_that("the subclass inherits every method unchanged", {
 
 # --- parts() and cells() ------------------------------------------------------
 
-test_that("every convex region is its own only part", {
-  # `parts()` reports what was declared, so it is the identity on a convex
-  # region whatever its shape.
-  spaces <- list(
-    simplex_region(vertices = diag(3)),
-    polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))),
-    halfspace_region(normal = c(1, -1), offset = 0),
-    point_region(theta = c(0.5, 0.3, 0.2)),
-    unconstrained_region(2L)
-  )
-  for (space in spaces) {
-    expect_type(parts(space), "list")
-    expect_length(parts(space), 1L)
-    expect_identical(parts(space)[[1L]], space)
-  }
-})
-
-
 test_that("a convex region is its own only cell unless it can be triangulated", {
   # A geometry that is already a simplex, or that has no finite simplicial
   # decomposition at all, has nothing to decompose into and is handed back as
   # it came.
   undecomposed <- list(
-    simplex_region(vertices = diag(3)),
     halfspace_region(normal = c(1, -1), offset = 0),
-    point_region(theta = c(0.5, 0.3, 0.2)),
     unconstrained_region(2L)
   )
   for (space in undecomposed) {

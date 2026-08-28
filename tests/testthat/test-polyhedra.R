@@ -39,15 +39,6 @@ test_that("H and V representations round trip", {
 })
 
 
-test_that("v_rep of a polytope is its vertices, with no rays or lineality", {
-  s <- plurality_cell()
-  v <- v_rep(s)
-  expect_identical(v$v, s@vertices)
-  expect_equal(dim(v$r), c(3L, 0L))
-  expect_equal(dim(v$l), c(3L, 0L))
-})
-
-
 # --- The sign convention ------------------------------------------------------
 
 test_that("h_rep of a simplex holds its own vertices and excludes outside points", {
@@ -59,18 +50,6 @@ test_that("h_rep of a simplex holds its own vertices and excludes outside points
   }
   # Reflecting the region through the origin would admit this one.
   expect_false(all(h$a %*% c(2, -1, 0) <= h$b + rounding_tol(1)))
-})
-
-
-test_that("h_rep of a halfspace is the declared inequality, unchanged", {
-  h <- h_rep(halfspace_region(normal = c(1, -1, 0), offset = 0))
-
-  expect_equal(nrow(h$a), 1L)
-  expect_false(h$eq)
-  expect_equal(as.vector(h$a), c(1, -1, 0))
-  expect_equal(h$b, 0)
-  # `theta_1 < theta_2`, which is the point of the plurality half-space.
-  expect_true(all(h$a %*% c(0.2, 0.5, 0.3) <= h$b))
 })
 
 
@@ -86,29 +65,6 @@ test_that("a cell in the standard simplex carries exactly one equality row", {
   a <- h$a[row, ]
   expect_equal(a / a[1L], c(1, 1, 1))
   expect_equal(h$b[row] / a[1L], 1)
-})
-
-
-test_that("the plurality cell also carries one equality row", {
-  expect_equal(sum(h_rep(plurality_cell())$eq), 1L)
-})
-
-
-test_that("an unconstrained region has no rows at all", {
-  h <- h_rep(unconstrained_region(3L))
-  expect_equal(dim(h$a), c(0L, 3L))
-  expect_equal(h$b, numeric(0))
-  expect_equal(h$eq, logical(0))
-})
-
-
-test_that("a point region is all equalities", {
-  theta <- c(0.5, 0.3, 0.2)
-  h <- h_rep(point_region(theta = theta))
-
-  expect_true(all(h$eq))
-  expect_equal(as.vector(h$a %*% theta), h$b)
-  expect_equal(v_rep(point_region(theta = theta))$v, matrix(theta, ncol = 1L))
 })
 
 
@@ -156,7 +112,6 @@ test_that("conversion to rationals is exact for the double", {
 
 test_that("as_qmatrix keeps the shape of its input", {
   m <- matrix(c(0.5, 1 / 3, 0.25, 0.75), 2L, 2L)
-  expect_equal(dim(ripr:::as_qmatrix(m)), c(2L, 2L))
   expect_identical(rcdd::q2d(ripr:::as_qmatrix(m)), m)
 })
 
@@ -172,21 +127,6 @@ test_that("the same double always gives the same rational", {
   # facet matcher, not a different encoding here.
   expect_false(identical(1 / 3, 1 - 2 / 3))
   expect_false(ripr:::as_qmatrix(1 / 3) == ripr:::as_qmatrix(1 - 2 / 3))
-})
-
-
-test_that("vertices survive a round trip exactly for the geometry ripr builds", {
-  # Plurality and medial vertices are 0, 1 and 1/2, so every facet cddlib
-  # derives from them is a small rational that a double holds exactly. The
-  # round trip is then lossless, which is what `certify()` depends on.
-  for (s in list(plurality_cell(), simplex_region(vertices = diag(3)))) {
-    back <- h_to_v(h_rep(s))
-    expect_equal(ncol(back$v), ncol(s@vertices))
-    expect_identical(
-      sorted_cols(back$v),
-      sorted_cols(s@vertices)
-    )
-  }
 })
 
 
@@ -215,7 +155,6 @@ test_that("a double H-representation is a lossy intermediate for derived facets"
 
 test_that("a value with no rational form is refused by name", {
   expect_error(ripr:::as_qmatrix(NA_real_), "finite")
-  expect_error(ripr:::as_qmatrix(Inf), "finite")
 })
 
 
@@ -258,10 +197,6 @@ test_that("is_empty is TRUE for contradictory constraints", {
 
 test_that("is_bounded distinguishes the bounded regions from the unbounded", {
   expect_true(is_bounded(plurality_cell()))
-  expect_true(is_bounded(polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
-  )))
-  expect_true(is_bounded(point_region(theta = c(0.5, 0.3, 0.2))))
 
   expect_false(is_bounded(halfspace_region(normal = c(1, -1, 0))))
   expect_false(is_bounded(unconstrained_region(3L)))

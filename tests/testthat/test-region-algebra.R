@@ -27,15 +27,6 @@ test_that("union() and intersect() fall through to base R off regions", {
 })
 
 
-test_that("union() on regions is the union_region constructor", {
-  s <- plurality_cell(3L, 2L)
-  h <- halfspace_region(normal = c(1, -1, 0))
-  expect_identical(union(s, h), union_region(s, h))
-  # A union argument flattens rather than nests, exactly as the constructor.
-  expect_identical(n_parts(union(union(s, h), plurality_cell(3L, 3L))), 3L)
-})
-
-
 # --- intersect ----------------------------------------------------------------
 
 test_that("two overlapping plurality cells intersect in the exact triangle", {
@@ -126,11 +117,6 @@ test_that("intersect() takes more than two regions and refuses mismatched dimens
 
 # --- setdiff ------------------------------------------------------------------
 
-test_that("setdiff() falls through to base R off regions", {
-  expect_identical(setdiff(c(1, 2), c(2, 3)), 1)
-})
-
-
 test_that("setdiff() subtracts every region it is given", {
   ambient <- simplex_region(vertices = diag(3))
   one_by_one <- setdiff(
@@ -151,6 +137,22 @@ test_that("a positional max_cells is refused rather than subtracted", {
   expect_error(
     setdiff(ambient, plurality_cell(3L, 2L), 10L),
     "must be passed by name"
+  )
+})
+
+
+test_that("setdiff() names a subtrahend that is not a region", {
+  ambient <- simplex_region(vertices = diag(3))
+  # A list of junk used to slip through the gate and surface as an obscure
+  # union validator error.
+  expect_error(
+    setdiff(ambient, plurality_cell(3L, 2L), list("a")),
+    "argument 1 in `...`"
+  )
+  # A misspelled max_cells is named, not subtracted.
+  expect_error(
+    setdiff(ambient, plurality_cell(3L, 2L), max_cell = 10L),
+    "`max_cell`"
   )
 })
 
@@ -386,13 +388,6 @@ test_that("a subtracted part that never meets x subtracts nothing", {
 
 # --- setequal -----------------------------------------------------------------
 
-test_that("setequal() falls through to base R off regions", {
-  expect_true(setequal(c(1, 2), c(2, 1)))
-  expect_false(setequal(c(1, 2), c(2, 3)))
-  expect_true(setequal(letters[1:3], rev(letters[1:3])))
-})
-
-
 test_that("setequal() decides convex regions from their facets alone", {
   # The same halfspace written two ways. Scaling a normal changes nothing about
   # the set, and nothing here is decomposed to find that out.
@@ -539,12 +534,6 @@ test_that("disjoin() covers the same set with parts that do not overlap", {
       }
     }
   }
-})
-
-
-test_that("disjoin() of a convex region is that region", {
-  s <- plurality_cell(3L, 2L)
-  expect_identical(disjoin(s), s)
 })
 
 

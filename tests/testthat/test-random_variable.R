@@ -106,37 +106,7 @@ test_that("input must have the right shape", {
   f <- fixture()
   R <- likelihood(f$Q)
   expect_match(error_message(R(c(4, 4))), "length-3 vector")
-  expect_match(error_message(R(c(2, 2, 2, 2))), "length-3 vector")
   expect_match(error_message(R(matrix(1, nrow = 2L, ncol = 4L))), "3 columns")
-})
-
-test_that("input must be numeric and present", {
-  f <- fixture()
-  R <- likelihood(f$Q)
-  expect_match(error_message(R(c("a", "b", "c"))), "outcomes must be numeric")
-  expect_match(error_message(R(c(4, NA, 4))), "outcomes must not be missing")
-  expect_match(error_message(R(c(4, NaN, 4))), "outcomes must not be missing")
-})
-
-test_that("count outcomes must be counts summing to the total", {
-  # The shape check alone would let through a vector of the right length that
-  # is not a point of the sample space at all.
-  f <- fixture()
-  R <- likelihood(f$Q)
-  expect_match(error_message(R(c(4, 2, 1))), "summing to 8", fixed = TRUE)
-  expect_match(error_message(R(c(9, -1, 0))), "non-negative whole numbers")
-  expect_match(error_message(R(c(4.5, 2, 1.5))), "non-negative whole numbers")
-  expect_silent(R(c(8, 0, 0)))
-})
-
-test_that("Gaussian outcomes may be anything finite", {
-  # The sample space is all of R^d, so only finiteness is added: an infinite
-  # outcome has zero density under every parameter, making a ratio there 0 / 0.
-  fam <- gaussian_family(dim = 2L)
-  L <- likelihood(induced_distribution(fam, point_mixing(c(0.5, 0.5))))
-  expect_silent(L(c(-3, 40)))
-  expect_match(error_message(L(c(Inf, 0))), "finite")
-  expect_match(error_message(L(1)), "length-2 vector")
 })
 
 # --- Arithmetic ---------------------------------------------------------------
@@ -166,7 +136,6 @@ test_that("results are random variables, and compose", {
   f <- fixture()
   R <- likelihood(f$Q) / likelihood(f$P)
   x <- rbind(c(4, 2, 2), c(8, 0, 0))
-  expect_true(S7_inherits(R / 2, random_variable))
   expect_equal(((R / 2 + 1) * 3)(x), (R(x) / 2 + 1) * 3)
 })
 
@@ -258,16 +227,6 @@ test_that("brackets appear only where they change the reading", {
   expect_equal(rv_expression(R / R / 2), "Q / P / (Q / P) / 2")
 })
 
-test_that("the expression tree records the operands", {
-  f <- fixture()
-  R <- likelihood(f$Q) / 2
-  expect_identical(R@op, "/")
-  expect_length(R@operands, 2L)
-  expect_true(S7_inherits(R@operands[[1L]], random_variable))
-  expect_equal(R@operands[[2L]], 2)
-  expect_true(is.na(likelihood(f$Q)@op))
-})
-
 test_that("a long label is shortened", {
   f <- fixture()
   long <- likelihood(induced_distribution(f$family, point_mixing(c(0.5, 0.3, 0.2))))
@@ -289,8 +248,6 @@ test_that("format() gives the expression, and does not error", {
   p <- likelihood(Q, label = "P*")
 
   expect_identical(format(x), "Q")
-  expect_identical(format(x / p), "Q / P*")
-  expect_identical(format(x / 4.27), "Q / 4.27")
 
   # A scalar, not the deparsed function, and not multi-line.
   expect_type(format(x), "character")

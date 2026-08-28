@@ -4,16 +4,13 @@
 \alias{simplex_region}
 \title{A simplex: an affinely independent vertex set}
 \usage{
-simplex_region(vertices, facets = NULL)
+simplex_region(vertices = NULL, .hv = NULL)
 }
 \arguments{
 \item{vertices}{\verb{(d, V)} numeric matrix, one vertex per column.}
 
-\item{facets}{Optionally, the half-space description already known to the
-caller, exactly as \code{\link[=polyhedron_region]{polyhedron_region()}} takes it; derived from the
-vertices when \code{NULL}. Set algebra operations supply the exact rows here:
-facets re-derived from \emph{rounded} vertices can change the combinatorics
-outright when the vertices are nearly degenerate.}
+\item{.hv}{Internal only: the underlying dual-representation record in both
+double and rational representation.}
 }
 \value{
 A \code{simplex_region}, which is also a \code{\link[=polytope_region]{polytope_region()}}.

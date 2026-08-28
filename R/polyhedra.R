@@ -514,6 +514,119 @@ q_facets <- function(v) {
 }
 
 
+# --- The dual-representation record -------------------------------------------
+
+#' All internal representations of a convex polyhedron
+#'
+#' Both H- and V- representations, in both double and rational form.
+#' The `polyhedron_region` base class is built on this.
+#'
+#' \describe{
+#'   \item{`h`}{Double facet list `(a, b, eq)`, or `NULL`.}
+#'   \item{`v`}{Double generator triple `list(v, r, l)`.}
+#'   \item{`qh`}{Rational H-matrix, or `NULL`.}
+#'   \item{`qv`}{Rational V-matrix.}
+#' }
+#' @keywords internal
+#' @noRd
+hv_region <- new_class(
+  "hv_region",
+  properties = list(
+    h = class_any,
+    v = class_list,
+    qh = class_any,
+    qv = class_any
+  )
+)
+
+
+#' `hv_region` from a rational H-representation
+#'
+#' Does 3 things:
+#' 1. remove redundancy from the H-rep
+#' 2. computes V-rep
+#' 3. Returns the internal `hv_region`.
+#' @keywords internal
+#' @noRd
+hv_from_qh <- function(qh) {
+  qh <- q_nonredundant(qh)
+  qv <- q_scdd(qh)
+  hv_region(
+    h = from_hmatrix(qh),
+    v = with_origin_vertex(from_vmatrix(qv)),
+    qh = qh,
+    qv = qv
+  )
+}
+
+
+#' `hv_region` from a rational V-representation
+#'
+#' Does two things:
+#' 1. compute H-rep
+#' 2. return internal `hv_region`
+#'
+#' @keywords internal
+#' @noRd
+hv_from_qv <- function(qv) {
+  qh <- q_scdd(qv)
+  hv_region(
+    h = from_hmatrix(qh),
+    v = with_origin_vertex(from_vmatrix(qv)),
+    qh = qh,
+    qv = qv
+  )
+}
+
+
+#' `hv_region` from a double V-representation
+#'
+#' Does 3 things:
+#' 1. Converts double V-rep to rational
+#' 2. Derives the corresponding H-rep
+#' 3. Gets a double H-rep to complete the `hv_region`
+#'
+#' `derive_qfacets()` may return null if there are too many generators.
+#' `q_hrep()` derives on demand.
+#' @keywords internal
+#' @noRd
+hv_from_v <- function(g) {
+  qv <- as_vmatrix(g)
+  qh <- derive_qfacets(qv, ncol(g$v) + ncol(g$r) + ncol(g$l))
+  hv_region(
+    h = if (!is.null(qh)) from_hmatrix(qh),
+    v = g,
+    qh = qh,
+    qv = qv
+  )
+}
+
+
+#' `hv_region` from a double H-representation
+#'
+#' Does 3 things:
+#' 1. derive rational H-rep
+#' 2. derive rational V-rep from 1.
+#' 3. derive double V-rep from rational V-rep -- unless `v` supplies one.
+#'
+#' `v` is permitted as an override for, e.g. halfspace anchors where the normal
+#' plus offset is equivalently interpreted as V- and H- representations, so
+#' keeping double values equal presents better, where converting from the
+#' derived V-rep may cause them to diverge a tiny amount.
+#' @keywords internal
+#' @noRd
+hv_from_h <- function(h, v = NULL) {
+  qh <- as_hmatrix(h)
+  qv <- q_scdd(qh)
+  hv_region(
+    h = h,
+    v = if (is.null(v)) with_origin_vertex(from_vmatrix(qv)) else v,
+    qh = qh,
+    qv = qv
+  )
+}
+
+
 # --- The double description itself --------------------------------------------
 
 #' Convert a V list to a package-native H list
@@ -524,17 +637,7 @@ v_to_h <- function(v) {
 }
 
 
-#' Convert a H list to a package-native V list
-#' @keywords internal
-#' @noRd
-h_to_v <- function(h) {
-  from_vmatrix(q_scdd(as_hmatrix(h)))
-}
-
-
 #' An empty generator block of the right ambient dimension
 #' @keywords internal
 #' @noRd
 no_generators <- function(d) matrix(numeric(0), nrow = d, ncol = 0L)
-
-

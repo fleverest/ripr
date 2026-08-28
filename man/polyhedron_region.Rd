@@ -6,7 +6,7 @@
 \alias{print,ripr::polyhedron_region-method}
 \title{A convex polyhedron given by its generators}
 \usage{
-polyhedron_region(vertices = NULL, rays = NULL, lines = NULL, facets = NULL)
+polyhedron_region(vertices = NULL, rays = NULL, lines = NULL, .hv = NULL)
 }
 \arguments{
 \item{vertices}{\verb{(d, nv)} numeric matrix, one vertex per column, or \code{NULL}
@@ -17,10 +17,7 @@ for a cone anchored at the origin.}
 \item{lines}{\verb{(d, nl)} numeric matrix spanning the lineality space, or
 \code{NULL}.}
 
-\item{facets}{Optionally, the half-space description already known to the
-caller: a list with \code{a} (\verb{(m, d)} matrix), \code{b} (length \code{m}) and \code{eq}
-(logical, length \code{m}), read as \code{a \%*\% theta <= b} with \code{eq} flagging
-equality rows.}
+\item{.hv}{Internal use only.}
 }
 \value{
 A \code{polyhedron_region}.
@@ -53,14 +50,15 @@ Theorem 1.2).
 
 \describe{
 \item{\code{generators}}{\code{list(v, r, l)} of numeric matrices, one generator
-per column.}
-\item{\code{facets}}{The half-space description as above, or \code{NULL} when it has
-not been derived.}
-\item{\code{q_cache}}{The exact rational representations, set at
-construction: for a declared region the exact rationals of its doubles,
-and for a region the set algebra produced, the exact cell itself -- so
-further algebra never starts from a rounding. \code{h} is \code{NULL} only above
-the facet guard.}
+per column. Read-only: derived from the static underlying record.}
+\item{\code{facets}}{The half-space description \verb{(A, B, eq)}, read as
+\code{a \%*\% theta <= b} for each row, with \code{eq} flagging when equality
+should hold rather than inequality for each row. \code{facets} may be \code{NULL}
+if it has not yet been derived. Read-only.}
+\item{\code{hv}}{The internal dual-representation record the views above
+read from, holding both descriptions in both double and rational forms.
+This is computed once at construction so that downstream computations
+don't start from a rounding.
 }
 }
 

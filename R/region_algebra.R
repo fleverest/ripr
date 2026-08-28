@@ -13,34 +13,22 @@ NULL
 #' @keywords internal
 #' @noRd
 region_from_qh <- function(qh) {
-  qh <- q_nonredundant(qh)
-  qv <- q_scdd(qh)
-  g <- with_origin_vertex(from_vmatrix(qv))
-  facets <- from_hmatrix(qh)
-  n_v <- ncol(g$v)
-  d <- nrow(g$v)
+  hv <- hv_from_qh(qh)
+  n_v <- ncol(hv@v$v)
+  d <- nrow(hv@v$v)
 
-  # Check if the region is a polytope or simplex
-  bounded <- ncol(g$r) == 0L && ncol(g$l) == 0L
-  simplex <- n_v <= d + 1L && d - sum(facets$eq) == n_v - 1L
-  out <- if (bounded) {
+  # Check if the region is a polytope or simplex.
+  bounded <- ncol(hv@v$r) == 0L && ncol(hv@v$l) == 0L
+  simplex <- n_v <= d + 1L && d - sum(hv@h$eq) == n_v - 1L
+  if (bounded) {
     if (simplex) {
-      simplex_region(vertices = g$v, facets = facets)
+      simplex_region(.hv = hv)
     } else {
-      polytope_region(vertices = g$v, facets = facets)
+      polytope_region(.hv = hv)
     }
   } else {
-    polyhedron_region(
-      vertices = g$v,
-      rays = g$r,
-      lines = g$l,
-      facets = facets
-    )
+    polyhedron_region(.hv = hv)
   }
-  # The cell remembers its exact representations, so that algebra composed on
-  # this cell uses the known rational representation rather than rounding.
-  out@q_cache <- list(h = qh, v = qv)
-  out
 }
 
 

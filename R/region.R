@@ -71,8 +71,7 @@ n_parts <- function(space) length(parts(space))
 # Every region is list-like over its parts, so the results of the set algebra
 # read uniformly whether one cell survived (a bare convex region), several (a
 # union), or none (NULL): `length()` is 1, n, or 0, and `x[[i]]`, `x[i]`,
-# `lapply()` work on all of them. `for` cannot iterate an S7 object -- loop
-# over `parts(x)` or `as.list(x)` instead.
+# `lapply()` work on all of them.
 
 #' @rdname parts
 #' @usage NULL
@@ -573,12 +572,10 @@ make_generators <- function(vertices, rays, lines) {
 #' Derive the exact facet matrix at construction, within a size guard
 #'
 #' Facet count is combinatorial in the generator count in the worst case, and
-#' the construction-time measurements stop at 16 vertices in R^5. Above
-#' `guard` generators -- columns: one generator per column, as everywhere in
-#' the package -- the constructor leaves `@facets` NULL and `h_rep()` derives
-#' on demand instead. Returns the rational matrix rather than doubles: the
-#' constructor stores it in `@q_cache` so the exact work is kept, not
-#' recomputed the first time the set algebra asks.
+#' the construction-time measurements stop at 16 vertices in R^5. The
+#' constructor leaves `@facets` NULL and `h_rep()` derives on demand instead.
+#' Returns the rational matrix directly. The record keeps it, so the exact work
+#' is done once rather than recomputed.
 #' @keywords internal
 #' @noRd
 derive_qfacets <- function(qv, n_generators, guard = 100L) {
@@ -614,22 +611,20 @@ derive_qfacets <- function(qv, n_generators, guard = 100L) {
 #' @param rays `(d, nr)` numeric matrix of recession directions, or `NULL`.
 #' @param lines `(d, nl)` numeric matrix spanning the lineality space, or
 #'   `NULL`.
-#' @param facets Optionally, the half-space description already known to the
-#'   caller: a list with `a` (`(m, d)` matrix), `b` (length `m`) and `eq`
-#'   (logical, length `m`), read as `a %*% theta <= b` with `eq` flagging
-#'   equality rows.
+#' @param .hv Internal use only.
 #' @return A `polyhedron_region`.
 #' @section Properties:
 #' \describe{
 #'   \item{`generators`}{`list(v, r, l)` of numeric matrices, one generator
-#'   per column.}
-#'   \item{`facets`}{The half-space description as above, or `NULL` when it has
-#'   not been derived.}
-#'   \item{`q_cache`}{The exact rational representations, set at
-#'   construction: for a declared region the exact rationals of its doubles,
-#'   and for a region the set algebra produced, the exact cell itself -- so
-#'   further algebra never starts from a rounding. `h` is `NULL` only above
-#'   the facet guard.}
+#'   per column. Read-only: derived from the static underlying record.}
+#'   \item{`facets`}{The half-space description `(A, B, eq)`, read as
+#'   `a %*% theta <= b` for each row, with `eq` flagging when equality
+#'   should hold rather than inequality for each row. `facets` may be `NULL`
+#'   if it has not yet been derived. Read-only.}
+#'   \item{`hv`}{The internal dual-representation record the views above
+#'   read from, holding both descriptions in both double and rational forms.
+#'   This is computed once at construction so that downstream computations
+#'   don't start from a rounding.
 #' }
 #' @references
 #'   \insertRef{Ziegler1995}{ripr}
@@ -651,34 +646,36 @@ polyhedron_region <- new_class(
   "polyhedron_region",
   parent = convex_region,
   properties = list(
-    generators = class_list,
-    facets = class_any,
-    q_cache = class_any
+    hv = hv_region,
+    generators = new_property(
+      class_list,
+      getter = function(self) self@hv@v
+    ),
+    facets = new_property(
+      class_any,
+      getter = function(self) self@hv@h
+    )
   ),
   constructor = function(
     vertices = NULL,
     rays = NULL,
     lines = NULL,
-    facets = NULL
+    .hv = NULL
   ) {
-    g <- make_generators(vertices, rays, lines)
+    if (!is.null(.hv)) {
+      if (!is.null(vertices) || !is.null(rays) || !is.null(lines)) {
+        stop(
+          "generators and `.hv` cannot both be given: the record already ",
+          "carries the generators.",
+          call. = FALSE
+        )
+      }
+      return(new_object(S7_object(), hv = .hv))
+    }
     # Every region carries its exact rational representations, generated at
     # construction. This way set operations stay exact.
-    qv <- as_vmatrix(g)
-    qh <- if (is.null(facets)) {
-      derive_qfacets(qv, ncol(g$v) + ncol(g$r) + ncol(g$l))
-    } else {
-      as_hmatrix(facets)
-    }
-    if (is.null(facets) && !is.null(qh)) {
-      facets <- from_hmatrix(qh)
-    }
-    new_object(
-      S7_object(),
-      generators = g,
-      facets = facets,
-      q_cache = list(h = qh, v = qv)
-    )
+    g <- make_generators(vertices, rays, lines)
+    new_object(S7_object(), hv = hv_from_v(g))
   },
   validator = function(self) {
     g <- self@generators
@@ -759,13 +756,7 @@ h_region <- function(a, b, eq = FALSE) {
       call. = FALSE
     )
   }
-  g <- h_to_v(h)
-  polyhedron_region(
-    vertices = g$v,
-    rays = g$r,
-    lines = g$l,
-    facets = h
-  )
+  polyhedron_region(.hv = hv_from_h(h))
 }
 
 
@@ -782,11 +773,7 @@ method(v_rep, polyhedron_region) <- function(space) {
 
 
 method(q_vrep, polyhedron_region) <- function(space) {
-  cache <- space@q_cache
-  if (!is.null(cache$v)) {
-    return(cache$v)
-  }
-  as_vmatrix(v_rep(space))
+  space@hv@qv
 }
 
 
@@ -799,15 +786,13 @@ method(h_rep, polyhedron_region) <- function(space) {
 }
 
 
-# A facet *derived* from vertex rep in general position is an exact rational a
-# double cannot hold, so the rational H-representation always re-runs the
-# exact conversion rather than re-rationalising the stored double `@facets`.
-# Can override this with `as_hmatrix(h_rep(space))` when the facets are,
-# declared directly by the user, for them it is exact and cheaper.
+# The record already holds the exact H whenever one was derived; only above
+# the facet guard is it absent, and a facet *derived* from a vertex rep in
+# general position is an exact rational a double cannot hold, so the on-demand
+# path re-runs the exact conversion rather than re-rationalising `@facets`.
 method(q_hrep, polyhedron_region) <- function(space) {
-  cache <- space@q_cache
-  if (!is.null(cache$h)) {
-    return(cache$h)
+  if (!is.null(space@hv@qh)) {
+    return(space@hv@qh)
   }
   # Only above the facet guard: the exact H was never derived, so derive on
   # demand without keeping it (S7 value semantics leave nowhere to put it).
@@ -1053,11 +1038,8 @@ method(chart, polyhedron_region) <- function(space) {
 #' simplices by a vertex fan triangulation. A square gives two triangles; a
 #' pentagon, three.
 #' @param vertices `(d, V)` numeric matrix, one vertex per column.
-#' @param facets Optionally, the half-space description already known to the
-#'   caller, exactly as [polyhedron_region()] takes it; derived from the
-#'   vertices when `NULL`. Set algebra operations supply the exact rows here:
-#'   facets re-derived from *rounded* vertices can change the combinatorics
-#'   outright when the vertices are nearly degenerate.
+#' @param .hv Internal only: the underlying dual-representation record in both
+#'   double and rational representation.
 #' @return A `polytope_region`, which is also a [polyhedron_region()] with
 #'   empty ray and lineality blocks.
 #' @examples
@@ -1077,7 +1059,10 @@ polytope_region <- new_class(
       getter = function(self) ncol(self@generators$v)
     )
   ),
-  constructor = function(vertices, facets = NULL) {
+  constructor = function(vertices = NULL, .hv = NULL) {
+    if (!is.null(.hv)) {
+      return(new_object(polyhedron_region(.hv = .hv)))
+    }
     if (!is.matrix(vertices) || ncol(vertices) == 0L) {
       stop(
         "`vertices` must be a matrix with one vertex per column.",
@@ -1087,7 +1072,7 @@ polytope_region <- new_class(
     if (!all(is.finite(vertices))) {
       stop("`vertices` must all be finite.", call. = FALSE)
     }
-    new_object(polyhedron_region(vertices = vertices, facets = facets))
+    new_object(polyhedron_region(vertices = vertices))
   },
   validator = function(self) {
     if (ncol(self@generators$r) > 0L || ncol(self@generators$l) > 0L) {
@@ -1153,10 +1138,10 @@ simplex_region <- new_class(
     }
     if (n_v > 1L) {
       # Affine independence
-      eq_rows <- if (is.null(self@facets)) {
-        sum(q_hrep(self)[, 1L] == "1")
-      } else {
+      eq_rows <- if (!is.null(self@facets)) {
         sum(self@facets$eq)
+      } else {
+        sum(q_hrep(self)[, 1L] == "1")
       }
       hull_dim <- d - eq_rows
       if (hull_dim != n_v - 1L) {
@@ -1172,8 +1157,11 @@ simplex_region <- new_class(
     }
     NULL
   },
-  constructor = function(vertices, facets = NULL) {
-    new_object(polytope_region(vertices = vertices, facets = facets))
+  constructor = function(vertices = NULL, .hv = NULL) {
+    if (!is.null(.hv)) {
+      return(new_object(polytope_region(.hv = .hv)))
+    }
+    new_object(polytope_region(vertices = vertices))
   }
 )
 
@@ -1244,15 +1232,19 @@ halfspace_region <- new_class(
     }
     new_object(
       polyhedron_region(
-        # The foot of the normal on the bounding hyperplane, the outward
-        # direction as the one ray, and an orthonormal basis of the hyperplane,
-        # which is exactly the lineality space.
-        vertices = matrix(anchor, ncol = 1L),
-        rays = matrix(-unit, ncol = 1L),
-        lines = if (d >= 2L) basis else NULL,
-        # The caller's own inequality, exactly: deriving it back from the
-        # QR-computed basis through cddlib would be strictly less exact.
-        facets = list(a = matrix(normal, nrow = 1L), b = offset, eq = FALSE)
+        .hv = hv_from_h(
+          # Computed from the callers input interpreted as a H-rep.
+          # Not interpreting as V-rep because of potential lossy conversions.
+          h = list(a = matrix(normal, nrow = 1L), b = offset, eq = FALSE),
+          # We override the V-rep double representation because mathematically
+          # the H- and V-reps share equivalent numbers, but floating-point
+          # magic can perturb.
+          v = make_generators(
+            vertices = matrix(anchor, ncol = 1L),
+            rays = matrix(-unit, ncol = 1L),
+            lines = if (d >= 2L) basis else NULL
+          )
+        )
       ),
       normal = normal,
       offset = offset,
@@ -1313,8 +1305,10 @@ point_region <- new_class(
     # The exact facets `theta_i == b_i`, rather than letting the polytope
     # constructor derive rows that describe the same point less directly.
     new_object(polytope_region(
-      vertices = matrix(theta, ncol = 1L),
-      facets = list(a = diag(d), b = theta, eq = rep(TRUE, d))
+      .hv = hv_from_h(
+        h = list(a = diag(d), b = theta, eq = rep(TRUE, d)),
+        v = make_generators(matrix(theta, ncol = 1L), NULL, NULL)
+      )
     ))
   },
   validator = function(self) {
@@ -1371,16 +1365,17 @@ unconstrained_region <- new_class(
     )
     new_object(
       polyhedron_region(
-        vertices = matrix(0, nrow = d, ncol = 1L),
-        lines = diag(d),
-        # A caller reading facets wants to be told there are none. `q_hrep()`
-        # states the same region to cddlib as the trivially true row
-        # `0 . x <= 1`, via `as_hmatrix()`'s zero-row branch, because cddlib
-        # needs a row to work with.
-        facets = list(
-          a = matrix(numeric(0), nrow = 0L, ncol = d),
-          b = numeric(0),
-          eq = logical(0)
+        .hv = hv_from_h(
+          # A caller reading facets wants to be told there are none.
+          # `q_hrep()` states the same region to cddlib as the trivially true
+          # row `0 . x <= 1`, via `as_hmatrix()`'s zero-row branch, because
+          # cddlib needs a row to work with.
+          h = list(
+            a = matrix(numeric(0), nrow = 0L, ncol = d),
+            b = numeric(0),
+            eq = logical(0)
+          ),
+          v = make_generators(matrix(0, nrow = d, ncol = 1L), NULL, diag(d))
         )
       )
     )

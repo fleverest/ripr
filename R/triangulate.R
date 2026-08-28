@@ -103,16 +103,10 @@ fan_cells <- function(qv, budget) {
 #' @keywords internal
 #' @noRd
 simplex_from_qv <- function(qv) {
-  qh <- q_scdd(qv)
-  out <- simplex_region(
-    vertices = from_vmatrix(qv)$v,
-    facets = from_hmatrix(qh)
-  )
   # As in `region_from_qh()`: the cell keeps the exact representations, so
   # algebra or a further decomposition on it starts where this one left off
   # rather than from the rounding.
-  out@q_cache <- list(h = qh, v = qv)
-  out
+  simplex_region(.hv = hv_from_qv(qv))
 }
 
 

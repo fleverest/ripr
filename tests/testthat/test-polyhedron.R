@@ -353,7 +353,9 @@ test_that("the hierarchy nests as documented", {
 # --- Printing -----------------------------------------------------------------
 
 test_that("regions print a geometric summary, not a property dump", {
-  square <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+  square <- polytope_region(
+    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+  )
   expect_output(print(square), "4 vertices in R\\^2")
   expect_output(print(square), "facets: 4 inequalities")
   expect_output(print(square), "vertices:")
@@ -369,7 +371,10 @@ test_that("regions print a geometric summary, not a property dump", {
   expect_output(print(unconstrained_region(3L)), "all of R\\^3")
   expect_output(print(unconstrained_region(3L)), "facets: none")
 
-  expect_match(format(simplex_region(vertices = diag(3))), "3 vertices in R\\^3")
+  expect_match(
+    format(simplex_region(vertices = diag(3))),
+    "3 vertices in R\\^3"
+  )
 
   # A union lists each part by its own format line while short.
   u <- union_region(
@@ -378,4 +383,28 @@ test_that("regions print a geometric summary, not a property dump", {
   )
   expect_output(print(u), "simplex_region: 3 vertices")
   expect_output(print(u), "halfspace_region: the halfspace")
+})
+
+
+test_that("facets cannot be declared, only derived", {
+  tri_v <- cbind(c(0, 0), c(1, 0), c(0, 1))
+  expect_error(
+    polytope_region(vertices = tri_v, facets = list(a = 1)),
+    "unused argument"
+  )
+  # The derived views are read-only, so the halves cannot desync after
+  # construction.
+  tri <- polytope_region(vertices = tri_v)
+  expect_error(tri@facets <- list(a = 1), "read-only")
+  expect_error(tri@generators <- list(), "read-only")
+  expect_error(tri@hv <- list(), "must be <ripr::hv_region>")
+  # And the internal door takes only the record type.
+  expect_error(
+    polyhedron_region(.hv = list(h = NULL, v = list())),
+    "must be <ripr::hv_region>"
+  )
+  expect_error(
+    polyhedron_region(vertices = tri_v, .hv = tri@hv),
+    "cannot both be given"
+  )
 })

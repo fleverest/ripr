@@ -169,7 +169,7 @@ test_that("triangulating an algebra cell starts from its exact form", {
   bary <- vapply(
     cells,
     function(cell) {
-      any(apply(cell@q_cache$v[, -(1:2), drop = FALSE], 1L, \(r) {
+      any(apply(cell@hv@qv[, -(1:2), drop = FALSE], 1L, \(r) {
         all(r == "1/3")
       }))
     },
@@ -188,11 +188,11 @@ test_that("triangulating an algebra cell starts from its exact form", {
 
 test_that("cells keep facets exact rather than re-deriving them from doubles", {
   cell <- cells(polygon_region(5L))[[1L]]
-  expect_false(is.null(cell@q_cache$h))
+  expect_false(is.null(cell@hv@qh))
   expect_false(is.null(cell@facets))
-  # `q_cache` is the exact pair for the same set the doubles approximate.
-  expect_equal(from_hmatrix(cell@q_cache$h)$a, cell@facets$a)
-  expect_equal(from_hmatrix(cell@q_cache$h)$b, cell@facets$b)
+  # The record is the exact pair for the same set the doubles approximate.
+  expect_equal(from_hmatrix(cell@hv@qh)$a, cell@facets$a)
+  expect_equal(from_hmatrix(cell@hv@qh)$b, cell@facets$b)
 })
 
 

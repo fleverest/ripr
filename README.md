@@ -101,7 +101,7 @@ fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #>           kl          gap        atoms 
-#> 2.824749e-02 1.342759e-04 3.000000e+01
+#> 2.824749e-02 1.342761e-04 3.000000e+01
 ```
 
 <div class="figure" style="text-align: center">
@@ -159,7 +159,7 @@ c(
   width = cert$sup_ub - cert$sup_lb
 )
 #>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 9.360834e-10
+#> 1.000134e+00 1.000134e+00 9.366701e-10
 ```
 
 The bound lands just above one: it precisely bounds `1 + gap`, with
@@ -168,7 +168,7 @@ The bound lands just above one: it precisely bounds `1 + gap`, with
 ``` r
 c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
 #> bound_minus_one      fitted_gap 
-#>    0.0001342768    0.0001342759
+#>    0.0001342769    0.0001342761
 ```
 
 The re-scaled random variable `E = X / cert$sup_ub` is then a genuine
@@ -245,7 +245,7 @@ c(
   width = fit$kl - E_gr
 )
 #>        lower        upper        width 
-#> 0.0281132266 0.0282474943 0.0001342678
+#> 0.0281132264 0.0282474944 0.0001342679
 ```
 
 ## A different multinomial null
@@ -309,7 +309,7 @@ X_medial <- likelihood(Q_maj, label = "Q") /
 
 c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
 #>        kl     upper 
-#> 0.3845872 1.0072202
+#> 0.3845872 1.0072172
 ```
 
 <div class="figure" style="text-align: center">

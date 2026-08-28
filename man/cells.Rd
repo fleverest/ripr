@@ -15,8 +15,7 @@ cells(space, ...)
 
 \item{...}{Passed on to the method. The triangulating method for
 \code{\link[=polyhedron_region]{polyhedron_region()}} takes \code{max_cells} (default \code{1000L}), the point at
-which it gives up rather than fan out a combinatorially large
-decomposition.}
+which it gives up.}
 }
 \value{
 A list of \link{convex_region} objects whose union is \code{space}.

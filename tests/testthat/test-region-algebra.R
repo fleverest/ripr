@@ -306,12 +306,12 @@ test_that("algebra cells keep their exact rational representation", {
 
   h <- from_hmatrix(q_hrep(wins))
   expect_identical(sum(h$eq), 1L)
-  expect_false(is.null(wins@q_cache$h))
+  expect_false(is.null(wins@hv@qh))
 
   # A declared region carries the exact rationals of its own doubles, kept
   # from the derivation its constructor ran anyway.
-  expect_false(is.null(ambient@q_cache$h))
-  expect_identical(sum(from_hmatrix(ambient@q_cache$h)$eq), 1L)
+  expect_false(is.null(ambient@hv@qh))
+  expect_identical(sum(from_hmatrix(ambient@hv@qh)$eq), 1L)
 })
 
 

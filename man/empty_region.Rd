@@ -6,10 +6,7 @@
 \alias{print,ripr::empty_region-method}
 \title{The region with nothing in it}
 \usage{
-empty_region(d)
-}
-\arguments{
-\item{d}{The ambient dimension the region is empty in, a positive integer.}
+empty_region()
 }
 \value{
 An \code{empty_region}.

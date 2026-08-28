@@ -100,7 +100,7 @@ method(`[[`, region) <- function(x, i, ...) parts(x)[[i]]
 method(`[`, region) <- function(x, i, ...) {
   chosen <- parts(x)[i]
   if (length(chosen) == 0L) {
-    return(empty_region(space_dim(x)))
+    return(empty_region())
   }
   union_region(chosen)
 }

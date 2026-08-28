@@ -46,7 +46,6 @@ region_from_qh <- function(qh) {
 #'
 #' A null hypothesis may not be empty: [null_model()] refuses one.
 #'
-#' @param d The ambient dimension the region is empty in, a positive integer.
 #' @return An `empty_region`.
 #' @examples
 #' # Disjoint regions intersect in nothing:
@@ -67,17 +66,19 @@ region_from_qh <- function(qh) {
 empty_region <- new_class(
   "empty_region",
   parent = region,
-  properties = list(n_dim = class_integer),
-  constructor = function(d) {
-    if (!is.numeric(d) || length(d) != 1L || !is.finite(d) || d < 1) {
-      stop("`d` must be a single positive integer.", call. = FALSE)
-    }
-    new_object(S7_object(), n_dim = as.integer(d))
+  constructor = function() {
+    new_object(S7_object())
   }
 )
 
 
-method(space_dim, empty_region) <- function(space) space@n_dim
+method(space_dim, empty_region) <- function(space) {
+  stop(
+    "`space_dim()` is not defined for an `empty_region`: the empty set is ",
+    "the same set in every ambient dimension.",
+    call. = FALSE
+  )
+}
 
 
 method(parts, empty_region) <- function(space) list()
@@ -118,7 +119,7 @@ method(q_vrep, empty_region) <- function(space) refuse_empty("q_vrep")
 
 
 method(region_phrase, empty_region) <- function(space) {
-  sprintf("the empty region in dimension %d", space@n_dim)
+  "the empty region"
 }
 
 
@@ -196,25 +197,13 @@ union_region <- new_class(
   properties = list(parts = class_list),
   constructor = function(...) {
     flat <- flatten_parts(list(...))
-    # An empty region contributes nothing to a union, but its dimension must
-    # still agree: dropping a mismatched empty would silently bless a union
-    # the validator refuses everywhere else.
+    # An empty region contributes nothing to a union. Dropped here.
     empties <- vapply(flat, \(p) S7_inherits(p, empty_region), logical(1))
     if (any(empties)) {
-      is_region <- vapply(flat, \(p) S7_inherits(p, region), logical(1))
-      dims <- unique(vapply(flat[is_region], space_dim, integer(1)))
-      if (length(dims) > 1L) {
-        stop(
-          "every element of `parts` must have the same ambient dimension; ",
-          "got ",
-          paste(dims, collapse = ", "),
-          call. = FALSE
-        )
-      }
-      if (all(empties)) {
-        return(empty_region(dims))
-      }
       flat <- flat[!empties]
+      if (length(flat) == 0L) {
+        return(empty_region())
+      }
     }
     if (length(flat) == 1L && S7_inherits(flat[[1L]], convex_region)) {
       return(flat[[1L]])
@@ -492,6 +481,10 @@ intersect.default <- function(x, y, ...) base::intersect(x, y)
 
 method(intersect, region) <- function(x, y, ...) {
   regions <- lapply(c(list(x, y), list(...)), as_region)
+  # An empty argument forces the result to be empty.
+  if (any(vapply(regions, \(r) S7_inherits(r, empty_region), logical(1)))) {
+    return(empty_region())
+  }
   dims <- vapply(regions, space_dim, integer(1))
   if (length(unique(dims)) > 1L) {
     stop(
@@ -514,11 +507,11 @@ method(intersect, region) <- function(x, y, ...) {
     # V-representation computation.
     acc <- Filter(Negate(q_is_empty), acc)
     if (length(acc) == 0L) {
-      return(empty_region(dims[[1L]]))
+      return(empty_region())
     }
   }
   if (length(acc) == 0L) {
-    return(empty_region(dims[[1L]]))
+    return(empty_region())
   }
   union_region(lapply(acc, region_from_qh))
 }
@@ -551,6 +544,11 @@ method(setdiff, region) <- function(x, y, ..., max_cells = 1000L) {
   # Everything in ... is subtracted: setdiff(x, y1, y2) removes the union of the
   # yi's.
   y <- as_region(c(list(y), dots))
+  # An empty side settles it, with no dimension to compare: nothing minus
+  # anything is nothing, and anything minus nothing is unchanged.
+  if (S7_inherits(x, empty_region) || S7_inherits(y, empty_region)) {
+    return(x)
+  }
   if (space_dim(x) != space_dim(y)) {
     stop(
       "every region must have the same ambient dimension; got ",
@@ -579,7 +577,7 @@ method(setdiff, region) <- function(x, y, ..., max_cells = 1000L) {
   }
   cells <- unlist(lapply(results, \(r) r$cells), recursive = FALSE)
   if (length(cells) == 0L) {
-    return(empty_region(space_dim(x)))
+    return(empty_region())
   }
   union_region(lapply(cells, region_from_qh))
 }
@@ -624,6 +622,9 @@ setequal.default <- function(x, y, ...) base::setequal(x, y)
 
 method(setequal, region) <- function(x, y, ..., max_cells = 1000L) {
   y <- as_region(y)
+  if (S7_inherits(x, empty_region) || S7_inherits(y, empty_region)) {
+    return(is_empty(x) && is_empty(y))
+  }
   if (space_dim(x) != space_dim(y)) {
     # Not an error, unlike `intersect()` and `setdiff()`. Those have no answer
     # to give for regions of different ambient dimensions; this one does, and
@@ -733,7 +734,7 @@ method(disjoin, union_region) <- function(x, ...) {
     }
   }
   if (length(kept) == 0L) {
-    return(empty_region(space_dim(x)))
+    return(empty_region())
   }
   union_region(kept)
 }

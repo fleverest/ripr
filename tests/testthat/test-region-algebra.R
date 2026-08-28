@@ -79,7 +79,6 @@ test_that("a disjoint intersection is empty, not a degenerate cell", {
     point_region(theta = c(0, 1, 0))
   )
   expect_true(S7_inherits(nothing, empty_region))
-  expect_identical(space_dim(nothing), 3L)
 
   # Cells meeting only in a shared face are not empty: the closed cells of a
   # cover genuinely intersect in that face.

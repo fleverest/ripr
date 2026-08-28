@@ -583,7 +583,7 @@ expectation_objective <- function(family, values) {
 #'
 #' Cheap by comparison, and defined wherever the search is. An unbounded part
 #' or a continuous parameter space can still be searched, though the lower bound
-#' may not be very tight.
+#' may sit far below the supremum.
 #' @param x A [random_variable].
 #' @param null A [null_model].
 #' @param n_seeds,n_restarts Resolution of the search.

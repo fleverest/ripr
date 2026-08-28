@@ -732,8 +732,9 @@ test_that("certify_sup() brackets the true supremum", {
 })
 
 test_that("the bound is valid at every iteration, not just at convergence", {
-  # The whole claim of the method: refinement buys tightness, not validity. If
-  # this fails then a run that hits `max_nodes` returns an invalid certificate.
+  # The whole claim of the method: refinement buys a tighter bound, not
+  # validity. If this fails then a run that hits `max_nodes` returns an invalid
+  # certificate.
   set.seed(21)
   lat <- bernstein_lattice(6L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
@@ -870,7 +871,7 @@ test_that("a run that prunes all nodes converges rather than running out", {
   # The other stopping path. Every other test converges by reaching tolerance.
   # Without this the empty-active-set branch never executes under test, and a
   # run that pruned its way to an answer would be reported as budget-limited,
-  # which says the bound is loose when it is as tight as the method gets.
+  # which says refinement could continue when it cannot.
   set.seed(47)
   lat <- bernstein_lattice(6L, 3L)
   # Picking coefficients that are not maximised on the vertices:

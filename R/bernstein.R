@@ -460,9 +460,9 @@ certified_bound <- function(attained, active_ub, pruned_ub) {
 #' Why the search should stop, or `NULL` to continue
 #'
 #' Three ways out, kept apart because they mean different things to the caller:
-#' the active set empties (everything pruned, the bound is as tight as this
-#' method gets), the gap closes to `tol`, or the iteration cap bites. Only the
-#' last qualifies the result.
+#' the active set empties (everything pruned, and further refinement cannot
+#' change the bound), the gap closes to `tol`, or the iteration cap bites. Only
+#' the last qualifies the result.
 #' @keywords internal
 #' @noRd
 stop_reason <- function(n_active, gap, tol, it, max_iter) {
@@ -508,8 +508,8 @@ prune_active <- function(active, incumbent, slack, keep_argmax) {
 #' Certified upper bound on `sup G` over the union of the seed sub-simplices
 #'
 #' Validity does not depend on convergence: `bound` is a valid upper bound at
-#' every iteration, so `G / bound <= 1` whenever you stop. Refinement buys
-#' tightness, not validity.
+#' every iteration, so `G / bound <= 1` whenever you stop. Refinement buys a
+#' tighter bound, not validity.
 #'
 #' @param seeds List of boxes (see `bisect()`).
 #' @param lat A `bernstein_lattice()`.

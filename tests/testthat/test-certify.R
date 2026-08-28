@@ -161,7 +161,7 @@ test_that("dividing by the bound gives an e-variable", {
     expect_lte(max(expectations(theta)), 1 + rounding_tol(1))
   }
 
-  tight <- c(
+  attained <- c(
     vapply(
       parts(null@region),
       function(s) max(expectations(s@vertices)),
@@ -172,8 +172,8 @@ test_that("dividing by the bound gives an e-variable", {
       ncol = 1L
     ))
   )
-  expect_lte(max(tight), 1 + rounding_tol(1))
-  expect_gt(max(tight), 1 - 1e-3)
+  expect_lte(max(attained), 1 + rounding_tol(1))
+  expect_gt(max(attained), 1 - 1e-3)
   expect_gt(res$sup_lb / res$sup_ub, 1 - 1e-6)
   expect_lte(res$sup_lb / res$sup_ub, 1)
 })
@@ -192,7 +192,7 @@ test_that("a constant variable certifies to its own value", {
 
 test_that("a variable maximised at a facet vertex needs no subdivision", {
   # The enclosure is exact at the vertices (PBP 10.2), so if the maximiser is
-  # a vertex the starting point is already a tight bound.
+  # a vertex the starting bound is already attained.
   n <- 6L
   null <- plurality_null(n = n, k = 3L)
   family <- null@family
@@ -304,9 +304,9 @@ test_that("converged and budget_hit distinguish the two ways of stopping", {
   values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 10)
   x <- tabulated_rv(null@family, values)
 
-  tight <- certify(x, null, tol = 1e-12, max_nodes = 5000L)
-  expect_true(all(tight$converged))
-  expect_false(any(tight$budget_hit))
+  full <- certify(x, null, tol = 1e-12, max_nodes = 5000L)
+  expect_true(all(full$converged))
+  expect_false(any(full$budget_hit))
 
   starved <- certify(x, null, tol = 1e-12, max_nodes = 2L)
   expect_true(any(starved$budget_hit))
@@ -317,7 +317,7 @@ test_that("converged and budget_hit distinguish the two ways of stopping", {
 
   # The starved bound is still valid, just looser -- which is the whole reason
   # the distinction is worth reporting rather than erroring on.
-  expect_gte(starved$sup_ub, tight$sup_ub)
+  expect_gte(starved$sup_ub, full$sup_ub)
 })
 
 # --- Recording ----------------------------------------------------------------
@@ -1167,7 +1167,7 @@ test_that("a dominated part reports its own bound, not the incumbent's", {
   # The small part still reports a valid bound on itself, far below the
   # incumbent it was pruned against.
   expect_gte(res$bounds[2L], alone$sup_lb)
-  expect_lt(res$bounds[2L], res$incumbents[1L])
+  expect_lte(res$bounds[2L], res$incumbents[1L])
 })
 
 

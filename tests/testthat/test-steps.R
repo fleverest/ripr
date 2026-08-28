@@ -312,10 +312,10 @@ test_that("solve_weights respects both its budget and its tolerance", {
   ld_all <- ld(flat_atoms(st))
   w0 <- flat_weights(st)
   # A tolerance nothing can meet leaves the cap as the only stopping rule.
-  tight <- solve_weights(ld_all, w0, st@engine, tol = 0, max_iter = 20L)
+  capped <- solve_weights(ld_all, w0, st@engine, tol = 0, max_iter = 20L)
   loose <- solve_weights(ld_all, w0, st@engine, tol = 1e10, max_iter = 20L)
   expect_equal(loose, w0)
-  expect_equal(sum(tight), 1, tolerance = rounding_tol(1))
+  expect_equal(sum(capped), 1, tolerance = rounding_tol(1))
 })
 
 # --- Oracles ------------------------------------------------------------------

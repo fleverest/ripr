@@ -24,6 +24,8 @@ NULL
 #' @param region The null's geometry: any [region]. A single [convex_region]
 #'   is stored as it comes, since one convex set is already a region; a list of
 #'   them becomes the [union_region] of its elements.
+#' @param max_cells The number of simplices the decomposition may produce
+#'   before giving up (default `1000L`).
 #' @return A `null_model`.
 #' @section Properties:
 #' \describe{
@@ -56,7 +58,7 @@ null_model <- new_class(
     cells = class_list,
     cell_part = class_integer
   ),
-  constructor = function(family, region) {
+  constructor = function(family, region, max_cells = 1000L) {
     region <- as_region(region)
     if (S7_inherits(region, empty_region)) {
       stop(
@@ -65,9 +67,10 @@ null_model <- new_class(
       )
     }
     prts <- parts(region)
+    budget <- cell_budget(max_cells)
     per_part <- lapply(seq_along(prts), function(i) {
       tryCatch(
-        cells(prts[[i]]),
+        cells(prts[[i]], .budget = budget),
         error = function(e) {
           stop(
             "could not decompose part ",

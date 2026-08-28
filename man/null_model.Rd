@@ -4,7 +4,7 @@
 \alias{null_model}
 \title{A null hypothesis: a family together with its parameter region}
 \usage{
-null_model(family, region)
+null_model(family, region, max_cells = 1000L)
 }
 \arguments{
 \item{family}{A \link{parametric_family}.}
@@ -12,6 +12,9 @@ null_model(family, region)
 \item{region}{The null's geometry: any \link{region}. A single \link{convex_region}
 is stored as it comes, since one convex set is already a region; a list of
 them becomes the \link{union_region} of its elements.}
+
+\item{max_cells}{The number of simplices the decomposition may produce
+before giving up (default \code{1000L}).}
 }
 \value{
 A \code{null_model}.

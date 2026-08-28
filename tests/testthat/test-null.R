@@ -34,7 +34,11 @@ test_that("a chart round-trips points in the part", {
       u <- ch$seed(1L)[, 1L]
       theta <- ch$to_theta(u)
       expect_true(contains(s, theta))
-      expect_equal(ch$to_theta(ch$from_theta(theta)), theta, tolerance = rounding_tol(1))
+      expect_equal(
+        ch$to_theta(ch$from_theta(theta)),
+        theta,
+        tolerance = rounding_tol(1)
+      )
     }
   }
 })
@@ -208,13 +212,21 @@ test_that("the chart round-trip is lossless in the interior and at a vertex", {
   ch <- chart(s)
 
   interior <- as.vector(s@vertices %*% rep(0.25, 4))
-  expect_equal(ch$to_theta(ch$from_theta(interior)), interior, tolerance = rounding_tol(1))
+  expect_equal(
+    ch$to_theta(ch$from_theta(interior)),
+    interior,
+    tolerance = rounding_tol(1)
+  )
 
   # Exact up to the floating point of the least-squares recovery: bit-identical
   # on some vertex matrices, an ulp or two off on others, and BLAS-dependent
   # either way -- so tested at 1e-12, not identical().
   vertex <- s@vertices[, 1L]
-  expect_equal(ch$to_theta(ch$from_theta(vertex)), vertex, tolerance = rounding_tol(1))
+  expect_equal(
+    ch$to_theta(ch$from_theta(vertex)),
+    vertex,
+    tolerance = rounding_tol(1)
+  )
 })
 
 test_that("maximise_over accepts seeds lying outside the part", {
@@ -325,6 +337,27 @@ test_that("a null takes its decomposition once, at construction", {
   # The cells are in part order and are that part's own `cells()`.
   expect_identical(mixed@cells[[1L]], parts(mixed@region)[[1L]])
   expect_identical(mixed@cells[2:3], cells(square))
+})
+
+test_that("null_model()'s max_cells caps the decomposition across parts", {
+  fam <- multinomial_family(n_trials = 10, k = 3)
+  square <- polytope_region(
+    vertices = cbind(
+      c(0.5, 0.5, 0),
+      c(0, 0.5, 0.5),
+      c(0, 0, 1),
+      c(0.5, 0, 0.5)
+    )
+  )
+  # Two triangles per square, so two squares need four in total.
+  null <- null_model(fam, list(square, square), max_cells = 4L)
+  expect_length(null@cells, 4L)
+  # One budget spans the parts, and the refusal still names the one that
+  # exhausted it.
+  expect_error(
+    null_model(fam, list(square, square), max_cells = 3L),
+    "could not decompose part 2.*max_cells = 3"
+  )
 })
 
 test_that("in_null is the union of the pieces", {

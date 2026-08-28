@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "==> [pre-commit] Building roxygen2 documentation"
+Rscript -e 'devtools::document()'
+
+echo "==> [pre-commit] Building README"
+Rscript -e 'devtools::build_readme()'
+
+echo "==> [pre-commit] Building vignettes"
+Rscript -e '
+  for (rmd in list.files("vignettes", pattern = "\\.Rmd$", full.names = TRUE)) {
+    rmarkdown::render(rmd, output_dir = "vignettes", quiet = TRUE)
+  }
+'
+
+# Stage anything the build steps above regenerated so it lands in this commit.
+git add DESCRIPTION NAMESPACE man README.md vignettes/*.html 2>/dev/null || true
+
+echo "==> [pre-commit] Running tests"
+Rscript -e 'devtools::test(stop_on_failure = TRUE)'
+
+echo "==> [pre-commit] Running R CMD check"
+Rscript -e 'devtools::check(document = FALSE, cran = FALSE, quiet = TRUE, error_on = "warning")'

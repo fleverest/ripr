@@ -293,6 +293,16 @@ test_that("Gauss-Hermite weights sum to one", {
   expect_equal(n_nodes(eng), 20L)
 })
 
+
+test_that("a one-node rule is the mean, not an error", {
+  # `n = 1` skips the eigendecomposition entirely: the single node carries all
+  # the weight.
+  s <- q_gaussian(d = 1, mean = 1.5)
+  eng <- resolve_engine(gh_engine(1L), s$Q, s$family)
+  expect_equal(n_nodes(eng), 1L)
+  expect_lt(abs(sum(exp(eng@log_w)) - 1), rounding_tol(1))
+})
+
 test_that("Gauss-Hermite integrates low-order polynomials exactly", {
   # An n-point rule is exact for degree <= 2n - 1, so the first two moments of
   # the Gaussian should come back to machine precision, not to quadrature error.

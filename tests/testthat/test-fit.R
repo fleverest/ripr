@@ -221,6 +221,37 @@ test_that("record_gap makes a gap available to the predicate", {
   st <- em_step(fw_step(plurality(), 2L), 1L, record_gap = TRUE)
   expect_silent(gap_below(1e-8)(st))
   expect_true(!is.na(utils::tail(st@trace$gap, 1L)))
+  # And through the weight verb too, which sweeps after its step.
+  st <- weight_step(st, 1L, record_gap = TRUE)
+  expect_true(!is.na(utils::tail(st@trace$gap, 1L)))
+})
+
+
+test_that("ripr_init refuses an atoms list that mismatches the parts", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  Q <- induced_distribution(fam, point_mixing(theta_star = c(0.5, 0.3, 0.2)))
+  null <- null_model(
+    fam,
+    list(
+      simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+      simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    )
+  )
+  expect_error(
+    ripr_init(Q, null, atoms = list(matrix(c(0.2, 0.5, 0.3), ncol = 1L))),
+    "one element per part"
+  )
+  expect_error(
+    ripr_init(
+      Q,
+      null,
+      atoms = list(
+        matrix(numeric(0), nrow = 3L, ncol = 0L),
+        matrix(numeric(0), nrow = 3L, ncol = 0L)
+      )
+    ),
+    "at least one part must carry an atom"
+  )
 })
 
 # --- What a trace row measures ------------------------------------------------

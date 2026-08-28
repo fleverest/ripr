@@ -430,6 +430,37 @@ test_that("setequal() decides convex regions from their facets alone", {
 })
 
 
+test_that("setequal() distinguishes a region from its boundary face", {
+  # The face's equality row is what rejects the body, and it has to be tested
+  # in both directions: the square satisfies `y <= 0` everywhere, so only the
+  # reverse `y >= 0` can turn it away.
+  square <- polytope_region(
+    vertices = cbind(c(0, -1), c(1, -1), c(1, 0), c(0, 0))
+  )
+  edge <- polytope_region(vertices = cbind(c(0, 0), c(1, 0)))
+  expect_false(setequal(square, edge))
+  expect_false(setequal(edge, square))
+
+  # And from the other side of the hyperplane, so whichever way cddlib
+  # orients the equality row, both directions of the test get exercised.
+  above <- polytope_region(
+    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+  )
+  expect_false(setequal(above, edge))
+})
+
+
+test_that("setdiff() refuses mismatched ambient dimensions", {
+  expect_error(
+    setdiff(
+      polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(0, 1))),
+      simplex_region(vertices = diag(3))
+    ),
+    "ambient dimension"
+  )
+})
+
+
 test_that("setequal() sees through a decomposition into cells", {
   # The case an emptiness test gets wrong. `setdiff(square, its triangles)` is
   # the diagonal, not nothing, because the difference is closed; the square is

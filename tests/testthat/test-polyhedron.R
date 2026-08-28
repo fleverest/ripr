@@ -408,3 +408,51 @@ test_that("facets cannot be declared, only derived", {
     "cannot both be given"
   )
 })
+
+
+test_that("a generator count past the facet guard derives its H-side on demand", {
+  # 101 vertices on a circle: past `derive_qfacets()`'s guard, so the record
+  # keeps no H-side, and `h_rep()`/`q_hrep()` run the exact conversion when
+  # asked instead.
+  angle <- 2 * pi * seq_len(101L) / 101
+  many <- polytope_region(vertices = rbind(cos(angle), sin(angle)))
+  expect_null(many@facets)
+
+  h <- h_rep(many)
+  expect_identical(nrow(h$a), 101L)
+  # Every declared vertex satisfies every derived facet.
+  expect_true(all(h$a %*% many@vertices <= h$b + rounding_tol(1)))
+  expect_identical(q_kind(q_hrep(many)), "H")
+  # And printing says why the facets are absent rather than erroring on them.
+  expect_output(print(many), "above the size guard")
+
+  # A simplex past the guard still validates: affine independence is read from
+  # the derived equality rows when there is no facet record to count.
+  s101 <- simplex_region(vertices = diag(101))
+  expect_null(s101@facets)
+})
+
+
+test_that("constructors refuse malformed input by name", {
+  expect_error(polyhedron_region(rays = c(1, 0)), "must be matrices")
+  expect_error(h_region(a = c(1, -1), b = 0), "numeric matrix")
+  expect_error(
+    h_region(a = matrix(c(1, -1), nrow = 1L), b = c(0, 1)),
+    "one entry per row"
+  )
+  expect_error(
+    h_region(a = matrix(c(1, -1), nrow = 1L), b = 0, eq = NA),
+    "TRUE or FALSE"
+  )
+  expect_error(point_region(theta = c(0.5, Inf)), "finite numeric vector")
+})
+
+
+test_that("a one-dimensional halfspace works without a basis", {
+  # `d = 1` leaves no hyperplane basis to derive; the constructor must not
+  # index one into existence.
+  h <- halfspace_region(normal = 2, offset = 1)
+  expect_identical(space_dim(h), 1L)
+  expect_true(contains(h, 0))
+  expect_false(contains(h, 1))
+})

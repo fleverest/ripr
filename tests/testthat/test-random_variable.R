@@ -191,6 +191,19 @@ test_that("only a single number may be combined with a variable", {
   f <- fixture()
   X <- likelihood(f$Q)
   expect_error(X * c(1, 2), "single number")
+  expect_error(c(1, 2) * X, "single number")
+})
+
+
+test_that("the constructor wants a function, and one that returns numbers", {
+  f <- fixture()
+  expect_error(
+    random_variable("not a function", sample_space = f$space),
+    "must be a function"
+  )
+  # The check runs where the wrong value appears: at evaluation.
+  words <- random_variable(\(x) "a", sample_space = f$space)
+  expect_error(words(c(4, 2, 2)), "must return numbers")
 })
 
 # --- Printing -----------------------------------------------------------------

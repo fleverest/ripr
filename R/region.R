@@ -522,7 +522,18 @@ maximise_over <- function(
   # supremum over the space. Here we just project the result back in and
   # re-evaluate, so the value is attained at a point of the space.
   theta <- project(space, ch$to_theta(best$par))
-  list(theta = theta, value = obj$value(theta))
+  value <- obj$value(theta)
+  # The search shouldn't return something worse than its best seed.
+  # SLSQP could stop a tiny step away from where it started and get something
+  # worse because the projection re-evaluates. Without this the refined value
+  # could be below one already attained by the seed.
+  seed_theta <- project(space, ch$to_theta(starts[, top[1L]]))
+  seed_value <- obj$value(seed_theta)
+  if (seed_value > value) {
+    theta <- seed_theta
+    value <- seed_value
+  }
+  list(theta = theta, value = value)
 }
 
 

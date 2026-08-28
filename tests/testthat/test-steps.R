@@ -210,7 +210,7 @@ test_that("a line search cannot increase KL", {
       cand$engine,
       directions = d
     )
-    expect_true(res$kl <= before + 1e-12)
+    expect_true(res$kl <= before + rounding_tol(before))
   }
 })
 

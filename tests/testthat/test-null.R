@@ -197,7 +197,7 @@ test_that("maximise_over is at least as good as the chart image of its seeds", {
     n_seeds = 10L,
     n_restarts = 3L
   )
-  expect_gte(res$value, obj$value(seed_image) - 1e-10)
+  expect_gte(res$value, obj$value(seed_image) - rounding_tol(1))
 })
 
 test_that("the chart round-trip is lossless in the interior and at a vertex", {

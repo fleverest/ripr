@@ -161,7 +161,7 @@ test_that("KL never increases under a line search", {
   # Guaranteed because gamma = 0 is in the search interval: the step can always
   # decline to move. Not true of the fixed schedule -- see below.
   st <- plurality() |> fw_step(5L) |> em_step(5L) |> weight_step(5L)
-  expect_true(all(diff(st@trace$kl) <= 1e-9))
+  expect_true(all(diff(st@trace$kl) <= rounding_tol(1)))
 })
 
 test_that("the fixed schedule does not discard a seeded initialisation", {
@@ -241,7 +241,7 @@ test_that("an oracle row's gap measures the mixture the step produced", {
   # Swept independently at the mixture the last row produced, it agrees.
   ld <- compile_engine(st@engine)
   fresh <- linear_gap(st, log_p_at_nodes(st, ld), ld, flat_atoms(st))
-  expect_equal(utils::tail(tr$gap, 1L), fresh$gap, tolerance = 1e-6)
+  expect_equal(utils::tail(tr$gap, 1L), fresh$gap, tolerance = rounding_tol(1))
 })
 
 test_that("an lb row's gap is swept, not carried over from the row before", {
@@ -327,8 +327,8 @@ test_that("splitting a call in two matches taking it in one", {
   a <- fw_step(plurality(), 3L)
   set.seed(8)
   b <- fw_step(fw_step(plurality(), 1L), 2L)
-  expect_equal(flat_weights(a), flat_weights(b), tolerance = 1e-8)
-  expect_equal(flat_atoms(a), flat_atoms(b), tolerance = 1e-8)
+  expect_equal(flat_weights(a), flat_weights(b), tolerance = rounding_tol(1))
+  expect_equal(flat_atoms(a), flat_atoms(b), tolerance = rounding_tol(1))
   expect_identical(a@iters, b@iters)
 })
 

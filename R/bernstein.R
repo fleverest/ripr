@@ -8,7 +8,7 @@ NULL
 # coefficients are the realised values of `X` at the lattice, the convex hull
 # property bounds the polynomial by their range for free, and de Casteljau
 # subdivision tightens it quadratically in the sub-simplex diameter. That is
-# what makes a *proven* upper bound available at all, as against the oracle's
+# what makes a *global* upper bound available at all, as against the oracle's
 # multi-start search, which only ever gives a lower one. See Leroy (2012),
 # Reliable Computing 17(1), 11-21.
 #
@@ -505,11 +505,11 @@ prune_active <- function(active, incumbent, slack, keep_argmax) {
 }
 
 
-#' Certified upper bound on `sup G` over the union of the seed sub-simplices
+#' Global upper bound on `sup G` over the union of the seed sub-simplices
 #'
 #' Validity does not depend on convergence: `bound` is a valid upper bound at
-#' every iteration, so `G / bound <= 1` whenever you stop. Refinement buys a
-#' tighter bound, not validity.
+#' every iteration (up to floating-point precision), so `G / bound <= 1`
+#' whenever you stop. Refinement buys a tighter bound, not validity.
 #'
 #' @param seeds List of boxes (see `bisect()`).
 #' @param lat A `bernstein_lattice()`.

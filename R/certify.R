@@ -70,7 +70,7 @@ certify_methods <- function() {
   list(
     list(
       name = "point",
-      subject = "Exact evaluation at a point",
+      subject = "Evaluation at a point",
       fit = point_fit,
       bound_fn = point_bound
     ),
@@ -92,7 +92,7 @@ certify_methods <- function() {
 #' does not require a polynomial form, there are no vertices and no subdivision
 #' is required.
 #'
-#' But the expectation has to be computable *exactly*, which here means summing
+#' But the expectation has to be computable *precisely*, which means summing
 #' over an enumerable sample space (for now; TODO?), and not through monte carlo
 #' or quadrature.
 #'
@@ -578,7 +578,7 @@ expectation_objective <- function(family, values) {
 #' Multi-start local ascent, a **lower** bound on the supremum: it reports the
 #' largest value it managed to find through optimisation, though a larger one
 #' value may exist somewhere it did not look. Use it as a diagnoses rather than
-#' treating it like a certificate on the bound. See [certify()] for proven
+#' treating it like a certificate on the bound. See [certify()] for global
 #' upper bounds where supported.
 #'
 #' Cheap by comparison, and defined wherever the search is. An unbounded part
@@ -745,7 +745,7 @@ certify_trace <- function(
 
 #' Certify an upper bound on the largest null expectation
 #'
-#' A **proven** upper bound on
+#' An upper bound on
 #' \eqn{\sup_{\theta \in \Theta_0} E_\theta[X]}{sup_theta E_theta[X]}, where
 #' available.
 #'
@@ -764,15 +764,16 @@ certify_trace <- function(
 #'
 #' Only two methods are currently implemented. A [point_region()] is certified
 #' by evaluation, for any family whose sample space can be enumerated (and thus
-#' the expectation computed exactly) the supremum over a single parameter is the
-#' expectation at that point, so there is nothing to enclose. Anything larger
-#' needs a specific bounding method, and the only one currently implemented is
-#' Bernstein branch-and-bound for multinomial families over simplices, found
-#' via a branch-and-bound algorithm that recursively subdivides the simplex
-#' \insertCite{Leroy2012}{ripr} and bounds each subset via the simplicial
-#' Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
+#' the expectation computed precisely) the supremum over a single parameter is
+#' the expectation at that point, so there is nothing to enclose. Anything
+#' larger needs a specific bounding method, and the only one currently
+#' implemented is Bernstein branch-and-bound for multinomial families over
+#' simplices, found via a branch-and-bound algorithm that recursively subdivides
+#' the simplex \insertCite{Leroy2012}{ripr} and bounds each subset via the
+#' simplicial Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
 #'
-#' Unlike [sup_lb()] this is a proven bound.
+#' Unlike [sup_lb()] this is a bound on the global supremum rather than a local
+#' optimum.
 #'
 #' ## Numerical limitations
 #'

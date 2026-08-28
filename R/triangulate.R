@@ -1,4 +1,7 @@
 #' @include region.R
+#' @include polyhedron_region.R
+#' @include simplex_region.R
+#' @include point_region.R
 NULL
 
 # --- Triangulation ------------------------------------------------------------

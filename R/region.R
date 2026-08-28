@@ -625,7 +625,7 @@ derive_qfacets <- function(qv, n_generators, guard = 100L) {
 #'   \item{`hv`}{The internal dual-representation record the views above
 #'   read from, holding both descriptions in both double and rational forms.
 #'   This is computed once at construction so that downstream computations
-#'   don't start from a rounding.
+#'   don't start from a rounding.}
 #' }
 #' @references
 #'   \insertRef{Ziegler1995}{ripr}

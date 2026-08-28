@@ -15,6 +15,10 @@ plurality_cell <- function() {
   simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 }
 
+h_to_v <- function(h) {
+  from_vmatrix(q_scdd(as_hmatrix(h)))
+}
+
 
 # --- Round trips --------------------------------------------------------------
 
@@ -24,7 +28,7 @@ test_that("H and V representations round trip", {
     simplex_region(vertices = diag(3)),
     polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
   )) {
-    back <- ripr:::h_to_v(h_rep(s))
+    back <- h_to_v(h_rep(s))
     expect_equal(ncol(back$r), 0L)
     expect_equal(ncol(back$l), 0L)
     expect_equal(
@@ -117,7 +121,7 @@ test_that("halfspace_region's own generators agree with cddlib's", {
   # is the cheapest available check that the sign convention is right.
   s <- halfspace_region(normal = c(1, -1, 0), offset = 2)
   ours <- v_rep(s)
-  theirs <- ripr:::h_to_v(h_rep(s))
+  theirs <- h_to_v(h_rep(s))
 
   # The point may be any point of the halfspace, so check membership, not
   # equality.
@@ -177,7 +181,7 @@ test_that("vertices survive a round trip exactly for the geometry ripr builds", 
   # derives from them is a small rational that a double holds exactly. The
   # round trip is then lossless, which is what `certify()` depends on.
   for (s in list(plurality_cell(), simplex_region(vertices = diag(3)))) {
-    back <- ripr:::h_to_v(h_rep(s))
+    back <- h_to_v(h_rep(s))
     expect_equal(ncol(back$v), ncol(s@vertices))
     expect_identical(
       sorted_cols(back$v),
@@ -196,7 +200,7 @@ test_that("a double H-representation is a lossy intermediate for derived facets"
     r = ripr:::no_generators(3),
     l = ripr:::no_generators(3)
   ))
-  back <- ripr:::h_to_v(h)
+  back <- h_to_v(h)
 
   # The true answer, which staying in rationals throughout would have given.
   expect_equal(nrow(unique(round(t(back$v), 9L))), 9L)

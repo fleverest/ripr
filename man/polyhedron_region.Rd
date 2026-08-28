@@ -58,7 +58,7 @@ if it has not yet been derived. Read-only.}
 \item{\code{hv}}{The internal dual-representation record the views above
 read from, holding both descriptions in both double and rational forms.
 This is computed once at construction so that downstream computations
-don't start from a rounding.
+don't start from a rounding.}
 }
 }
 

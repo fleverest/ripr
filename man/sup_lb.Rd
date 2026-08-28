@@ -20,7 +20,7 @@ A list with \code{sup_lb} and the \code{theta} attaining it.
 Multi-start local ascent, a \strong{lower} bound on the supremum: it reports the
 largest value it managed to find through optimisation, though a larger one
 value may exist somewhere it did not look. Use it as a diagnoses rather than
-treating it like a certificate on the bound. See \code{\link[=certify]{certify()}} for proven
+treating it like a certificate on the bound. See \code{\link[=certify]{certify()}} for global
 upper bounds where supported.
 }
 \details{

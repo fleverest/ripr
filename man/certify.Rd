@@ -42,7 +42,7 @@ stopped at \code{max_nodes} with the gap still open, so its bound is valid but
 likely loose.
 }
 \description{
-A \strong{proven} upper bound on
+An upper bound on
 \eqn{\sup_{\theta \in \Theta_0} E_\theta[X]}{sup_theta E_theta[X]}, where
 available.
 }
@@ -62,15 +62,16 @@ with rays or lineality, of which \code{\link[=halfspace_region]{halfspace_region
 
 Only two methods are currently implemented. A \code{\link[=point_region]{point_region()}} is certified
 by evaluation, for any family whose sample space can be enumerated (and thus
-the expectation computed exactly) the supremum over a single parameter is the
-expectation at that point, so there is nothing to enclose. Anything larger
-needs a specific bounding method, and the only one currently implemented is
-Bernstein branch-and-bound for multinomial families over simplices, found
-via a branch-and-bound algorithm that recursively subdivides the simplex
-\insertCite{Leroy2012}{ripr} and bounds each subset via the simplicial
-Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
+the expectation computed precisely) the supremum over a single parameter is
+the expectation at that point, so there is nothing to enclose. Anything
+larger needs a specific bounding method, and the only one currently
+implemented is Bernstein branch-and-bound for multinomial families over
+simplices, found via a branch-and-bound algorithm that recursively subdivides
+the simplex \insertCite{Leroy2012}{ripr} and bounds each subset via the
+simplicial Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
 
-Unlike \code{\link[=sup_lb]{sup_lb()}} this is a proven bound.
+Unlike \code{\link[=sup_lb]{sup_lb()}} this is a bound on the global supremum rather than a local
+optimum.
 \subsection{Numerical limitations}{
 
 The derived bounds are mathematically guaranteed, but evaluated in floating

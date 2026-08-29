@@ -131,7 +131,7 @@ supported_in <- new_generic("supported_in", "dist", function(dist, space) {
 #' @rdname supported_in
 #' @usage NULL
 method(supported_in, distribution) <- function(dist, space) {
-  region_subset(dist@sample_space, space)
+  tryCatch(region_subset(dist@sample_space, space), error = function(e) FALSE)
 }
 
 
@@ -139,24 +139,27 @@ method(supported_in, distribution) <- function(dist, space) {
 #' @keywords internal
 #' @noRd
 check_mixes_over <- function(mixing, parameter_space) {
-  if (space_dim(mixing@sample_space) != space_dim(parameter_space)) {
+  if (isTRUE(supported_in(mixing, parameter_space))) {
+    return(invisible(NULL))
+  }
+  mixing_dim <- tryCatch(space_dim(mixing@sample_space), error = function(e) {
+    NA_integer_
+  })
+  if (!is.na(mixing_dim) && mixing_dim != space_dim(parameter_space)) {
     stop(
       "`mixing` is over ",
-      space_dim(mixing@sample_space),
+      mixing_dim,
       " dimensions but the family's parameters have ",
       space_dim(parameter_space),
       ".",
       call. = FALSE
     )
   }
-  if (!supported_in(mixing, parameter_space)) {
-    stop(
-      "`mixing` puts mass outside the family's parameter space, where the ",
-      "family has no density. A mixture over it would not be a distribution.",
-      call. = FALSE
-    )
-  }
-  invisible(NULL)
+  stop(
+    "`mixing` puts mass outside the family's parameter space, where the ",
+    "family has no density. A mixture over it would not be a distribution.",
+    call. = FALSE
+  )
 }
 
 

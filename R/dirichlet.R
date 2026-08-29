@@ -138,7 +138,6 @@ dirichlet_draws <- function(alpha, n) {
 #' # Still a proper distribution, on the outcomes that region can produce.
 #' sum(exp(log_density(fam(W1), enumerate_space(fam@sample_space))))
 #' @rdname dirichlet
-#' @aliases dirichlet
 #' @export
 dirichlet_dist <- new_class(
   "dirichlet_dist",

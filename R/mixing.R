@@ -124,7 +124,10 @@ continuous_dist <- new_class(
 #' @rdname supported_in
 #' @usage NULL
 method(supported_in, discrete_dist) <- function(dist, space) {
-  all(apply(atoms(dist), 2L, function(theta) contains(space, theta)))
+  tryCatch(
+    all(apply(atoms(dist), 2L, function(theta) contains(space, theta))),
+    error = function(e) FALSE
+  )
 }
 
 

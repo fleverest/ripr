@@ -66,7 +66,7 @@ test_that("draws have the right mean and covariance", {
   fam <- gaussian_family(dim = 2, sigma = sigma)
   theta <- c(1, -2)
   set.seed(3)
-  d <- kernel_draw(fam, theta, 2e5)
+  d <- kernel_draw(fam, matrix(theta, nrow = length(theta), ncol = 2e5))
   expect_equal(dim(d), c(2e5L, 2L))
   expect_equal(colMeans(d), theta, tolerance = 0.02)
   expect_equal(stats::cov(d), sigma, tolerance = 0.05)

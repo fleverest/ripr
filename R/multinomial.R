@@ -61,6 +61,22 @@ method(score, multinomial_family) <- function(family, theta, x) {
 }
 
 
-method(kernel_draw, multinomial_family) <- function(family, theta, n_obs) {
-  t(stats::rmultinom(n_obs, size = family@n_trials, prob = theta))
+method(kernel_draw, multinomial_family) <- function(family, theta_mat) {
+  # The conditional-binomial form:
+  # `x_j | x_1..x_(j-1) ~ Binom(n - sum, p_j / (1 - sum p))`.
+  # `rbinom()` is vectorised over both size and prob, so just `k - 1` calls.
+  theta_mat <- as.matrix(theta_mat)
+  m <- ncol(theta_mat)
+  k <- nrow(theta_mat)
+  out <- matrix(0L, nrow = m, ncol = k)
+  remaining <- rep(as.integer(family@n_trials), m)
+  unspent <- rep(1, m)
+  for (j in seq_len(k - 1L)) {
+    share <- ifelse(unspent > 0, pmin(1, pmax(0, theta_mat[j, ] / unspent)), 0)
+    out[, j] <- stats::rbinom(m, remaining, share)
+    remaining <- remaining - out[, j]
+    unspent <- unspent - theta_mat[j, ]
+  }
+  out[, k] <- remaining
+  out
 }

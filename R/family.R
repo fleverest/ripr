@@ -182,20 +182,34 @@ score <- new_generic("score", "family", function(family, theta, x) {
 })
 
 
-#' Draw observations from `P_theta`
+#' Draw one observation from `P_theta` per parameter
+#'
+#' Take one draw per column of `theta_mat`, so the number of draws is the number
+#' of parameters. To take repeated draws from a single parameter value you would
+#' repeat the parameter value across columns, which is what
+#' [induced_distribution()] does for a point mass.
+#'
+#' Users should sample via `draw(fam(theta), n)`, which does the same thing and
+#' routes here.
 #' @param family A [parametric_family].
-#' @param theta Parameter vector.
-#' @param n_obs Number of draws.
-#' @return `(n_obs, k)` numeric matrix.
+#' @param theta_mat `(d, M)` matrix of parameter columns; a length-`d` vector is
+#'   taken as a single column.
+#' @return `(M, k)` numeric matrix, one observation per row.
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' kernel_draw(fam, c(0.5, 0.3, 0.2), n_obs = 5L)
+#'
+#' # Five draws from one parameter: repeat it across five columns.
+#' kernel_draw(fam, matrix(c(0.5, 0.3, 0.2), nrow = 3L, ncol = 5L))
+#'
+#' # One draw from each of three different parameters.
+#' kernel_draw(fam, cbind(c(0.5, 0.3, 0.2), c(0.2, 0.2, 0.6), c(0.9, 0.05, 0.05)))
+#' @seealso [compile_loglik()], the density half of the same pair.
 #' @export
 kernel_draw <- new_generic(
   "kernel_draw",
   "family",
-  function(family, theta, n_obs) {
+  function(family, theta_mat) {
     S7::S7_dispatch()
   }
 )

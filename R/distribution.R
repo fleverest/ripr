@@ -191,21 +191,26 @@ induced_draw <- new_generic(
 )
 
 
+#' @description Sampling from a mixture can be done easily by sampling once
+#' from the mixing distribution, then sampling from the family at that parameter
+#' value.
+#' @rdname induced_draw
+#' @usage NULL
+method(induced_draw, list(mixing_measure, parametric_family)) <- function(
+  mixing,
+  family,
+  n_obs
+) {
+  kernel_draw(family, draw_theta(mixing, n_obs))
+}
+
+
 method(induced_log_density, list(point_mixing, parametric_family)) <- function(
   mixing,
   family,
   x
 ) {
   kernel_loglik(family, mixing@theta_star, x)
-}
-
-
-method(induced_draw, list(point_mixing, parametric_family)) <- function(
-  mixing,
-  family,
-  n_obs
-) {
-  kernel_draw(family, mixing@theta_star, n_obs)
 }
 
 
@@ -218,29 +223,6 @@ method(induced_log_density, list(finite_mixing, parametric_family)) <- function(
     kernel_loglik_batch(family, mixing@components, x),
     log(mixing@weights)
   ))
-}
-
-
-method(induced_draw, list(finite_mixing, parametric_family)) <- function(
-  mixing,
-  family,
-  n_obs
-) {
-  idx <- sample.int(
-    length(mixing@weights),
-    n_obs,
-    replace = TRUE,
-    prob = mixing@weights
-  )
-  # One call per distinct component, indexed back into place: samplers are
-  # vectorised over draws but not over parameters.
-  k <- ncol(kernel_draw(family, mixing@components[, idx[1L]], 1L))
-  out <- matrix(NA_real_, nrow = n_obs, ncol = k)
-  for (c_i in unique(idx)) {
-    rows <- which(idx == c_i)
-    out[rows, ] <- kernel_draw(family, mixing@components[, c_i], length(rows))
-  }
-  out
 }
 
 
@@ -259,32 +241,3 @@ method(induced_log_density, list(continuous_mixing, parametric_family)) <-
       call. = FALSE
     )
   }
-
-
-method(induced_draw, list(continuous_mixing, parametric_family)) <- function(
-  mixing,
-  family,
-  n_obs
-) {
-  if (n_obs == 0L) {
-    return(matrix(nrow = 0L, ncol = space_dim(family@sample_space)))
-  }
-  theta <- draw_theta(mixing, n_obs)
-  # One call per draw. Todo: vectorise kernel_draw.
-  #
-  # This loop is 98% of the cost of `draw()` here: 18.2s of a 18.7s
-  # million-draw call, against 0.46s for a vectorised equivalent -- 40x. The
-  # fix belongs in `kernel_draw()`, which should take a `(d, M)` matrix of
-  # parameters. For the multinomial that is the conditional-binomial
-  # construction, `x_j | rest ~ Binom(remaining, p_j / p_rest)`, and
-  # `rbinom()` is vectorised over both size and prob, so `K - 1` calls replace
-  # `M`. It changes the `parametric_family` interface, so it belongs with the
-  # space and distribution refactor rather than here.
-  first <- kernel_draw(family, theta[, 1L], 1L)
-  out <- matrix(NA_real_, nrow = n_obs, ncol = ncol(first))
-  out[1L, ] <- first
-  for (i in seq_len(n_obs)[-1L]) {
-    out[i, ] <- kernel_draw(family, theta[, i], 1L)
-  }
-  out
-}

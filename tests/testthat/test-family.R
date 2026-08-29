@@ -148,9 +148,56 @@ test_that("draw returns the right shape and respects the trial total", {
   for (n_trials in c(1, 25, 50)) {
     for (k in 1:5) {
       fam <- multinomial_family(n_trials = n_trials, k = k)
-      d <- kernel_draw(fam, seq_len(k) / sum(seq_len(k)), n)
+      theta <- seq_len(k) / sum(seq_len(k))
+      d <- kernel_draw(fam, matrix(theta, nrow = k, ncol = n))
       expect_equal(dim(d), c(n, k))
       expect_true(all(rowSums(d) == n_trials))
     }
   }
+})
+
+
+test_that("kernel_draw draws one observation per parameter column", {
+  set.seed(1)
+  fam <- multinomial_family(n_trials = 20L, k = 3L)
+
+  # Three different parameters, one draw each -- not three draws from one.
+  theta <- cbind(c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+  expect_equal(kernel_draw(fam, theta), t(theta) * 20L)
+
+  # A bare vector is one column, so one draw.
+  expect_equal(dim(kernel_draw(fam, c(0.5, 0.3, 0.2))), c(1L, 3L))
+})
+
+test_that("kernel_draw agrees in distribution with the per-column sampler", {
+  # The conditional-binomial construction has to match `rmultinom()`, which is
+  # what it replaced. Compared on the full sample space rather than on moments.
+  set.seed(1)
+  fam <- multinomial_family(n_trials = 6L, k = 3L)
+  theta <- c(0.5, 0.3, 0.2)
+  n <- 4e5
+
+  outcomes <- enumerate_space(fam@sample_space)
+  key <- function(m) apply(m, 1L, paste, collapse = ",")
+  tally <- function(d) tabulate(match(key(d), key(outcomes)), nrow(outcomes))
+
+  got <- tally(kernel_draw(fam, matrix(theta, nrow = 3L, ncol = n)))
+  want <- n * exp(log_density(fam(theta), outcomes))
+  chi <- sum((got - want)^2 / want)
+  expect_gt(pchisq(chi, nrow(outcomes) - 1L, lower.tail = FALSE), 1e-4)
+})
+
+test_that("kernel_draw handles parameters with zero-probability categories", {
+  # `p_j / (1 - sum p)` is 0/0 once the remaining probability is spent, which
+  # a column ending in zeros reaches before its last category.
+  set.seed(1)
+  fam <- multinomial_family(n_trials = 8L, k = 4L)
+  theta <- cbind(c(0.5, 0.5, 0, 0), c(1, 0, 0, 0), c(0, 0, 0, 1))
+  d <- kernel_draw(fam, theta)
+
+  expect_false(anyNA(d))
+  expect_equal(rowSums(d), rep(8L, 3L))
+  expect_equal(d[2, ], c(8L, 0L, 0L, 0L))
+  expect_equal(d[3, ], c(0L, 0L, 0L, 8L))
+  expect_true(all(d[1, 3:4] == 0L))
 })

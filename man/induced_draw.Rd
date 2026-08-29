@@ -2,6 +2,7 @@
 % Please edit documentation in R/distribution.R
 \name{induced_draw}
 \alias{induced_draw}
+\alias{induced_draw,ripr::mixing_measure,ripr::parametric_family-method}
 \title{Draw from the induced mixture}
 \usage{
 induced_draw(mixing, family, n_obs)
@@ -17,6 +18,8 @@ induced_draw(mixing, family, n_obs)
 \verb{(n_obs, K)} numeric matrix.
 }
 \description{
-Draw from the induced mixture
+Sampling from a mixture can be done easily by sampling once
+from the mixing distribution, then sampling from the family at that parameter
+value.
 }
 \keyword{internal}

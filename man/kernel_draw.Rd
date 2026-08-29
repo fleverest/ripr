@@ -2,25 +2,39 @@
 % Please edit documentation in R/family.R
 \name{kernel_draw}
 \alias{kernel_draw}
-\title{Draw observations from \code{P_theta}}
+\title{Draw one observation from \code{P_theta} per parameter}
 \usage{
-kernel_draw(family, theta, n_obs)
+kernel_draw(family, theta_mat)
 }
 \arguments{
 \item{family}{A \link{parametric_family}.}
 
-\item{theta}{Parameter vector.}
-
-\item{n_obs}{Number of draws.}
+\item{theta_mat}{\verb{(d, M)} matrix of parameter columns; a length-\code{d} vector is
+taken as a single column.}
 }
 \value{
-\verb{(n_obs, k)} numeric matrix.
+\verb{(M, k)} numeric matrix, one observation per row.
 }
 \description{
-Draw observations from \code{P_theta}
+Take one draw per column of \code{theta_mat}, so the number of draws is the number
+of parameters. To take repeated draws from a single parameter value you would
+repeat the parameter value across columns, which is what
+\code{\link[=induced_distribution]{induced_distribution()}} does for a point mass.
+}
+\details{
+Users should sample via \code{draw(fam(theta), n)}, which does the same thing and
+routes here.
 }
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 4L, k = 3L)
-kernel_draw(fam, c(0.5, 0.3, 0.2), n_obs = 5L)
+
+# Five draws from one parameter: repeat it across five columns.
+kernel_draw(fam, matrix(c(0.5, 0.3, 0.2), nrow = 3L, ncol = 5L))
+
+# One draw from each of three different parameters.
+kernel_draw(fam, cbind(c(0.5, 0.3, 0.2), c(0.2, 0.2, 0.6), c(0.9, 0.05, 0.05)))
+}
+\seealso{
+\code{\link[=compile_loglik]{compile_loglik()}}, the density half of the same pair.
 }

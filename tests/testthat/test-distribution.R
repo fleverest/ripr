@@ -209,3 +209,50 @@ test_that("a distribution's print distinguishes a point mass from a mixture", {
     fixed = TRUE
   )
 })
+
+
+test_that("draw_theta samples every kind of mixing measure", {
+  set.seed(1)
+  p <- draw_theta(point_mixing(theta_star = c(0.5, 0.3, 0.2)), 4L)
+  expect_equal(dim(p), c(3L, 4L))
+  expect_true(all(apply(p, 2L, identical, c(0.5, 0.3, 0.2))))
+
+  # Weights govern how often each atom is drawn, and repeats stay in place.
+  w <- finite_mixing(
+    components = cbind(c(1, 0, 0), c(0, 1, 0)),
+    weights = c(0.25, 0.75)
+  )
+  d <- draw_theta(w, 4000L)
+  expect_equal(dim(d), c(3L, 4000L))
+  expect_equal(mean(d[2, ]), 0.75, tolerance = 0.03)
+})
+
+test_that("one induced_draw method serves every mixing measure", {
+  # The collapse must not have changed any measure's behaviour: a point mass
+  # still gives its own kernel, a finite mixture still respects its weights.
+  fam <- multinomial_family(n_trials = 30L, k = 3L)
+
+  set.seed(1)
+  x <- draw(fam(point_mixing(theta_star = c(1, 0, 0))), 5L)
+  expect_equal(x, matrix(rep(c(30L, 0L, 0L), each = 5L), nrow = 5L))
+
+  set.seed(1)
+  degenerate <- finite_mixing(
+    components = cbind(c(1, 0, 0), c(0, 0, 1)),
+    weights = c(0.5, 0.5)
+  )
+  y <- draw(fam(degenerate), 2000L)
+  # Every draw is one atom or the other, in roughly equal numbers.
+  expect_true(all(y[, 2L] == 0L))
+  expect_equal(mean(y[, 1L] == 30L), 0.5, tolerance = 0.05)
+})
+
+test_that("a closed-form pairing still overrides the general method", {
+  # A Gaussian prior through a Gaussian kernel is N(m, Sigma + V) directly and
+  # never samples a parameter, so it must beat the generic two-step method.
+  fam <- gaussian_family(dim = 1L, sigma = matrix(1))
+  prior <- gaussian_mixing(prior_mean = 0, prior_cov = matrix(3))
+  set.seed(1)
+  x <- draw(fam(prior), 2e5)
+  expect_equal(var(as.vector(x)), 4, tolerance = 0.05)
+})

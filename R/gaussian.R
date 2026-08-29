@@ -111,10 +111,11 @@ method(score, gaussian_family) <- function(family, theta, x) {
 }
 
 
-method(kernel_draw, gaussian_family) <- function(family, theta, n_obs) {
+method(kernel_draw, gaussian_family) <- function(family, theta_mat) {
+  theta_mat <- as.matrix(theta_mat)
   d <- as.integer(family@n_dim)
-  z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
-  t(family@chol_l %*% z + theta)
+  z <- matrix(stats::rnorm(length(theta_mat)), nrow = d, ncol = ncol(theta_mat))
+  t(family@chol_l %*% z + theta_mat)
 }
 
 

@@ -100,12 +100,14 @@ continuous_mixing <- new_class(
 )
 
 
-#' Draw parameters from a continuous mixing measure
+#' Draw parameters from a mixing measure
 #'
-#' The sampling half of a [continuous_mixing]: `n` draws of
-#' \eqn{\theta \sim W}{theta ~ W}. Columns, as parameters are everywhere else
-#' in the package, so the result feeds [kernel_draw()] a column at a time.
-#' @param mixing A [continuous_mixing].
+#' `n` draws of \eqn{\theta \sim W}{theta ~ W}, for any [mixing_measure] W.
+#'
+#' Yields parameter draws across columns, so the result feeds straight into
+#' [kernel_draw()], whose matrix form draws one observation per column in a
+#' single call.
+#' @param mixing A [mixing_measure].
 #' @param n Number of draws.
 #' @return `(d, n)` numeric matrix, one parameter per column.
 #' @examples
@@ -175,6 +177,29 @@ refuse_continuous <- function(x, what) {
 #' @rdname atoms
 #' @usage NULL
 method(atoms, continuous_mixing) <- function(x) refuse_continuous(x, "atoms")
+
+
+#' @description A point mass draws the same parameter every time.
+#' @rdname draw_theta
+#' @usage NULL
+method(draw_theta, point_mixing) <- function(mixing, n) {
+  matrix(mixing@theta_star, nrow = length(mixing@theta_star), ncol = n)
+}
+
+
+#' @description A finite mixture draws its atoms with probability equal to their
+#'   weights.
+#' @rdname draw_theta
+#' @usage NULL
+method(draw_theta, finite_mixing) <- function(mixing, n) {
+  idx <- sample.int(
+    length(mixing@weights),
+    n,
+    replace = TRUE,
+    prob = mixing@weights
+  )
+  mixing@components[, idx, drop = FALSE]
+}
 
 
 #' Weights of a mixing measure

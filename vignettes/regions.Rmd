@@ -89,14 +89,20 @@ library(ripr)
 
 ## Introduction
 
-A null hypothesis, or `null_model` in `ripr` comprises a `parametric_family` and a `region`: a subset of the family's `parameter_space`. `region` is abstract and splits in two.
+A null hypothesis, or `null_model` in `ripr` comprises a `parametric_family` and a `region`: a subset of the family's `parameter_space`.
+
 `convex_region`s are individual convex units that carry the geometry a fitting procedure needs: a `chart()` provides a coordinate system for optimisation, `contains()` encodes membership for the set, and `project()` moves outside points onto the region.
 The `union_region` is a finite union of convex regions and is generally *not* convex.
 
 ```{r hierarchy}
 s <- simplex_region(vertices = diag(3))
+S7::S7_inherits(s, space)
 S7::S7_inherits(s, region)
 S7::S7_inherits(s, convex_region)
+
+# a space with no geometry is not a region.
+S7::S7_inherits(count_space(n = 4L, k = 3L), space)
+S7::S7_inherits(count_space(n = 4L, k = 3L), region)
 
 u <- union_region(s, halfspace_region(normal = c(1, -1, 0)))
 S7::S7_inherits(u, region)

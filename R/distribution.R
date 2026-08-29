@@ -102,11 +102,13 @@ mixture <- new_class(
   "mixture",
   parent = distribution,
   properties = list(family = parametric_family, mixing = distribution),
+  validator = function(self) {
+    mixes_over_problem(self@mixing, self@family@parameter_space)
+  },
   constructor = function(family, mixing) {
     if (!S7_inherits(mixing, distribution)) {
       mixing <- dirac(theta = as.numeric(mixing))
     }
-    check_mixes_over(mixing, family@parameter_space)
     new_object(
       S7_object(),
       sample_space = family@sample_space,
@@ -135,30 +137,34 @@ method(supported_in, distribution) <- function(dist, space) {
 }
 
 
-#' The refusal a mixture owes a measure that does not live on its parameters
+#' What is wrong with mixing this measure over these parameters, if anything
+#'
+#' Returns a message for [mixture()]'s validator, or `NULL` when the pairing is
+#' sound.
 #' @keywords internal
 #' @noRd
-check_mixes_over <- function(mixing, parameter_space) {
+mixes_over_problem <- function(mixing, parameter_space) {
   if (isTRUE(supported_in(mixing, parameter_space))) {
-    return(invisible(NULL))
+    return(NULL)
   }
-  mixing_dim <- tryCatch(space_dim(mixing@sample_space), error = function(e) {
-    NA_integer_
-  })
+  # Figure out the measure's own space.
+  # This runs purely to say what precisely went wrong.
+  mixing_dim <- tryCatch(
+    space_dim(mixing@sample_space),
+    error = function(e) NA_integer_
+  )
   if (!is.na(mixing_dim) && mixing_dim != space_dim(parameter_space)) {
-    stop(
+    return(paste0(
       "`mixing` is over ",
       mixing_dim,
       " dimensions but the family's parameters have ",
       space_dim(parameter_space),
-      ".",
-      call. = FALSE
-    )
+      "."
+    ))
   }
-  stop(
+  paste0(
     "`mixing` puts mass outside the family's parameter space, where the ",
-    "family has no density. A mixture over it would not be a distribution.",
-    call. = FALSE
+    "family is not defined. A mixture over it would not be a distribution."
   )
 }
 

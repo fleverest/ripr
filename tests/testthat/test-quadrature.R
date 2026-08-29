@@ -9,7 +9,7 @@ q_binomial <- function(n = 10, p = 0.75) {
   fam <- multinomial_family(n_trials = n, k = 2)
   list(
     family = fam,
-    Q = induced_distribution(fam, point_mixing(theta_star = c(p, 1 - p)))
+    Q = induced_distribution(fam, dirac(theta = c(p, 1 - p)))
   )
 }
 
@@ -49,7 +49,7 @@ test_that("the exact engine drops nodes carrying no Q mass", {
   # A degenerate Q puts zero mass on most of the support. Those nodes must be
   # screened out, or `log_q - log_p_W` gives 0 * -Inf = NaN downstream.
   fam <- multinomial_family(n_trials = 4, k = 2)
-  Q <- induced_distribution(fam, point_mixing(theta_star = c(1, 0)))
+  Q <- induced_distribution(fam, dirac(theta = c(1, 0)))
   eng <- resolve_engine(exact_engine(), Q, fam)
 
   expect_equal(n_nodes(eng), 1L)
@@ -215,7 +215,7 @@ q_gaussian <- function(d = 1, mean = NULL, sigma = NULL) {
   }
   list(
     family = fam,
-    Q = induced_distribution(fam, point_mixing(theta_star = mean))
+    Q = induced_distribution(fam, dirac(theta = mean))
   )
 }
 
@@ -297,7 +297,7 @@ test_that("Gauss-Hermite works for a Gaussian-prior alternative", {
   fam <- gaussian_family(dim = 1, sigma = matrix(1))
   Q <- induced_distribution(
     fam,
-    gaussian_mixing(prior_mean = 0.5, prior_cov = matrix(2))
+    gaussian_dist(prior_mean = 0.5, prior_cov = matrix(2))
   )
   eng <- resolve_engine(gh_engine(25L), Q, fam)
   # The induced mixture is N(0.5, 1 + 2), so its variance is 3.

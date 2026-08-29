@@ -1,18 +1,14 @@
-#' @include mixing_measure.R family.R
+#' @include space.R family.R
 NULL
 
-#' Distributions over a sample space
+#' Distributions over a space
 #'
 #' A `distribution` is a law over a [space]: the type the RIPr problem
 #' consumes as the alternative \eqn{Q}{Q}, and the type it returns as
 #' \eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, [log_density()]
-#' and [draw()], over the outcomes its `sample_space` admits.
-#'
-#' This is the sample-side counterpart of [mixing_measure], which is a law over
-#' a [convex_region].
+#' and [draw()], over the points its `sample_space` admits.
 #'
 #' \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
-#' closed-form outcome law can subclass this directly, supply the two methods,
 #' and is usable everywhere an [induced_distribution()] is.
 #' @param sample_space The [space] this is a law over.
 #' @examples
@@ -91,13 +87,13 @@ method(family, distribution) <- function(object, ...) NULL
 #' `fam(theta)` and `fam(W)`.
 #'
 #' @param family The [parametric_family] whose kernel is pushed forward.
-#' @param mixing A [mixing_measure] over its parameter space, or a parameter
+#' @param mixing A [distribution] over its parameter space, or a parameter
 #'   vector for a point mass.
 #' @return An `induced_distribution`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' induced_distribution(fam, c(0.5, 0.3, 0.2))
-#' induced_distribution(fam, finite_mixing(
+#' induced_distribution(fam, finite_dist(
 #'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
 #'   weights = c(0.5, 0.5)
 #' ))
@@ -105,10 +101,10 @@ method(family, distribution) <- function(object, ...) NULL
 induced_distribution <- new_class(
   "induced_distribution",
   parent = distribution,
-  properties = list(family = parametric_family, mixing = mixing_measure),
+  properties = list(family = parametric_family, mixing = distribution),
   constructor = function(family, mixing) {
-    if (!S7_inherits(mixing, mixing_measure)) {
-      mixing <- point_mixing(theta_star = as.numeric(mixing))
+    if (!S7_inherits(mixing, distribution)) {
+      mixing <- dirac(theta = as.numeric(mixing))
     }
     new_object(
       S7_object(),
@@ -148,10 +144,10 @@ method(print, induced_distribution) <- function(x, ...) {
 method(format, induced_distribution) <- function(x, ...) {
   name <- attr(S7_class(x@family), "name")
   n <- n_atoms(x@mixing)
-  detail <- if (S7_inherits(x@mixing, point_mixing)) {
+  detail <- if (S7_inherits(x@mixing, dirac)) {
     paste0(
       "at theta = (",
-      paste(signif(x@mixing@theta_star, 3L), collapse = ", "),
+      paste(signif(x@mixing@theta, 3L), collapse = ", "),
       ")"
     )
   } else if (is.na(n)) {
@@ -166,7 +162,7 @@ method(format, induced_distribution) <- function(x, ...) {
 # --- Induced-mixture formulas: double dispatch on (mixing, family) -----------
 
 #' Induced log density `log int dP_theta(x) dW(theta)`
-#' @param mixing A [mixing_measure].
+#' @param mixing A [distribution] over the parameter space.
 #' @param family A [parametric_family].
 #' @param x `(M, K)` matrix of outcomes.
 #' @return Length-`M` numeric vector.
@@ -179,7 +175,7 @@ induced_log_density <- new_generic(
 
 
 #' Draw from the induced mixture
-#' @param mixing A [mixing_measure].
+#' @param mixing A [distribution] over the parameter space.
 #' @param family A [parametric_family].
 #' @param n_obs Number of draws.
 #' @return `(n_obs, K)` numeric matrix.
@@ -196,48 +192,11 @@ induced_draw <- new_generic(
 #' value.
 #' @rdname induced_draw
 #' @usage NULL
-method(induced_draw, list(mixing_measure, parametric_family)) <- function(
+method(induced_draw, list(distribution, parametric_family)) <- function(
   mixing,
   family,
   n_obs
 ) {
-  kernel_draw(family, draw_theta(mixing, n_obs))
+  # `draw()` returns rows, so we transpose
+  kernel_draw(family, t(draw(mixing, n_obs)))
 }
-
-
-method(induced_log_density, list(point_mixing, parametric_family)) <- function(
-  mixing,
-  family,
-  x
-) {
-  kernel_loglik(family, mixing@theta_star, x)
-}
-
-
-method(induced_log_density, list(finite_mixing, parametric_family)) <- function(
-  mixing,
-  family,
-  x
-) {
-  row_logsumexp(add_by_col(
-    kernel_loglik_batch(family, mixing@components, x),
-    log(mixing@weights)
-  ))
-}
-
-
-method(induced_log_density, list(continuous_mixing, parametric_family)) <-
-  function(mixing, family, x) {
-    stop(
-      "no induced density is implemented for a `",
-      attr(S7_class(mixing), "name"),
-      "` over a `",
-      attr(S7_class(family), "name"),
-      "`. Mixing a continuous measure through a kernel is an integral, and ",
-      "only some pairings have one in closed or quadrature form.\n",
-      "This is deliberately not approximated by Monte Carlo by default, ",
-      "see `draw_theta()` if you wish to approximate the mixing distribution ",
-      "with random draws instead.",
-      call. = FALSE
-    )
-  }

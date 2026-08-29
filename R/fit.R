@@ -58,9 +58,9 @@ ripr_init <- function(
     # near where W_1 puts its mass, which is where the RIPr will be. Falls back
     # to the family's canonical point, since Q need not be a mixture at all.
     ref <- if (S7_inherits(alternative, induced_distribution)) {
-      mode_parameter(alternative@mixing)
+      reference_point(alternative@mixing)
     } else {
-      reference_parameter(null@family)
+      reference_point(null@family)
     }
     atoms <- lapply(
       parts(null@region),
@@ -560,7 +560,7 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
 #' @param tol,max_iter Passed to the weight solve.
 #' @param max_rounds Cap on refinement rounds.
-#' @return A list with `W0` (a [finite_mixing]), `P_star` (a [induced_distribution]), `kl` of
+#' @return A list with `W0` (a [finite_dist]), `P_star` (a [induced_distribution]), `kl` of
 #'   the returned mixture, `gap_fit` (the last Frank--Wolfe gap recorded during
 #'   fitting, `NA` if none was), `gap_final` (a fresh Frank--Wolfe gap over the
 #'   returned mixture, `NA` unless `record_gap = TRUE`), `rounds`, `atoms`,
@@ -641,7 +641,7 @@ ripr_finish <- function(
     )
   }
 
-  mixing <- finite_mixing(
+  mixing <- finite_dist(
     components = flat_atoms(state)[, keep, drop = FALSE],
     weights = w[keep] / sum(w[keep])
   )

@@ -21,6 +21,6 @@ certification obtains a sample independent of the fit.
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))
+Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
 resolve_engine(mc_engine(200L), Q, fam)
 }

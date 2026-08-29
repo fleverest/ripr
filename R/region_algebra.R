@@ -94,7 +94,11 @@ method(parts, empty_region) <- function(space) list()
 #' @description An empty region has no cells.
 #' @rdname cells
 #' @usage NULL
-method(cells, empty_region) <- function(space, max_cells = 1000L, .budget = NULL) {
+method(cells, empty_region) <- function(
+  space,
+  max_cells = 1000L,
+  .budget = NULL
+) {
   list()
 }
 
@@ -338,7 +342,11 @@ method(parts, union_region) <- function(space) space@parts
 #'   share one `max_cells` budget, so the cap is on the union's total.
 #' @rdname cells
 #' @usage NULL
-method(cells, union_region) <- function(space, max_cells = 1000L, .budget = NULL) {
+method(cells, union_region) <- function(
+  space,
+  max_cells = 1000L,
+  .budget = NULL
+) {
   budget <- if (is.null(.budget)) cell_budget(max_cells) else .budget
   unlist(
     lapply(space@parts, \(p) cells(p, .budget = budget)),

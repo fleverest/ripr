@@ -26,7 +26,7 @@ own; in normal use the step verbs and \code{\link[=ripr_finish]{ripr_finish()}} 
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))
+Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
 engine <- resolve_engine(exact_engine(), Q, fam)
 log_expect_q(engine, log(engine@nodes[, 1] + 1))
 }

@@ -2,13 +2,13 @@
 % Please edit documentation in R/distribution.R
 \name{induced_draw}
 \alias{induced_draw}
-\alias{induced_draw,ripr::mixing_measure,ripr::parametric_family-method}
+\alias{induced_draw,ripr::distribution,ripr::parametric_family-method}
 \title{Draw from the induced mixture}
 \usage{
 induced_draw(mixing, family, n_obs)
 }
 \arguments{
-\item{mixing}{A \link{mixing_measure}.}
+\item{mixing}{A \link{distribution} over the parameter space.}
 
 \item{family}{A \link{parametric_family}.}
 

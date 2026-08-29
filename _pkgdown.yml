@@ -81,27 +81,26 @@ reference:
 
 - title: Distributions
   desc: >
-    A `distribution` is a law over a sample space, and a `mixing_measure` is a
-    law over a parameter space. Pushing the latter through a family's kernel
-    induces the former.
+    A `distribution` is a law over a `space`. Pushing one over a parameter space
+    through a family's kernel induces a mixture distribution over the family's
+    sample space.
   contents:
   - distribution
   - log_density
   - draw
   - family.distribution
   - induced_distribution
-  - mixing_measure
-  - point_mixing
-  - finite_mixing
-  - continuous_mixing
-  - gaussian_mixing
+  - discrete_dist
+  - dirac
+  - finite_dist
+  - continuous_dist
+  - gaussian_dist
   - dirichlet
   - n_atoms
   - atoms
-  - weights.mixing_measure
-  - draw_theta
+  - weights.distribution
   - prune
-  - mode_parameter
+  - reference_point
 
 - title: Random variables
   desc: >

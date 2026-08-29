@@ -7,7 +7,7 @@
 
 fixture <- function(snapshot = "none") {
   fam <- multinomial_family(n_trials = 8, k = 3)
-  alternative <- induced_distribution(fam, point_mixing(c(0.5, 0.3, 0.2)))
+  alternative <- induced_distribution(fam, dirac(c(0.5, 0.3, 0.2)))
   parts <- lapply(2:3, function(j) {
     simplex_region(
       vertices = cbind(
@@ -132,7 +132,7 @@ test_that("KL is zero when the mixture is the alternative", {
   # anything, so it catches a mis-signed or mis-weighted reduction.
   fam <- multinomial_family(n_trials = 8, k = 3)
   theta <- c(0.5, 0.3, 0.2)
-  alternative <- induced_distribution(fam, point_mixing(theta))
+  alternative <- induced_distribution(fam, dirac(theta))
   st <- ripr_state(
     atoms = list(matrix(theta, ncol = 1L)),
     weights = list(1),

@@ -37,8 +37,8 @@ test_that("only the truncated case requires integer concentrations", {
   expect_error(truncated(c(2, 2.7, 1), region), "singular")
   expect_identical(truncated(c(4, 3, 2), region)@alpha, c(4L, 3L, 2L))
 
-  expect_true(S7::S7_inherits(dirichlet_mixing(c(1.5, 2)), dirichlet_mixing))
-  expect_equal(dirichlet_mixing(c(0.5, 1.5, 2.25))@alpha, c(0.5, 1.5, 2.25))
+  expect_true(S7::S7_inherits(dirichlet(c(1.5, 2)), dirichlet))
+  expect_equal(dirichlet(c(0.5, 1.5, 2.25))@alpha, c(0.5, 1.5, 2.25))
 })
 
 test_that("a non-integer Dirichlet still induces the right mixture", {
@@ -53,21 +53,21 @@ test_that("a non-integer Dirichlet still induces the right mixture", {
       (sum(lgamma(alpha + x)) - lgamma(sum(alpha + x))) -
       (sum(lgamma(alpha)) - lgamma(sum(alpha)))
   })
-  got <- log_density(family(dirichlet_mixing(alpha = alpha)), outcomes)
+  got <- log_density(family(dirichlet(alpha = alpha)), outcomes)
 
   expect_equal(got, hand, tolerance = 1e-14)
   expect_equal(sum(exp(got)), 1, tolerance = 1e-12)
 })
 
 test_that("alpha must be a positive vector of length at least two", {
-  expect_error(dirichlet_mixing(alpha = 3), "at least 2 entries")
-  expect_error(dirichlet_mixing(alpha = c(2, 0)), "finite positive")
-  expect_error(dirichlet_mixing(alpha = c(2, -1)), "finite positive")
+  expect_error(dirichlet(alpha = 3), "at least 2 entries")
+  expect_error(dirichlet(alpha = c(2, 0)), "finite positive")
+  expect_error(dirichlet(alpha = c(2, -1)), "finite positive")
 })
 
 # --- The untruncated case, against closed forms -------------------------------
 
-test_that("dirichlet_mixing induces the Dirichlet-multinomial", {
+test_that("dirichlet induces the Dirichlet-multinomial", {
   n <- 6L
   family <- k3_family(n)
   alpha <- c(4, 3, 2)
@@ -79,7 +79,7 @@ test_that("dirichlet_mixing induces the Dirichlet-multinomial", {
       (sum(lgamma(alpha + x)) - lgamma(sum(alpha + x))) -
       (sum(lgamma(alpha)) - lgamma(sum(alpha)))
   })
-  got <- log_density(family(dirichlet_mixing(alpha = alpha)), outcomes)
+  got <- log_density(family(dirichlet(alpha = alpha)), outcomes)
 
   expect_equal(got, hand, tolerance = 1e-14)
   expect_equal(sum(exp(got)), 1, tolerance = 1e-12)
@@ -94,7 +94,7 @@ test_that("a uniform Dirichlet induces the uniform law over the lattice", {
     n <- 5L
     family <- multinomial_family(n_trials = n, k = k)
     outcomes <- enumerate_space(family@sample_space)
-    flat <- family(dirichlet_mixing(alpha = rep(1, k)))
+    flat <- family(dirichlet(alpha = rep(1, k)))
     mass <- exp(log_density(flat, outcomes))
 
     expect_equal(nrow(outcomes), choose(n + k - 1L, k - 1L))
@@ -157,7 +157,7 @@ test_that("truncating to the whole simplex reproduces the untruncated law", {
   outcomes <- enumerate_space(family@sample_space)
   alpha <- c(4, 3, 2)
 
-  closed <- log_density(family(dirichlet_mixing(alpha = alpha)), outcomes)
+  closed <- log_density(family(dirichlet(alpha = alpha)), outcomes)
   quadrature <- log_density(
     family(truncated(alpha, family@parameter_space)),
     outcomes
@@ -413,20 +413,20 @@ test_that("an oversized quadrature rule is refused, naming what drove it", {
 
 # --- Sampling -----------------------------------------------------------------
 
-test_that("draw_theta lands inside the region", {
+test_that("draw lands inside the region", {
   set.seed(1)
   region <- plurality_complement()
-  theta <- draw_theta(truncated(c(4, 3, 2), region), 200L)
+  theta <- draw(truncated(c(4, 3, 2), region), 200L)
 
-  expect_equal(dim(theta), c(3L, 200L))
-  expect_true(all(apply(theta, 2L, function(t) contains(region, t))))
-  expect_equal(colSums(theta), rep(1, 200L))
+  expect_equal(dim(theta), c(200L, 3L))
+  expect_true(all(apply(theta, 1L, function(t) contains(region, t))))
+  expect_equal(rowSums(theta), rep(1, 200L))
 })
 
-test_that("draw_theta on an untruncated Dirichlet lands in the simplex", {
+test_that("draw on an untruncated Dirichlet lands in the simplex", {
   set.seed(1)
-  theta <- draw_theta(dirichlet_mixing(alpha = c(4, 3, 2)), 100L)
-  expect_equal(colSums(theta), rep(1, 100L))
+  theta <- draw(dirichlet(alpha = c(4, 3, 2)), 100L)
+  expect_equal(rowSums(theta), rep(1, 100L))
   expect_true(all(theta > 0))
 })
 
@@ -436,8 +436,8 @@ test_that("a region the prior barely reaches errors rather than looping", {
     c(1, 0, 0), c(0.999, 0.001, 0), c(0.999, 0, 0.001)
   ))
   pinched <- truncated(c(1, 1, 1), corner)
-  expect_error(draw_theta(pinched, 10L), "rejection sampling")
-  expect_error(draw_theta(pinched, 10L), "proposals")
+  expect_error(draw(pinched, 10L), "rejection sampling")
+  expect_error(draw(pinched, 10L), "proposals")
 })
 
 test_that("draw goes through the kernel one parameter at a time", {
@@ -454,7 +454,7 @@ test_that("draw goes through the kernel one parameter at a time", {
 
 test_that("a continuous mixing measure has no support to list", {
   for (mixing in list(
-    dirichlet_mixing(alpha = c(4, 3, 2)),
+    dirichlet(alpha = c(4, 3, 2)),
     truncated(c(4, 3, 2), plurality_complement())
   )) {
     expect_true(is.na(n_atoms(mixing)))
@@ -465,26 +465,26 @@ test_that("a continuous mixing measure has no support to list", {
   }
 })
 
-test_that("mode_parameter seeds the optimiser from inside the region", {
+test_that("reference_point seeds the optimiser from inside the region", {
   # The mode when every concentration exceeds 1, the mean otherwise, projected
   # onto the region when the untruncated point is outside it.
-  expect_equal(mode_parameter(dirichlet_mixing(c(4, 3, 2))), c(3, 2, 1) / 6)
-  expect_equal(mode_parameter(dirichlet_mixing(c(1, 3, 2))), c(1, 3, 2) / 6)
+  expect_equal(reference_point(dirichlet(c(4, 3, 2))), c(3, 2, 1) / 6)
+  expect_equal(reference_point(dirichlet(c(1, 3, 2))), c(1, 3, 2) / 6)
 
   region <- plurality_complement()
-  inside <- mode_parameter(truncated(c(4, 3, 2), region))
+  inside <- reference_point(truncated(c(4, 3, 2), region))
   expect_true(contains(region, inside))
 
   # A prior whose mode sits in the null still has to start somewhere legal.
-  outside <- mode_parameter(truncated(c(2, 6, 6), region))
+  outside <- reference_point(truncated(c(2, 6, 6), region))
   expect_true(contains(region, outside))
 })
 
 test_that("a Dirichlet mixed through the wrong family errors naming both", {
-  wrong <- gaussian_family(dim = 3L)(dirichlet_mixing(alpha = c(2, 2, 2)))
+  wrong <- gaussian_family(dim = 3L)(dirichlet(alpha = c(2, 2, 2)))
   expect_error(
     log_density(wrong, c(0, 0, 0)),
-    "`dirichlet_mixing` over a `gaussian_family`"
+    "`dirichlet` over a `gaussian_family`"
   )
   # And it says there is no silent Monte Carlo fallback, and what to reach for
   # instead of one.
@@ -492,12 +492,12 @@ test_that("a Dirichlet mixed through the wrong family errors naming both", {
     log_density(wrong, c(0, 0, 0)),
     "not approximated by Monte Carlo"
   )
-  expect_error(log_density(wrong, c(0, 0, 0)), "draw_theta")
+  expect_error(log_density(wrong, c(0, 0, 0)), "`draw\\(\\)`")
 })
 
 test_that("the concentration count must match the family's categories", {
   expect_error(
-    log_density(k3_family(4L)(dirichlet_mixing(c(2, 2))), c(2L, 1L, 1L)),
+    log_density(k3_family(4L)(dirichlet(c(2, 2))), c(2L, 1L, 1L)),
     "2 entries but the family has 3 categories"
   )
 })

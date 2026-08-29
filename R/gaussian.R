@@ -1,4 +1,4 @@
-#' @include family.R mixing_measure.R distribution.R quadrature.R
+#' @include family.R mixing.R distribution.R quadrature.R
 NULL
 
 
@@ -128,16 +128,23 @@ method(kernel_draw, gaussian_family) <- function(family, theta_mat) {
 #'
 #' @param prior_mean Numeric prior mean vector.
 #' @param prior_cov Prior covariance, symmetric positive definite.
-#' @return A `gaussian_mixing`.
+#' @return A `gaussian_dist`.
 #' @examples
 #' fam <- gaussian_family(dim = 2L)
-#' prior <- gaussian_mixing(prior_mean = c(0, 0), prior_cov = diag(2))
+#' prior <- gaussian_dist(prior_mean = c(0, 0), prior_cov = diag(2))
 #' log_density(fam(prior), c(0.5, 0.5))
 #' @export
-gaussian_mixing <- new_class(
-  "gaussian_mixing",
-  parent = continuous_mixing,
-  properties = list(prior_mean = class_numeric, prior_cov = class_any),
+gaussian_dist <- new_class(
+  "gaussian_dist",
+  parent = continuous_dist,
+  properties = list(
+    prior_mean = class_numeric,
+    prior_cov = class_any,
+    sample_space = new_property(
+      space,
+      getter = function(self) real_region(length(self@prior_mean))
+    )
+  ),
   constructor = function(prior_mean, prior_cov) {
     prior_mean <- as.numeric(prior_mean)
     new_object(
@@ -149,7 +156,7 @@ gaussian_mixing <- new_class(
 )
 
 
-method(induced_log_density, list(gaussian_mixing, gaussian_family)) <- function(
+method(induced_log_density, list(gaussian_dist, gaussian_family)) <- function(
   mixing,
   family,
   x
@@ -162,7 +169,7 @@ method(induced_log_density, list(gaussian_mixing, gaussian_family)) <- function(
 }
 
 
-method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
+method(induced_draw, list(gaussian_dist, gaussian_family)) <- function(
   mixing,
   family,
   n_obs
@@ -174,34 +181,36 @@ method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
 }
 
 
-method(draw_theta, gaussian_mixing) <- function(mixing, n) {
-  d <- length(mixing@prior_mean)
-  z <- matrix(stats::rnorm(n * d), nrow = d, ncol = n)
-  t(chol(mixing@prior_cov)) %*% z + mixing@prior_mean
+#' @rdname draw
+#' @usage NULL
+method(draw, gaussian_dist) <- function(dist, n_obs) {
+  d <- length(dist@prior_mean)
+  z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
+  t(t(chol(dist@prior_cov)) %*% z + dist@prior_mean)
 }
 
 
 # --- Mode and reference parameter for a Gaussian mixing measures --------------
 
-method(mode_parameter, gaussian_mixing) <- function(x) x@prior_mean
+method(reference_point, gaussian_dist) <- function(x) x@prior_mean
 
 
 # --- Moments, for Gauss-Hermite quadrature ------------------------------------
 
 method(
   induced_gaussian_moments,
-  list(point_mixing, gaussian_family)
+  list(dirac, gaussian_family)
 ) <- function(
   mixing,
   family
 ) {
-  list(mean = mixing@theta_star, cov = family@sigma)
+  list(mean = mixing@theta, cov = family@sigma)
 }
 
 
 method(
   induced_gaussian_moments,
-  list(gaussian_mixing, gaussian_family)
+  list(gaussian_dist, gaussian_family)
 ) <- function(
   mixing,
   family

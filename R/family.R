@@ -14,9 +14,9 @@ NULL
 #'
 #' Families are callable, which is that map written down: `fam(theta)` is the
 #' [distribution] \eqn{p_\theta}{p_theta}. A kernel extends canonically from
-#' points to measures, so `fam(W)` for a [mixing_measure] is the same map and
-#' gives the induced \eqn{P_W}{P_W}. [induced_distribution()] is the same thing
-#' spelled out, for when that reads better.
+#' points to distributions, so `fam(W)` for a [distribution] `W`` over the
+#' parameter space is the same map and gives the [induced_distribution()]
+#' \eqn{P_W}{P_W}.
 #'
 #' Not marked abstract, because S7 forbids that alongside a `class_function`
 #' parent -- abstract classes must have abstract parents. It is one in every
@@ -34,7 +34,7 @@ NULL
 #'
 #' # The map theta -> p_theta, and its extension to mixing measures.
 #' fam(c(0.5, 0.3, 0.2))
-#' fam(finite_mixing(
+#' fam(finite_dist(
 #'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
 #'   weights = c(0.5, 0.5)
 #' ))
@@ -213,22 +213,3 @@ kernel_draw <- new_generic(
     S7::S7_dispatch()
   }
 )
-
-
-#' A reference point for the parameter space.
-#'
-#' Used as a fallback for initialising the atoms for a RIPr optimisation run,
-#' where the alternative does not take the form of a mixture. Defaults to the
-#' point of the parameter space closest to the origin, which is the centroid for
-#' a simplex and the origin itself for an unconstrained space.
-#' @keywords internal
-#' @noRd
-reference_parameter <- new_generic("reference_parameter", "family", \(family) {
-  S7::S7_dispatch()
-})
-
-
-method(reference_parameter, parametric_family) <- function(family) {
-  space <- family@parameter_space
-  project(space, rep(0, space_dim(space)))
-}

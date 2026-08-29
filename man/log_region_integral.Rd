@@ -2,14 +2,14 @@
 % Please edit documentation in R/dirichlet.R
 \name{log_region_integral}
 \alias{log_region_integral}
-\alias{log_region_integral,ripr::dirichlet_mixing-method}
+\alias{log_region_integral,ripr::dirichlet-method}
 \alias{log_region_integral,ripr::truncated_dirichlet-method}
 \title{Log of the unnormalised Dirichlet integral over a region}
 \usage{
 log_region_integral(mixing, shape)
 }
 \arguments{
-\item{mixing}{A \link{dirichlet_type}.}
+\item{mixing}{A \link{dirichlet_dist}.}
 
 \item{shape}{\verb{(K, M)} matrix of Dirichlet shape vectors, one per column:
 \code{alpha + x} for the numerator, \code{alpha} for the normaliser.}
@@ -20,7 +20,7 @@ Length-\code{M} numeric vector.
 \description{
 \eqn{\log \int_A \prod_j \theta_j^{\beta_j - 1} \mathrm{d}\theta}{
 log int_A prod_j theta_j^(beta_j - 1) dtheta}, evaluated at every column of
-\code{shape} at once. This term is what differentiates the \code{\link[=dirichlet_mixing]{dirichlet_mixing()}}
+\code{shape} at once. This term is what differentiates the \code{\link[=dirichlet]{dirichlet()}}
 from a \code{\link[=truncated_dirichlet]{truncated_dirichlet()}}.
 
 Over the whole simplex the integral is the multivariate Beta

@@ -1,4 +1,4 @@
-#' @include mixing_measure.R distribution.R multinomial.R region.R
+#' @include mixing.R distribution.R multinomial.R region.R
 #' @include polytope_region.R
 NULL
 
@@ -19,7 +19,7 @@ NULL
 
 #' Validate Dirichlet concentration parameters
 #'
-#' The closed form [dirichlet_mixing()] evaluates is exact for real ones, so
+#' The closed form [dirichlet()] evaluates is exact for real ones, so
 #' only the quadrature in [truncated_dirichlet()] needs the integer restriction.
 #' @keywords internal
 #' @noRd
@@ -88,20 +88,20 @@ dirichlet_draws <- function(alpha, n) {
 
 #' Dirichlet priors over the simplex
 #'
-#' The abstract parent of [dirichlet_mixing()] and [truncated_dirichlet()]:
+#' The abstract parent of [dirichlet()] and [truncated_dirichlet()]:
 #' a Dirichlet law \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the
 #' probability simplex, possibly truncated to a particular [region]. Paired with
 #' a [multinomial_family()] it induces a continuous mixture.
 #'
 #' Concentrations must be positive. [truncated_dirichlet()] narrows that to
 #' positive **integers**, because the exactness of Gauss-Jacobi quadrature
-#' requires it; [dirichlet_mixing()] evaluates a closed form and takes any
+#' requires it; [dirichlet()] evaluates a closed form and takes any
 #' positive reals.
 #'
 #' @param alpha Length-`K` vector of positive concentrations, `K >= 2`. The
-#'   property both subclasses share; `dirichlet_type` is abstract and is
+#'   property both subclasses share; `dirichlet_dist` is abstract and is
 #'   not constructed directly. [truncated_dirichlet()] narrows this to whole
-#'   numbers; [dirichlet_mixing()] does not.
+#'   numbers; [dirichlet()] does not.
 #' @param region A [region] of the probability simplex in `R^K`, bounded and
 #'   full-dimensional. [truncated_dirichlet()] only.
 #' @param degree_slack Internal: Raise the rule's degree by this much. The
@@ -109,19 +109,19 @@ dirichlet_draws <- function(alpha, n) {
 #'   is working as expected. [truncated_dirichlet()] only.
 #' @param max_nodes Refuse a rule with more nodes than this.
 #'   [truncated_dirichlet()] only.
-#' @return A `dirichlet_mixing` or a `truncated_dirichlet`; both are
-#'   `dirichlet_type` objects.
+#' @return A `dirichlet` or a `truncated_dirichlet`; both are
+#'   `dirichlet_dist` objects.
 #' @examples
-#' # `dirichlet_type` is abstract; the two constructors subclass it:
-#' S7::S7_inherits(dirichlet_mixing(alpha = c(4, 3, 2)), dirichlet_type)
+#' # `dirichlet_dist` is abstract; the two constructors subclass it:
+#' S7::S7_inherits(dirichlet(alpha = c(4, 3, 2)), dirichlet_dist)
 #'
 #' fam <- multinomial_family(n_trials = 6L, k = 3L)
-#' Q <- fam(dirichlet_mixing(alpha = c(4, 3, 2)))
+#' Q <- fam(dirichlet(alpha = c(4, 3, 2)))
 #' sum(exp(log_density(Q, enumerate_space(fam@sample_space))))
 #'
 #' # A uniform prior gives every outcome the same mass -- the Bose-Einstein
 #' # count, `choose(n + K - 1, K - 1)` outcomes each of equal probability.
-#' flat <- fam(dirichlet_mixing(alpha = c(1, 1, 1)))
+#' flat <- fam(dirichlet(alpha = c(1, 1, 1)))
 #' unique(round(exp(log_density(flat, enumerate_space(fam@sample_space))), 12))
 #' 1 / choose(6 + 3 - 1, 3 - 1)
 #'
@@ -140,11 +140,19 @@ dirichlet_draws <- function(alpha, n) {
 #' @rdname dirichlet
 #' @aliases dirichlet
 #' @export
-dirichlet_type <- new_class(
-  "dirichlet_type",
-  parent = continuous_mixing,
+dirichlet_dist <- new_class(
+  "dirichlet_dist",
+  parent = continuous_dist,
   abstract = TRUE,
-  properties = list(alpha = class_numeric)
+  properties = list(
+    alpha = class_numeric,
+    sample_space = new_property(
+      space,
+      getter = function(self) {
+        simplex_region(vertices = diag(length(self@alpha)))
+      }
+    )
+  )
 )
 
 
@@ -152,7 +160,7 @@ dirichlet_type <- new_class(
 #'
 #' \eqn{\log \int_A \prod_j \theta_j^{\beta_j - 1} \mathrm{d}\theta}{
 #' log int_A prod_j theta_j^(beta_j - 1) dtheta}, evaluated at every column of
-#' `shape` at once. This term is what differentiates the [dirichlet_mixing()]
+#' `shape` at once. This term is what differentiates the [dirichlet()]
 #' from a [truncated_dirichlet()].
 #'
 #' No normalisation is applied here because call sites require a ratio of two
@@ -160,7 +168,7 @@ dirichlet_type <- new_class(
 #'
 #' The degree of the integrand is `colSums(shape) - K`, so `shape` has all the
 #' information that a quadrature implementation needs.
-#' @param mixing A [dirichlet_type].
+#' @param mixing A [dirichlet_dist].
 #' @param shape `(K, M)` matrix of Dirichlet shape vectors, one per column:
 #'   `alpha + x` for the numerator, `alpha` for the normaliser.
 #' @return Length-`M` numeric vector.
@@ -174,7 +182,7 @@ log_region_integral <- new_generic(
 
 #' @rdname dirichlet
 #' @usage NULL
-method(induced_log_density, list(dirichlet_type, multinomial_family)) <-
+method(induced_log_density, list(dirichlet_dist, multinomial_family)) <-
   function(mixing, family, x) {
     k <- length(mixing@alpha)
     if (k != family@k) {
@@ -218,9 +226,9 @@ method(induced_log_density, list(dirichlet_type, multinomial_family)) <-
 #' @rdname dirichlet
 #' @order 2
 #' @export
-dirichlet_mixing <- new_class(
-  "dirichlet_mixing",
-  parent = dirichlet_type,
+dirichlet <- new_class(
+  "dirichlet",
+  parent = dirichlet_dist,
   constructor = function(alpha) {
     new_object(S7_object(), alpha = as_concentration(alpha))
   }
@@ -231,13 +239,15 @@ dirichlet_mixing <- new_class(
 #'   function, so this is exact and ignores the degree `shape` implies.
 #' @rdname log_region_integral
 #' @usage NULL
-method(log_region_integral, dirichlet_mixing) <- function(mixing, shape) {
+method(log_region_integral, dirichlet) <- function(mixing, shape) {
   colSums(lgamma(shape)) - lgamma(colSums(shape))
 }
 
 
-method(draw_theta, dirichlet_mixing) <- function(mixing, n) {
-  dirichlet_draws(mixing@alpha, n)
+#' @rdname draw
+#' @usage NULL
+method(draw, dirichlet) <- function(dist, n_obs) {
+  t(dirichlet_draws(dist@alpha, n_obs))
 }
 
 
@@ -245,9 +255,9 @@ method(draw_theta, dirichlet_mixing) <- function(mixing, n) {
 #'   is above 1, and the mean otherwise. Both only seed the optimiser's starting
 #'   atom, so the fallback costs nothing but a slightly different starting
 #'   point.
-#' @rdname mode_parameter
+#' @rdname reference_point
 #' @usage NULL
-method(mode_parameter, dirichlet_mixing) <- function(x) {
+method(reference_point, dirichlet) <- function(x) {
   dirichlet_centre(x@alpha)
 }
 
@@ -444,10 +454,10 @@ check_quadrature_size <- function(
 #' The integrand is a monomial of total degree `|alpha| + n - K`, the same for
 #' every outcome since counts always sum to `n`. A collapsed-coordinate
 #' Gauss-Jacobi rule of that degree on each cell therefore evaluates it exactly
-#' and agrees with [dirichlet_mixing()] over the whole simplex to floating point
+#' and agrees with [dirichlet()] over the whole simplex to floating point
 #' rounding.
 #'
-#' Non-integer concentrations are refused here, unlike in [dirichlet_mixing()]:
+#' Non-integer concentrations are refused here, unlike in [dirichlet()]:
 #' they make the integrand singular on the boundary faces, so the quadrature
 #' rule would only be approximate.
 #'
@@ -456,9 +466,10 @@ check_quadrature_size <- function(
 #' @export
 truncated_dirichlet <- new_class(
   "truncated_dirichlet",
-  parent = dirichlet_type,
+  parent = dirichlet_dist,
   properties = list(
     region = region,
+    sample_space = new_property(space, getter = function(self) self@region),
     cells = class_list,
     degree_slack = class_numeric,
     max_nodes = class_numeric
@@ -653,9 +664,11 @@ method(log_region_integral, truncated_dirichlet) <- function(mixing, shape) {
 
 #' @description Rejection sampling from `Dir(alpha)`, keeping the proposals the
 #'   region contains.
-#' @rdname draw_theta
+#' @rdname draw
 #' @usage NULL
-method(draw_theta, truncated_dirichlet) <- function(mixing, n) {
+method(draw, truncated_dirichlet) <- function(dist, n_obs) {
+  mixing <- dist
+  n <- n_obs
   k <- length(mixing@alpha)
   out <- matrix(NA_real_, nrow = k, ncol = n)
   filled <- 0L
@@ -697,15 +710,15 @@ method(draw_theta, truncated_dirichlet) <- function(mixing, n) {
       )
     }
   }
-  out
+  t(out)
 }
 
 
 #' @description The untruncated mode or mean when the region contains it, and
 #'   otherwise its projection onto whichever cell of the region is nearest.
-#' @rdname mode_parameter
+#' @rdname reference_point
 #' @usage NULL
-method(mode_parameter, truncated_dirichlet) <- function(x) {
+method(reference_point, truncated_dirichlet) <- function(x) {
   centre <- dirichlet_centre(x@alpha)
   if (contains(x@region, centre)) {
     return(centre)

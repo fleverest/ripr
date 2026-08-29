@@ -254,7 +254,7 @@ leaves <- leaf_corners(full, depth)
 length(leaves)
 
 centroids <- vapply(leaves, \(cell) rowMeans(cell@vertices), numeric(3))
-W_alt <- finite_mixing(
+W_alt <- finite_dist(
   components = centroids,
   weights = rep(1 / length(leaves), length(leaves))
 )

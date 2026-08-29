@@ -322,7 +322,7 @@ medial <- null_model(
   )
 )
 
-W_maj <- finite_mixing(
+W_maj <- finite_dist(
   components = cbind(
     c(0.6, 0.2, 0.2),
     c(0.2, 0.6, 0.2),

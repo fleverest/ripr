@@ -9,7 +9,7 @@
 test_that("a point mixing induces the family at its own parameter", {
   fam <- multinomial_family(n_trials = 10, k = 2)
   theta <- c(0.75, 0.25)
-  p <- induced_distribution(fam, point_mixing(theta_star = theta))
+  p <- induced_distribution(fam, dirac(theta = theta))
   x <- enumerate_space(fam@sample_space)
   expect_equal(log_density(p, x), kernel_loglik(fam, theta, x))
 })
@@ -17,7 +17,10 @@ test_that("a point mixing induces the family at its own parameter", {
 test_that("an induced mixture is itself a probability distribution", {
   fam <- multinomial_family(n_trials = 9, k = 3)
   comp <- cbind(c(0.6, 0.3, 0.1), c(0.2, 0.2, 0.6), c(1 / 3, 1 / 3, 1 / 3))
-  p <- induced_distribution(fam, finite_mixing(components = comp, weights = c(0.2, 0.5, 0.3)))
+  p <- induced_distribution(
+    fam,
+    finite_dist(components = comp, weights = c(0.2, 0.5, 0.3))
+  )
   expect_equal(
     sum(exp(log_density(p, enumerate_space(fam@sample_space)))),
     1,
@@ -30,7 +33,7 @@ test_that("a finite mixture is the weighted sum of its components", {
   w <- c(0.4, 0.6)
   comp <- cbind(c(0.5, 0.3, 0.2), c(0.1, 0.1, 0.8))
   x <- enumerate_space(fam@sample_space)
-  p <- induced_distribution(fam, finite_mixing(components = comp, weights = w))
+  p <- induced_distribution(fam, finite_dist(components = comp, weights = w))
 
   manual <- log(
     w[1] *
@@ -44,8 +47,11 @@ test_that("a degenerate finite mixing agrees with the point mixing", {
   fam <- multinomial_family(n_trials = 5, k = 3)
   theta <- c(0.5, 0.3, 0.2)
   x <- enumerate_space(fam@sample_space)
-  a <- induced_distribution(fam, point_mixing(theta_star = theta))
-  b <- induced_distribution(fam, finite_mixing(components = matrix(theta, ncol = 1L), weights = 1))
+  a <- induced_distribution(fam, dirac(theta = theta))
+  b <- induced_distribution(
+    fam,
+    finite_dist(components = matrix(theta, ncol = 1L), weights = 1)
+  )
   expect_equal(log_density(a, x), log_density(b, x))
 })
 
@@ -53,10 +59,13 @@ test_that("a zero-weight atom contributes nothing", {
   fam <- multinomial_family(n_trials = 5, k = 3)
   x <- enumerate_space(fam@sample_space)
   live <- c(0.5, 0.3, 0.2)
-  with_dead <- induced_distribution(fam, finite_mixing(
+  with_dead <- induced_distribution(
+    fam,
+    finite_dist(
       components = cbind(live, c(0.1, 0.1, 0.8)),
       weights = c(1, 0)
-    ))
+    )
+  )
   expect_equal(log_density(with_dead, x), kernel_loglik(fam, live, x))
 })
 
@@ -64,10 +73,13 @@ test_that("a mixture carrying a boundary atom stays finite where it should", {
   # P_W must be strictly positive wherever Q is, or the ratio is undefined; a
   # boundary atom in the mixture is the usual way that gets violated.
   fam <- multinomial_family(n_trials = 5, k = 3)
-  p <- induced_distribution(fam, finite_mixing(
+  p <- induced_distribution(
+    fam,
+    finite_dist(
       components = cbind(c(0.5, 0.5, 0), c(1 / 3, 1 / 3, 1 / 3)),
       weights = c(0.5, 0.5)
-    ))
+    )
+  )
   ld <- log_density(p, enumerate_space(fam@sample_space))
   expect_true(all(is.finite(ld)))
   expect_equal(sum(exp(ld)), 1, tolerance = rounding_tol(1))
@@ -77,10 +89,13 @@ test_that("a mixture carrying a boundary atom stays finite where it should", {
 
 test_that("draw returns the right shape and respects the trial total", {
   fam <- multinomial_family(n_trials = 7, k = 3)
-  p <- induced_distribution(fam, finite_mixing(
+  p <- induced_distribution(
+    fam,
+    finite_dist(
       components = cbind(c(0.6, 0.3, 0.1), c(0.1, 0.1, 0.8)),
       weights = c(0.5, 0.5)
-    ))
+    )
+  )
   set.seed(2)
   d <- draw(p, 200L)
   expect_equal(dim(d), c(200L, 3L))
@@ -90,10 +105,13 @@ test_that("draw returns the right shape and respects the trial total", {
 test_that("draw handles a mixture where one component is never selected", {
   # The per-component loop must not assume every component draws at least once.
   fam <- multinomial_family(n_trials = 4, k = 2)
-  p <- induced_distribution(fam, finite_mixing(
+  p <- induced_distribution(
+    fam,
+    finite_dist(
       components = cbind(c(0.5, 0.5), c(0.9, 0.1)),
       weights = c(1, 0)
-    ))
+    )
+  )
   set.seed(5)
   d <- draw(p, 30L)
   expect_equal(dim(d), c(30L, 2L))
@@ -105,10 +123,13 @@ test_that("draws from a mixture are consistent with its density", {
   # induced_log_density describes: empirical frequencies converge to the pmf.
   skip_on_cran()
   fam <- multinomial_family(n_trials = 4, k = 2)
-  p <- induced_distribution(fam, finite_mixing(
+  p <- induced_distribution(
+    fam,
+    finite_dist(
       components = cbind(c(0.75, 0.25), c(0.25, 0.75)),
       weights = c(0.5, 0.5)
-    ))
+    )
+  )
   set.seed(42)
   d <- draw(p, 2e5)
   x <- enumerate_space(fam@sample_space)
@@ -125,7 +146,7 @@ test_that("draws from a mixture are consistent with its density", {
 test_that("mixture rejects components of the wrong type", {
   fam <- multinomial_family(n_trials = 3, k = 2)
   expect_error(induced_distribution(fam, fam))
-  expect_error(induced_distribution("not a family", point_mixing(theta_star = c(0.5, 0.5))))
+  expect_error(induced_distribution("not a family", dirac(theta = c(0.5, 0.5))))
 })
 
 # --- Callable families --------------------------------------------------------
@@ -141,7 +162,7 @@ test_that("calling a family is the map theta -> p_theta", {
 
 test_that("a kernel extends from points to measures, so fam(W) is the same map", {
   fam <- multinomial_family(n_trials = 4L, k = 3L)
-  w <- finite_mixing(
+  w <- finite_dist(
     components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
     weights = c(0.3, 0.7)
   )
@@ -152,7 +173,7 @@ test_that("a kernel extends from points to measures, so fam(W) is the same map",
   x <- enumerate_space(fam@sample_space)
   expect_equal(
     log_density(fam(theta), x),
-    log_density(fam(point_mixing(theta_star = theta)), x)
+    log_density(fam(dirac(theta = theta)), x)
   )
 })
 
@@ -199,9 +220,13 @@ test_that("a family prints its two spaces, not its closure", {
 
 test_that("a distribution's print distinguishes a point mass from a mixture", {
   fam <- multinomial_family(n_trials = 4L, k = 3L)
-  expect_match(format(fam(c(0.5, 0.3, 0.2))), "at theta = (0.5, 0.3, 0.2)", fixed = TRUE)
   expect_match(
-    format(fam(finite_mixing(
+    format(fam(c(0.5, 0.3, 0.2))),
+    "at theta = (0.5, 0.3, 0.2)",
+    fixed = TRUE
+  )
+  expect_match(
+    format(fam(finite_dist(
       components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
       weights = c(0.5, 0.5)
     ))),
@@ -211,20 +236,20 @@ test_that("a distribution's print distinguishes a point mass from a mixture", {
 })
 
 
-test_that("draw_theta samples every kind of mixing measure", {
+test_that("draw samples every distribution over a parameter space", {
   set.seed(1)
-  p <- draw_theta(point_mixing(theta_star = c(0.5, 0.3, 0.2)), 4L)
-  expect_equal(dim(p), c(3L, 4L))
-  expect_true(all(apply(p, 2L, identical, c(0.5, 0.3, 0.2))))
+  p <- draw(dirac(theta = c(0.5, 0.3, 0.2)), 4L)
+  expect_equal(dim(p), c(4L, 3L))
+  expect_true(all(apply(p, 1L, identical, c(0.5, 0.3, 0.2))))
 
   # Weights govern how often each atom is drawn, and repeats stay in place.
-  w <- finite_mixing(
+  w <- finite_dist(
     components = cbind(c(1, 0, 0), c(0, 1, 0)),
     weights = c(0.25, 0.75)
   )
-  d <- draw_theta(w, 4000L)
-  expect_equal(dim(d), c(3L, 4000L))
-  expect_equal(mean(d[2, ]), 0.75, tolerance = 0.03)
+  d <- draw(w, 4000L)
+  expect_equal(dim(d), c(4000L, 3L))
+  expect_equal(mean(d[, 2L]), 0.75, tolerance = 0.03)
 })
 
 test_that("one induced_draw method serves every mixing measure", {
@@ -233,11 +258,11 @@ test_that("one induced_draw method serves every mixing measure", {
   fam <- multinomial_family(n_trials = 30L, k = 3L)
 
   set.seed(1)
-  x <- draw(fam(point_mixing(theta_star = c(1, 0, 0))), 5L)
+  x <- draw(fam(dirac(theta = c(1, 0, 0))), 5L)
   expect_equal(x, matrix(rep(c(30L, 0L, 0L), each = 5L), nrow = 5L))
 
   set.seed(1)
-  degenerate <- finite_mixing(
+  degenerate <- finite_dist(
     components = cbind(c(1, 0, 0), c(0, 0, 1)),
     weights = c(0.5, 0.5)
   )
@@ -251,7 +276,7 @@ test_that("a closed-form pairing still overrides the general method", {
   # A Gaussian prior through a Gaussian kernel is N(m, Sigma + V) directly and
   # never samples a parameter, so it must beat the generic two-step method.
   fam <- gaussian_family(dim = 1L, sigma = matrix(1))
-  prior <- gaussian_mixing(prior_mean = 0, prior_cov = matrix(3))
+  prior <- gaussian_dist(prior_mean = 0, prior_cov = matrix(3))
   set.seed(1)
   x <- draw(fam(prior), 2e5)
   expect_equal(var(as.vector(x)), 4, tolerance = 0.05)

@@ -2,7 +2,7 @@
 % Please edit documentation in R/distribution.R
 \name{distribution}
 \alias{distribution}
-\title{Distributions over a sample space}
+\title{Distributions over a space}
 \usage{
 distribution(sample_space = space())
 }
@@ -13,14 +13,10 @@ distribution(sample_space = space())
 A \code{distribution} is a law over a \link{space}: the type the RIPr problem
 consumes as the alternative \eqn{Q}{Q}, and the type it returns as
 \eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, \code{\link[=log_density]{log_density()}}
-and \code{\link[=draw]{draw()}}, over the outcomes its \code{sample_space} admits.
+and \code{\link[=draw]{draw()}}, over the points its \code{sample_space} admits.
 }
 \details{
-This is the sample-side counterpart of \link{mixing_measure}, which is a law over
-a \link{convex_region}.
-
 \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
-closed-form outcome law can subclass this directly, supply the two methods,
 and is usable everywhere an \code{\link[=induced_distribution]{induced_distribution()}} is.
 }
 \examples{

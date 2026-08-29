@@ -91,7 +91,7 @@ test_that("a Gaussian prior induces a mixture with inflated covariance", {
   prior_cov <- matrix(c(0.5, 0, 0, 0.25), 2, 2)
   fam <- gaussian_family(dim = 2, sigma = sigma)
   m <- c(0.5, -1)
-  p <- induced_distribution(fam, gaussian_mixing(prior_mean = m, prior_cov = prior_cov))
+  p <- induced_distribution(fam, gaussian_dist(prior_mean = m, prior_cov = prior_cov))
 
   x <- rbind(c(0, 0), c(1, 1), c(-2, 0.5))
   direct <- gaussian_family(dim = 2, sigma = sigma + prior_cov)
@@ -103,7 +103,7 @@ test_that("draws from the induced mixture match the inflated covariance", {
   sigma <- diag(c(1, 2))
   prior_cov <- diag(c(0.5, 0.5))
   fam <- gaussian_family(dim = 2, sigma = sigma)
-  p <- induced_distribution(fam, gaussian_mixing(prior_mean = c(1, 0), prior_cov = prior_cov))
+  p <- induced_distribution(fam, gaussian_dist(prior_mean = c(1, 0), prior_cov = prior_cov))
   set.seed(4)
   d <- draw(p, 2e5)
   expect_equal(colMeans(d), c(1, 0), tolerance = 0.02)
@@ -113,13 +113,13 @@ test_that("draws from the induced mixture match the inflated covariance", {
 test_that("a Gaussian mixing measure has no finite atom count", {
   # It is a continuous measure over the parameter space, so `n_atoms` has no
   # answer rather than the answer 1.
-  g <- gaussian_mixing(prior_mean = 0, prior_cov = matrix(1))
+  g <- gaussian_dist(prior_mean = 0, prior_cov = matrix(1))
   expect_true(is.na(n_atoms(g)))
 })
 
 test_that("the prior covariance must match the prior mean", {
   expect_error(
-    gaussian_mixing(prior_mean = c(0, 0), prior_cov = matrix(1)),
+    gaussian_dist(prior_mean = c(0, 0), prior_cov = matrix(1)),
     "2 by 2"
   )
 })

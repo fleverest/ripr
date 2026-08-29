@@ -7,7 +7,7 @@
 induced_log_density(mixing, family, x)
 }
 \arguments{
-\item{mixing}{A \link{mixing_measure}.}
+\item{mixing}{A \link{distribution} over the parameter space.}
 
 \item{family}{A \link{parametric_family}.}
 

@@ -26,7 +26,7 @@ your own, to judge whether a Monte Carlo engine carries enough draws.
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- induced_distribution(fam, point_mixing(c(0.5, 0.5)))
+Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
 engine <- resolve_engine(mc_engine(200L), Q, fam)
 expect_se(engine, engine@nodes[, 1])
 }

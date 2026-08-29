@@ -7,7 +7,7 @@
 induced_gaussian_moments(mixing, family)
 }
 \arguments{
-\item{mixing}{A \link{mixing_measure}.}
+\item{mixing}{A \link{distribution} over the family's parameter space.}
 
 \item{family}{A \link{parametric_family}.}
 }

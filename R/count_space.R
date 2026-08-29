@@ -100,5 +100,4 @@ method(validate_outcome, count_space) <- function(space, x) {
   x
 }
 
-
 # --- Real vectors -------------------------------------------------------------

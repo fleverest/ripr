@@ -37,9 +37,9 @@ else it offers is a way of navigating that map.
 
 Families are callable, which is that map written down: \code{fam(theta)} is the
 \link{distribution} \eqn{p_\theta}{p_theta}. A kernel extends canonically from
-points to measures, so \code{fam(W)} for a \link{mixing_measure} is the same map and
-gives the induced \eqn{P_W}{P_W}. \code{\link[=induced_distribution]{induced_distribution()}} is the same thing
-spelled out, for when that reads better.
+points to distributions, so \code{fam(W)} for a \link{distribution} `W`` over the
+parameter space is the same map and gives the \code{\link[=induced_distribution]{induced_distribution()}}
+\eqn{P_W}{P_W}.
 
 Not marked abstract, because S7 forbids that alongside a \code{class_function}
 parent -- abstract classes must have abstract parents. It is one in every
@@ -53,7 +53,7 @@ S7::S7_inherits(fam, parametric_family)
 
 # The map theta -> p_theta, and its extension to mixing measures.
 fam(c(0.5, 0.3, 0.2))
-fam(finite_mixing(
+fam(finite_dist(
   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
   weights = c(0.5, 0.5)
 ))

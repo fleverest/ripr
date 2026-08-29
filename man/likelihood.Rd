@@ -24,7 +24,7 @@ of these: \code{likelihood(Q) / likelihood(P_star)}.
 }
 \examples{
 fam <- gaussian_family(dim = 2)
-Q <- likelihood(induced_distribution(fam, point_mixing(c(0.5, 0.5))))
+Q <- likelihood(induced_distribution(fam, dirac(c(0.5, 0.5))))
 Q(c(2,2))
 }
 \seealso{

@@ -578,7 +578,7 @@ null, just at finer resolution:</p>
 <span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="co">#&gt; [1] 27</span></span>
 <span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a></span>
 <span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a>centroids <span class="ot">&lt;-</span> <span class="fu">vapply</span>(leaves, \(cell) <span class="fu">rowMeans</span>(cell<span class="sc">@</span>vertices), <span class="fu">numeric</span>(<span class="dv">3</span>))</span>
-<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a>W_alt <span class="ot">&lt;-</span> <span class="fu">finite_mixing</span>(</span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a>W_alt <span class="ot">&lt;-</span> <span class="fu">finite_dist</span>(</span>
 <span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a>  <span class="at">components =</span> centroids,</span>
 <span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a>  <span class="at">weights =</span> <span class="fu">rep</span>(<span class="dv">1</span> <span class="sc">/</span> <span class="fu">length</span>(leaves), <span class="fu">length</span>(leaves))</span>
 <span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a>)</span></code></pre></div>

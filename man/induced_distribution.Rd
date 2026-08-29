@@ -11,7 +11,7 @@ induced_distribution(family, mixing)
 \arguments{
 \item{family}{The \link{parametric_family} whose kernel is pushed forward.}
 
-\item{mixing}{A \link{mixing_measure} over its parameter space, or a parameter
+\item{mixing}{A \link{distribution} over its parameter space, or a parameter
 vector for a point mass.}
 }
 \value{
@@ -36,7 +36,7 @@ directly is the shorthand for both, and usually reads better:
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 induced_distribution(fam, c(0.5, 0.3, 0.2))
-induced_distribution(fam, finite_mixing(
+induced_distribution(fam, finite_dist(
   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
   weights = c(0.5, 0.5)
 ))

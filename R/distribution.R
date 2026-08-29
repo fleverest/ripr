@@ -242,3 +242,49 @@ method(induced_draw, list(finite_mixing, parametric_family)) <- function(
   }
   out
 }
+
+
+method(induced_log_density, list(continuous_mixing, parametric_family)) <-
+  function(mixing, family, x) {
+    stop(
+      "no induced density is implemented for a `",
+      attr(S7_class(mixing), "name"),
+      "` over a `",
+      attr(S7_class(family), "name"),
+      "`. Mixing a continuous measure through a kernel is an integral, and ",
+      "only some pairings have one in closed or quadrature form.\n",
+      "This is deliberately not approximated by Monte Carlo by default, ",
+      "see `draw_theta()` if you wish to approximate the mixing distribution ",
+      "with random draws instead.",
+      call. = FALSE
+    )
+  }
+
+
+method(induced_draw, list(continuous_mixing, parametric_family)) <- function(
+  mixing,
+  family,
+  n_obs
+) {
+  if (n_obs == 0L) {
+    return(matrix(nrow = 0L, ncol = space_dim(family@sample_space)))
+  }
+  theta <- draw_theta(mixing, n_obs)
+  # One call per draw. Todo: vectorise kernel_draw.
+  #
+  # This loop is 98% of the cost of `draw()` here: 18.2s of a 18.7s
+  # million-draw call, against 0.46s for a vectorised equivalent -- 40x. The
+  # fix belongs in `kernel_draw()`, which should take a `(d, M)` matrix of
+  # parameters. For the multinomial that is the conditional-binomial
+  # construction, `x_j | rest ~ Binom(remaining, p_j / p_rest)`, and
+  # `rbinom()` is vectorised over both size and prob, so `K - 1` calls replace
+  # `M`. It changes the `parametric_family` interface, so it belongs with the
+  # space and distribution refactor rather than here.
+  first <- kernel_draw(family, theta[, 1L], 1L)
+  out <- matrix(NA_real_, nrow = n_obs, ncol = ncol(first))
+  out[1L, ] <- first
+  for (i in seq_len(n_obs)[-1L]) {
+    out[i, ] <- kernel_draw(family, theta[, i], 1L)
+  }
+  out
+}

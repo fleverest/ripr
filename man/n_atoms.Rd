@@ -2,6 +2,7 @@
 % Please edit documentation in R/mixing_measure.R
 \name{n_atoms}
 \alias{n_atoms}
+\alias{n_atoms,ripr::continuous_mixing-method}
 \title{Number of atoms in a mixing measure}
 \usage{
 n_atoms(x)
@@ -13,7 +14,8 @@ n_atoms(x)
 Integer.
 }
 \description{
-Number of atoms in a mixing measure
+A continuous measure has no atoms to count, which is \code{NA}
+rather than \code{0}: zero would say the measure was empty.
 }
 \examples{
 n_atoms(point_mixing(theta_star = c(0.5, 0.5)))

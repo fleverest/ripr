@@ -135,7 +135,7 @@ method(kernel_draw, gaussian_family) <- function(family, theta, n_obs) {
 #' @export
 gaussian_mixing <- new_class(
   "gaussian_mixing",
-  parent = mixing_measure,
+  parent = continuous_mixing,
   properties = list(prior_mean = class_numeric, prior_cov = class_any),
   constructor = function(prior_mean, prior_cov) {
     prior_mean <- as.numeric(prior_mean)
@@ -146,9 +146,6 @@ gaussian_mixing <- new_class(
     )
   }
 )
-
-
-method(n_atoms, gaussian_mixing) <- function(x) NA_integer_
 
 
 method(induced_log_density, list(gaussian_mixing, gaussian_family)) <- function(
@@ -173,6 +170,13 @@ method(induced_draw, list(gaussian_mixing, gaussian_family)) <- function(
   chol_l <- t(chol(family@sigma + mixing@prior_cov))
   z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
   t(chol_l %*% z + mixing@prior_mean)
+}
+
+
+method(draw_theta, gaussian_mixing) <- function(mixing, n) {
+  d <- length(mixing@prior_mean)
+  z <- matrix(stats::rnorm(n * d), nrow = d, ncol = n)
+  t(chol(mixing@prior_cov)) %*% z + mixing@prior_mean
 }
 
 

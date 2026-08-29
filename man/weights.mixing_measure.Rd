@@ -2,6 +2,7 @@
 % Please edit documentation in R/mixing_measure.R
 \name{weights.mixing_measure}
 \alias{weights.mixing_measure}
+\alias{weights,ripr::continuous_mixing-method}
 \title{Weights of a mixing measure}
 \arguments{
 \item{object}{A \link{mixing_measure}.}

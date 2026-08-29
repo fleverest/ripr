@@ -2,6 +2,7 @@
 % Please edit documentation in R/mixing_measure.R
 \name{atoms}
 \alias{atoms}
+\alias{atoms,ripr::continuous_mixing-method}
 \title{Parameter atoms of a mixing measure}
 \usage{
 atoms(x)

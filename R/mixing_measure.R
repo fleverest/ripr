@@ -4,14 +4,15 @@ NULL
 #' Mixing measure over a family's parameter space
 #'
 #' A law \eqn{W}{W} over a family's [convex_region]: a point mass
-#' ([point_mixing()]) or a finite weighted set of atoms ([finite_mixing()]).
-#' Pushed through a family's kernel it induces the law \eqn{P_W}{P_W} over
-#' outcomes; see [induced_distribution()].
+#' ([point_mixing()]), a finite weighted set of atoms ([finite_mixing()]), or a
+#' continuous law ([continuous_mixing]). Pushed through a family's kernel it
+#' induces the law \eqn{P_W}{P_W} over outcomes; see [induced_distribution()].
 #'
 #' This is the parameter-side counterpart of [distribution], which is a law over
 #' a [sample_space]. The two are peers rather than branches of a common type:
-#' a mixing measure has atoms and weights but no density, and an outcome law has
-#' a density but no atoms, so there is no interface they share.
+#' a mixing measure is asked for its support and for parameter draws, and an
+#' outcome law for a density and outcome draws, so there is no interface they
+#' share.
 #'
 #' The naming follows the mixture-model literature: \eqn{W}{W} is the
 #' `mixing_measure`, \eqn{P_W}{P_W} is the mixture it induces.
@@ -76,6 +77,46 @@ finite_mixing <- new_class(
 )
 
 
+#' Mixing measures with no atoms
+#'
+#' A law over the parameter space that is continuous rather than discrete, so
+#' it has a density where a [finite_mixing] has weights. [dirichlet_mixing()]
+#' and [truncated_dirichlet()] are of this kind, as is [gaussian_mixing()].
+#'
+#' The three generics a discrete measure answers by listing its support --
+#' [n_atoms()], [atoms()] and `weights()` -- have no answer here, so `n_atoms()`
+#' is `NA` and the other two error. What a continuous measure offers instead is
+#' [draw_theta()], and the pairing with a family still has to supply a density
+#' for the induced mixture; see [induced_distribution()].
+#' @examples
+#' # `continuous_mixing` is abstract; dirichlet_mixing() subclasses it, e.g.
+#' S7::S7_inherits(dirichlet_mixing(alpha = c(2, 1, 1)), continuous_mixing)
+#' n_atoms(dirichlet_mixing(alpha = c(2, 1, 1)))
+#' @export
+continuous_mixing <- new_class(
+  "continuous_mixing",
+  parent = mixing_measure,
+  abstract = TRUE
+)
+
+
+#' Draw parameters from a continuous mixing measure
+#'
+#' The sampling half of a [continuous_mixing]: `n` draws of
+#' \eqn{\theta \sim W}{theta ~ W}. Columns, as parameters are everywhere else
+#' in the package, so the result feeds [kernel_draw()] a column at a time.
+#' @param mixing A [continuous_mixing].
+#' @param n Number of draws.
+#' @return `(d, n)` numeric matrix, one parameter per column.
+#' @examples
+#' set.seed(1)
+#' draw_theta(dirichlet_mixing(alpha = c(4, 3, 2)), n = 3L)
+#' @export
+draw_theta <- new_generic("draw_theta", "mixing", function(mixing, n) {
+  S7::S7_dispatch()
+})
+
+
 #' Number of atoms in a mixing measure
 #' @param x A [mixing_measure].
 #' @return Integer.
@@ -90,6 +131,13 @@ method(n_atoms, point_mixing) <- function(x) 1L
 
 
 method(n_atoms, finite_mixing) <- function(x) ncol(x@components)
+
+
+#' @description A continuous measure has no atoms to count, which is `NA`
+#'   rather than `0`: zero would say the measure was empty.
+#' @rdname n_atoms
+#' @usage NULL
+method(n_atoms, continuous_mixing) <- function(x) NA_integer_
 
 
 #' Parameter atoms of a mixing measure
@@ -107,6 +155,28 @@ method(atoms, point_mixing) <- function(x) matrix(x@theta_star, ncol = 1L)
 method(atoms, finite_mixing) <- function(x) x@components
 
 
+#' The refusal a continuous measure owes both support accessors
+#' @keywords internal
+#' @noRd
+refuse_continuous <- function(x, what) {
+  stop(
+    "`",
+    what,
+    "()` is not defined for a `",
+    attr(S7_class(x), "name"),
+    "`: a continuous mixing measure has a density rather than a support to ",
+    "list. Use `draw_theta()` to sample it, or `mode_parameter()` for the ",
+    "point it concentrates on.",
+    call. = FALSE
+  )
+}
+
+
+#' @rdname atoms
+#' @usage NULL
+method(atoms, continuous_mixing) <- function(x) refuse_continuous(x, "atoms")
+
+
 #' Weights of a mixing measure
 #' @param object A [mixing_measure].
 #' @param ... Ignored.
@@ -121,6 +191,13 @@ method(weights, point_mixing) <- function(object, ...) 1
 
 
 method(weights, finite_mixing) <- function(object, ...) object@weights
+
+
+#' @rdname weights.mixing_measure
+#' @usage NULL
+method(weights, continuous_mixing) <- function(object, ...) {
+  refuse_continuous(object, "weights")
+}
 
 
 #' Drop atoms below a weight threshold and renormalise

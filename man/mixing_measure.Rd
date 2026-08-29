@@ -8,15 +8,16 @@ mixing_measure()
 }
 \description{
 A law \eqn{W}{W} over a family's \link{convex_region}: a point mass
-(\code{\link[=point_mixing]{point_mixing()}}) or a finite weighted set of atoms (\code{\link[=finite_mixing]{finite_mixing()}}).
-Pushed through a family's kernel it induces the law \eqn{P_W}{P_W} over
-outcomes; see \code{\link[=induced_distribution]{induced_distribution()}}.
+(\code{\link[=point_mixing]{point_mixing()}}), a finite weighted set of atoms (\code{\link[=finite_mixing]{finite_mixing()}}), or a
+continuous law (\link{continuous_mixing}). Pushed through a family's kernel it
+induces the law \eqn{P_W}{P_W} over outcomes; see \code{\link[=induced_distribution]{induced_distribution()}}.
 }
 \details{
 This is the parameter-side counterpart of \link{distribution}, which is a law over
 a \link{sample_space}. The two are peers rather than branches of a common type:
-a mixing measure has atoms and weights but no density, and an outcome law has
-a density but no atoms, so there is no interface they share.
+a mixing measure is asked for its support and for parameter draws, and an
+outcome law for a density and outcome draws, so there is no interface they
+share.
 
 The naming follows the mixture-model literature: \eqn{W}{W} is the
 \code{mixing_measure}, \eqn{P_W}{P_W} is the mixture it induces.

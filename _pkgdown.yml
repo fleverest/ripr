@@ -94,10 +94,13 @@ reference:
   - mixing_measure
   - point_mixing
   - finite_mixing
+  - continuous_mixing
   - gaussian_mixing
+  - dirichlet_type
   - n_atoms
   - atoms
   - weights.mixing_measure
+  - draw_theta
   - prune
   - mode_parameter
 

@@ -34,5 +34,5 @@ constraints (e.g. a lower-dimension null may set theta1 = theta2).
 \examples{
 region_dim(point_region(theta = c(0.5, 0.3, 0.2)))
 region_dim(simplex_region(vertices = diag(3)))
-region_dim(unconstrained_region(3L))
+region_dim(real_region(3L))
 }

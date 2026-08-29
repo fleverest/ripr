@@ -685,7 +685,7 @@ test_that("bernstein_compatible() accepts when certification is possible", {
     normal = c(1, -1, 0),
     offset = 0
   )))
-  expect_false(bernstein_compatible(unconstrained_region(3L)))
+  expect_false(bernstein_compatible(real_region(3L)))
 
   # The degenerate single vertex has no edges to condition
   expect_true(bernstein_compatible(simplex_region(vertices = matrix(1))))
@@ -861,7 +861,7 @@ test_that("the point method takes any family whose sample space is enumerable", 
     error = conditionMessage
   )
   expect_match(msg, "Evaluation at a point")
-  expect_match(msg, "an integral over a `real_space`")
+  expect_match(msg, "an integral over a `real_region`")
   expect_false(grepl("No bounding method is implemented", msg))
 })
 

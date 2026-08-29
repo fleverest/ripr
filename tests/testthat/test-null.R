@@ -323,7 +323,7 @@ test_that("region_dim is the affine dimension, at most the ambient", {
   expect_identical(region_dim(segment), 1L)
   expect_identical(region_dim(simplex_region(vertices = diag(3))), 2L)
   expect_identical(region_dim(halfspace_region(normal = c(1, -1, 0))), 3L)
-  expect_identical(region_dim(unconstrained_region(2L)), 2L)
+  expect_identical(region_dim(real_region(2L)), 2L)
 
   # A union spans what its largest part spans.
   tri <- simplex_region(
@@ -355,11 +355,11 @@ test_that("a region of the wrong dimension is refused at construction", {
   expect_error(
     null_model(
       fam,
-      list(simplex_region(vertices = diag(3)), unconstrained_region(2L))
+      list(simplex_region(vertices = diag(3)), real_region(2L))
     ),
     "same ambient dimension"
   )
-  expect_silent(null_model(fam, list(unconstrained_region(3L))))
+  expect_silent(null_model(fam, list(real_region(3L))))
 })
 
 test_that("a family's parameter space has the family's own dimension", {
@@ -375,14 +375,14 @@ test_that("a family's parameter space has the family's own dimension", {
 # --- The unconstrained region -------------------------------------------------
 
 test_that("a real region contains every finite point and moves none", {
-  r <- unconstrained_region(2L)
+  r <- real_region(2L)
   expect_true(contains(r, c(1e6, -3)))
   expect_false(contains(r, c(Inf, 0)))
   expect_equal(project(r, c(3, -1)), c(3, -1))
 })
 
 test_that("the real region's chart is the identity", {
-  r <- unconstrained_region(3L)
+  r <- real_region(3L)
   ch <- chart(r)
   expect_equal(ch$n_par, 3L)
   theta <- c(0.4, -2, 7)
@@ -403,7 +403,7 @@ test_that("maximise_over finds an interior optimum on a real region", {
     grad = function(theta) -2 * (theta - target)
   )
   found <- maximise_over(
-    unconstrained_region(2L),
+    real_region(2L),
     obj,
     n_seeds = 50L,
     n_restarts = 5L

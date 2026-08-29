@@ -234,7 +234,7 @@ bernstein_obstruction <- function(space) {
     "searches it."
   )
   # Before the class test, because it is the class-independent one: a
-  # `halfspace_region` and an `unconstrained_region` fail for the same reason,
+  # `halfspace_region` and an `real_region` fail for the same reason,
   # and so would an unbounded `polyhedron_region` belonging to neither.
   if (!is_bounded(space)) {
     return(list(
@@ -760,7 +760,7 @@ certify_trace <- function(
 #' so any bounded null will certify for a multinomial expectation. What is
 #' currently refused is a part that is unbounded (e.g. a [polyhedron_region()]
 #' with rays or lineality, of which [halfspace_region()] and
-#' [unconstrained_region()] are instances of).
+#' [real_region()] are instances of).
 #'
 #' Only two methods are currently implemented. A [point_region()] is certified
 #' by evaluation, for any family whose sample space can be enumerated (and thus

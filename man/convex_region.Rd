@@ -18,15 +18,15 @@ A \code{convex_region} object encodes the geometry: it encodes dimension,
 membership checking, projection, and a \code{\link[=chart]{chart()}} that maps constrained
 generator coordinates to the region.
 
-Not to be confused with \link{sample_space}. Outcomes from a sample space are
-only validated, but in this package parameters need coordinates for a
-optimiser to search over, which is what \code{\link[=chart]{chart()}} is for. There may be
-null geometries that do not permit a \code{\link[=chart]{chart()}}, but these are currently
-beyond the scope of this package.
+What separates a \code{convex_region} from a bare \link{space} is the \code{\link[=chart]{chart()}}.
+Membership is enough to say what a set is, but an optimiser needs
+coordinates to search over, and a projection needs somewhere to land. There
+may be null geometries that do not permit a \code{\link[=chart]{chart()}}, but these are
+currently beyond the scope of this package.
 }
 \examples{
 # `convex_region` is abstract; polytope_region(), simplex_region(),
-# halfspace_region(), point_region() and unconstrained_region() subclass it:
+# halfspace_region(), point_region() and real_region() subclass it:
 s <- simplex_region(vertices = diag(3))
 S7::S7_inherits(s, convex_region)
 space_dim(s)

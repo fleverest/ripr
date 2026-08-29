@@ -137,7 +137,7 @@ test_that("a convex region is its own only cell unless it can be triangulated", 
   # it came.
   undecomposed <- list(
     halfspace_region(normal = c(1, -1), offset = 0),
-    unconstrained_region(2L)
+    real_region(2L)
   )
   for (space in undecomposed) {
     expect_identical(cells(space), list(space))

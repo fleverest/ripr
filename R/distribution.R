@@ -3,7 +3,7 @@ NULL
 
 #' Distributions over a sample space
 #'
-#' A `distribution` is a law over a [sample_space]: the type the RIPr problem
+#' A `distribution` is a law over a [space]: the type the RIPr problem
 #' consumes as the alternative \eqn{Q}{Q}, and the type it returns as
 #' \eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, [log_density()]
 #' and [draw()], over the outcomes its `sample_space` admits.
@@ -14,7 +14,7 @@ NULL
 #' \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
 #' closed-form outcome law can subclass this directly, supply the two methods,
 #' and is usable everywhere an [induced_distribution()] is.
-#' @param sample_space The [sample_space] this is a law over.
+#' @param sample_space The [space] this is a law over.
 #' @examples
 #' # `distribution` is abstract; induced_distribution() subclasses it, e.g.
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -24,7 +24,7 @@ NULL
 distribution <- new_class(
   "distribution",
   abstract = TRUE,
-  properties = list(sample_space = sample_space)
+  properties = list(sample_space = space)
 )
 
 

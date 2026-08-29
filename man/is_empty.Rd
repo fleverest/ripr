@@ -29,5 +29,5 @@ is_empty(simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
 
 # Nor is a single point, or the whole space:
 is_empty(point_region(theta = c(0.5, 0.3, 0.2)))
-is_empty(unconstrained_region(3L))
+is_empty(real_region(3L))
 }

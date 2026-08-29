@@ -73,7 +73,7 @@ derive_qfacets <- function(qv, n_generators, guard = 100L) {
 #' The concrete base of every convex region in the package: the Minkowski--Weul
 #' form \eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone(R) + span(L)}.
 #' [polytope_region()], [simplex_region()], [halfspace_region()],
-#' [point_region()] and [unconstrained_region()] are all special cases that
+#' [point_region()] and [real_region()] are all special cases that
 #' have friendlier constructors and do extra validation; use this one when
 #' you know the generators themselves, or [h_region()] if you have the
 #' H-representation.
@@ -546,7 +546,7 @@ method(print, polyhedron_region) <- function(x, ...) {
   cat(
     "  ",
     region_phrase(x),
-    if (!is_bounded(x) && !S7_inherits(x, unconstrained_region)) ", unbounded",
+    if (!is_bounded(x) && !S7_inherits(x, real_region)) ", unbounded",
     "\n",
     sep = ""
   )

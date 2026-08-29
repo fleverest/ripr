@@ -44,7 +44,7 @@ as_covariance <- function(sigma, d, what = "sigma") {
 #' Observations are single draws \eqn{X \sim N(\theta, \Sigma)}{X ~ N(theta, sigma)}
 #' with \eqn{\Sigma}{sigma} known, so the parameter is the mean.
 #'
-#' The sample space is [real_space()], which cannot be enumerated: pair this
+#' The sample space is [real_region()], which cannot be enumerated: pair this
 #' family with [mc_engine()] or [gh_engine()] rather than [exact_engine()]. It
 #' is also a family for which a certified gap bound is unavailable.
 #'
@@ -74,8 +74,8 @@ gaussian_family <- new_class(
     sigma <- as_covariance(sigma, dim)
     new_object(
       at_theta,
-      sample_space = real_space(dim),
-      parameter_space = unconstrained_region(dim),
+      sample_space = real_region(dim),
+      parameter_space = real_region(dim),
       n_dim = dim,
       sigma = sigma,
       chol_l = t(chol(sigma)),

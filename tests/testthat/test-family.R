@@ -11,7 +11,7 @@ test_that("a family carries the sample space its outcomes live in", {
   # holds a reference to one. Their properties live in `test-sample_space.R`.
   fam <- multinomial_family(n_trials = 4, k = 3)
   expect_identical(fam@sample_space, count_space(n = 4L, k = 3L))
-  expect_identical(gaussian_family(dim = 2)@sample_space, real_space(2L))
+  expect_identical(gaussian_family(dim = 2)@sample_space, real_region(2L))
 })
 
 test_that("a family carries the parameter space its parameters live in", {
@@ -100,8 +100,8 @@ test_that("a family with no compile_loglik method errors", {
   # default, so an incomplete family fails loudly rather than silently.
   toy <- new_class("toy_family", parent = parametric_family)
   toy_fam <- toy(
-    sample_space = real_space(1L),
-    parameter_space = unconstrained_region(1L)
+    sample_space = real_region(1L),
+    parameter_space = real_region(1L)
   )
   expect_error(compile_loglik(toy_fam, matrix(1:4, nrow = 2)))
 })

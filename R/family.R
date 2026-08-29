@@ -1,4 +1,4 @@
-#' @include sample_space.R region.R
+#' @include space.R region.R
 NULL
 
 #' Parametric families
@@ -9,7 +9,7 @@ NULL
 #'
 #' A family is the pair of a [convex_region] \eqn{\Theta}{Theta} and the map
 #' \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
-#' [sample_space]; the two spaces are what the family carries, and everything
+#' [space]; the two spaces are what the family carries, and everything
 #' else it offers is a way of navigating that map.
 #'
 #' Families are callable, which is that map written down: `fam(theta)` is the
@@ -24,7 +24,7 @@ NULL
 #' directly gives a family with no kernel, which errors on first use exactly as
 #' any other incomplete family does.
 #'
-#' @param sample_space The [sample_space] that outcomes belong to.
+#' @param sample_space The [space] that outcomes belong to.
 #' @param parameter_space The [convex_region] that parameter lives in. For
 #'   instance, the standard simplex for Multinomial proportions.
 #' @return A callable `parametric_family`.
@@ -46,7 +46,7 @@ parametric_family <- new_class(
   "parametric_family",
   parent = class_function,
   properties = list(
-    sample_space = sample_space,
+    sample_space = space,
     parameter_space = convex_region
   ),
   constructor = function(sample_space, parameter_space) {

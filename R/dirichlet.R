@@ -137,6 +137,8 @@ dirichlet_draws <- function(alpha, n) {
 #'
 #' # Still a proper distribution, on the outcomes that region can produce.
 #' sum(exp(log_density(fam(W1), enumerate_space(fam@sample_space))))
+#' @rdname dirichlet
+#' @aliases dirichlet
 #' @export
 dirichlet_type <- new_class(
   "dirichlet_type",
@@ -170,7 +172,7 @@ log_region_integral <- new_generic(
 )
 
 
-#' @rdname dirichlet_type
+#' @rdname dirichlet
 #' @usage NULL
 method(induced_log_density, list(dirichlet_type, multinomial_family)) <-
   function(mixing, family, x) {
@@ -213,7 +215,7 @@ method(induced_log_density, list(dirichlet_type, multinomial_family)) <-
 #' It has a closed form, so evaluating the density does not require quadrature
 #' rules and is therefore exact.
 #'
-#' @rdname dirichlet_type
+#' @rdname dirichlet
 #' @order 2
 #' @export
 dirichlet_mixing <- new_class(
@@ -449,7 +451,7 @@ check_quadrature_size <- function(
 #' they make the integrand singular on the boundary faces, so the quadrature
 #' rule would only be approximate.
 #'
-#' @rdname dirichlet_type
+#' @rdname dirichlet
 #' @order 3
 #' @export
 truncated_dirichlet <- new_class(

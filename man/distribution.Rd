@@ -4,13 +4,13 @@
 \alias{distribution}
 \title{Distributions over a sample space}
 \usage{
-distribution(sample_space = sample_space())
+distribution(sample_space = space())
 }
 \arguments{
-\item{sample_space}{The \link{sample_space} this is a law over.}
+\item{sample_space}{The \link{space} this is a law over.}
 }
 \description{
-A \code{distribution} is a law over a \link{sample_space}: the type the RIPr problem
+A \code{distribution} is a law over a \link{space}: the type the RIPr problem
 consumes as the alternative \eqn{Q}{Q}, and the type it returns as
 \eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, \code{\link[=log_density]{log_density()}}
 and \code{\link[=draw]{draw()}}, over the outcomes its \code{sample_space} admits.

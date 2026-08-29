@@ -26,7 +26,7 @@ A \code{polyhedron_region}.
 The concrete base of every convex region in the package: the Minkowski--Weul
 form \eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone(R) + span(L)}.
 \code{\link[=polytope_region]{polytope_region()}}, \code{\link[=simplex_region]{simplex_region()}}, \code{\link[=halfspace_region]{halfspace_region()}},
-\code{\link[=point_region]{point_region()}} and \code{\link[=unconstrained_region]{unconstrained_region()}} are all special cases that
+\code{\link[=point_region]{point_region()}} and \code{\link[=real_region]{real_region()}} are all special cases that
 have friendlier constructors and do extra validation; use this one when
 you know the generators themselves, or \code{\link[=h_region]{h_region()}} if you have the
 H-representation.

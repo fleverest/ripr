@@ -58,7 +58,7 @@ bounding method.A part that is a \code{\link[=polytope_region]{polytope_region()
 so any bounded null will certify for a multinomial expectation. What is
 currently refused is a part that is unbounded (e.g. a \code{\link[=polyhedron_region]{polyhedron_region()}}
 with rays or lineality, of which \code{\link[=halfspace_region]{halfspace_region()}} and
-\code{\link[=unconstrained_region]{unconstrained_region()}} are instances of).
+\code{\link[=real_region]{real_region()}} are instances of).
 
 Only two methods are currently implemented. A \code{\link[=point_region]{point_region()}} is certified
 by evaluation, for any family whose sample space can be enumerated (and thus

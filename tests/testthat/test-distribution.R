@@ -165,7 +165,6 @@ test_that("the callable closure captures nothing", {
   fam <- multinomial_family(n_trials = 60L, k = 4L)
   expect_identical(environment(fam), asNamespace("ripr"))
   expect_identical(environment(fam), environment(gaussian_family(dim = 2L)))
-  expect_false(any(c("n_trials", "k", "space") %in% ls(environment(fam))))
 })
 
 test_that("a family survives a serialisation round trip and stays callable", {

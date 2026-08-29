@@ -9,7 +9,7 @@
 parametric_family(sample_space, parameter_space)
 }
 \arguments{
-\item{sample_space}{The \link{sample_space} that outcomes belong to.}
+\item{sample_space}{The \link{space} that outcomes belong to.}
 
 \item{parameter_space}{The \link{convex_region} that parameter lives in. For
 instance, the standard simplex for Multinomial proportions.}
@@ -32,7 +32,7 @@ attribute dump.
 \details{
 A family is the pair of a \link{convex_region} \eqn{\Theta}{Theta} and the map
 \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
-\link{sample_space}; the two spaces are what the family carries, and everything
+\link{space}; the two spaces are what the family carries, and everything
 else it offers is a way of navigating that map.
 
 Families are callable, which is that map written down: \code{fam(theta)} is the

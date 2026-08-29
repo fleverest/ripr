@@ -18,7 +18,7 @@ random_variable(
 \item{f}{The mapping that defines the random variable, accepting an \verb{(n, d)}
 matrix and returning \code{n} numbers.}
 
-\item{sample_space}{The \link{sample_space} this variable is defined on.}
+\item{sample_space}{The \link{space} this variable is defined on.}
 
 \item{label}{How to name this variable when printing. Ignored when \code{op} is
 given, since the expression is then built from the operands.}
@@ -52,7 +52,7 @@ infinite when the denominator is not absolutely continuous with respect to
 the numerator.
 }
 \examples{
-X <- random_variable(\(x) dnorm(x, 1), sample_space = real_space(1))
+X <- random_variable(\(x) dnorm(x, 1), sample_space = real_region(1))
 X(as.matrix(0:2))
 }
 \seealso{

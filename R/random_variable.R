@@ -1,4 +1,4 @@
-#' @include sample_space.R distribution.R
+#' @include space.R distribution.R
 NULL
 
 # Random variables on a sample space, and arithmetic over them.
@@ -26,7 +26,7 @@ NULL
 #'
 #' @param f The mapping that defines the random variable, accepting an `(n, d)`
 #'   matrix and returning `n` numbers.
-#' @param sample_space The [sample_space] this variable is defined on.
+#' @param sample_space The [space] this variable is defined on.
 #' @param label How to name this variable when printing. Ignored when `op` is
 #'   given, since the expression is then built from the operands.
 #' @param op The operator that produced this variable, or `NA` for a leaf. Set
@@ -36,14 +36,14 @@ NULL
 #' @return A callable `random_variable`.
 #' @seealso [likelihood()], [random_variable_arithmetic]
 #' @examples
-#' X <- random_variable(\(x) dnorm(x, 1), sample_space = real_space(1))
+#' X <- random_variable(\(x) dnorm(x, 1), sample_space = real_region(1))
 #' X(as.matrix(0:2))
 #' @export
 random_variable <- new_class(
   "random_variable",
   parent = class_function,
   properties = list(
-    sample_space = sample_space,
+    sample_space = space,
     label = class_character,
     op = class_character,
     operands = class_list

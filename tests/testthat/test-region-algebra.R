@@ -109,7 +109,7 @@ test_that("intersect() takes more than two regions and refuses mismatched dimens
   )
 
   expect_error(
-    intersect(unconstrained_region(2L), unconstrained_region(3L)),
+    intersect(real_region(2L), real_region(3L)),
     "ambient dimension"
   )
 })
@@ -220,7 +220,7 @@ test_that("the double difference agrees with the original", {
 test_that("subtracting a lower-dimensional slice warns and removes nothing", {
   expect_warning(
     back <- setdiff(
-      unconstrained_region(3L),
+      real_region(3L),
       simplex_region(vertices = diag(3))
     ),
     "lower-dimensional"
@@ -407,14 +407,14 @@ test_that("setequal() decides convex regions from their facets alone", {
     polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))),
     halfspace_region(normal = c(1, -1, 0)),
     point_region(theta = c(0.5, 0.3, 0.2)),
-    unconstrained_region(2L)
+    real_region(2L)
   )) {
     expect_true(setequal(region, region))
   }
 
   expect_false(setequal(
     simplex_region(vertices = diag(3)),
-    unconstrained_region(3L)
+    real_region(3L)
   ))
   # A different ambient dimension is a `FALSE`, not an error: two sets in
   # different spaces are answerably not the same set.

@@ -1,29 +1,25 @@
 #' @include polyhedron_region.R
 NULL
 
-# --- Unconstrained region -----------------------------------------------------
+# --- Real region --------------------------------------------------------------
 
 #' The whole of `R^d` as a region
 #'
-#' The unconstrained case: \eqn{\Theta = \mathbb{R}^d}{Theta = R^d}, with the
+#' All of \eqn{\mathbb{R}^d}{R^d}: \eqn{\Theta = \mathbb{R}^d}{Theta = R^d}, with the
 #' identity chart. This is the parameter space of a [gaussian_family()], and the
 #' way to say that a null places no constraint at all.
 #'
 #' Being unbounded it has no vertices, so like [halfspace_region()] it admits no
 #' certified gap bound.
 #'
-#' The name says what the region is, rather than what it is made of: a
-#' [real_space] is a *sample* space, and the two were too easy to confuse while
-#' this one carried the same `real_` prefix.
-#'
 #' @param d Integer dimension.
-#' @return An `unconstrained_region`.
+#' @return A `real_region`.
 #' @examples
-#' unconstrained_region(2L)
-#' project(unconstrained_region(2L), c(3, -1))
+#' real_region(2L)
+#' project(real_region(2L), c(3, -1))
 #' @export
-unconstrained_region <- new_class(
-  "unconstrained_region",
+real_region <- new_class(
+  "real_region",
   parent = polyhedron_region,
   properties = list(
     n_dim = new_property(
@@ -58,16 +54,30 @@ unconstrained_region <- new_class(
 )
 
 
-method(project, unconstrained_region) <- function(space, theta) {
+method(project, real_region) <- function(space, theta) {
   as.numeric(theta)
 }
 
 
-method(contains, unconstrained_region) <- function(space, theta, tol = 1e-8) {
+method(contains, real_region) <- function(space, theta, tol = 1e-8) {
   length(theta) == as.integer(space@n_dim) && all(is.finite(theta))
 }
 
 
-method(region_phrase, unconstrained_region) <- function(space) {
+method(region_phrase, real_region) <- function(space) {
   sprintf("all of R^%d", space_dim(space))
+}
+
+
+#' @description All of \eqn{\mathbb{R}^d}{R^d} is admissible, so the inherited
+#'   checks (numeric, correct shape, no missing values) are almost all that is
+#'   needed. Only finiteness has to be added.
+#' @rdname validate_outcome
+#' @usage NULL
+method(validate_outcome, real_region) <- function(space, x) {
+  x <- check_outcome_shape(x, space_dim(space))
+  if (any(!is.finite(x))) {
+    stop("outcomes must be finite.", call. = FALSE)
+  }
+  x
 }

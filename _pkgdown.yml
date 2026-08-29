@@ -4,18 +4,19 @@ template:
   bootstrap: 5
 
 reference:
-- title: Sample spaces
+- title: Spaces
   desc: >
-    A `sample_space` owns the set an observation is drawn from: its dimension,
-    which objects are elements of it, and (when finite) all of them.
+    A `space` is a set a measure can live on. Every space says how many
+    coordinates one of its elements carries and whether a given point is one of
+    them; a finite one can also list them all.
   contents:
-  - sample_space
-  - count_space
-  - real_space
+  - space
   - space_dim
+  - contains
   - validate_outcome
   - enumerate_space
   - is_finite_space
+  - count_space
 
 - title: Observation models
   desc: >
@@ -33,12 +34,11 @@ reference:
 
 - title: Regions
   desc: >
-    A `region` is any subset of a family's parameter space. A `convex_region`
-    is one that is convex, and handles the geometry: membership, projection,
-    and an unconstrained chart / coordinate system for optimisation. A
-    `union_region` is a finite union of them, and need not be convex; its cells
-    may overlap.  Every region answers `parts()` for what it was declared as and
-    `cells()` for what the algorithms decompose it into.
+    Subsets of the real numbers that carry convex geometry. A `convex_region`
+    can be charted, projected onto, and searched by an optimiser; a
+    `union_region` is a finite union of them and need not be convex, and its
+    parts may overlap.  Every region answers `parts()` for what it was declared
+    as and `cells()` for a triangulation of its parts.
   contents:
   - region
   - convex_region
@@ -50,9 +50,8 @@ reference:
   - simplex_region
   - halfspace_region
   - point_region
-  - unconstrained_region
+  - real_region
   - chart
-  - contains
   - project
   - init_point
   - parts
@@ -96,7 +95,7 @@ reference:
   - finite_mixing
   - continuous_mixing
   - gaussian_mixing
-  - dirichlet_type
+  - dirichlet
   - n_atoms
   - atoms
   - weights.mixing_measure

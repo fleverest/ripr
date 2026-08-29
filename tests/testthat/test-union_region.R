@@ -51,7 +51,7 @@ test_that("one convex region is handed back unwrapped", {
 
 test_that("cells of different ambient dimensions are refused, naming both", {
   err <- expect_error(
-    union_region(simplex_region(vertices = diag(3)), unconstrained_region(2L)),
+    union_region(simplex_region(vertices = diag(3)), real_region(2L)),
     "same ambient dimension"
   )
   expect_match(conditionMessage(err), "3")

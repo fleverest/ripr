@@ -101,7 +101,7 @@ test_that("the chart of a point region is empty", {
 
 
 test_that("the chart of an unconstrained region is the identity", {
-  space <- unconstrained_region(3L)
+  space <- real_region(3L)
 
   ch <- chart(space)
   expect_identical(ch$n_par, 3L)
@@ -152,7 +152,7 @@ test_that("declared facets are stored exactly; derived facets describe the hull"
   expect_identical(p@facets$eq, rep(TRUE, 3L))
   expect_identical(p@facets$b, c(0.5, 0.3, 0.2))
 
-  expect_identical(nrow(unconstrained_region(3L)@facets$a), 0L)
+  expect_identical(nrow(real_region(3L)@facets$a), 0L)
 
   # A polytope derives its facets once at construction: the unit square has
   # four, and they cut out exactly the square.
@@ -302,8 +302,8 @@ test_that("regions print a geometric summary, not a property dump", {
   expect_output(print(p), "the point \\(0.5, 0.3, 0.2\\)")
   expect_output(print(p), "facets: 3 equalities")
 
-  expect_output(print(unconstrained_region(3L)), "all of R\\^3")
-  expect_output(print(unconstrained_region(3L)), "facets: none")
+  expect_output(print(real_region(3L)), "all of R\\^3")
+  expect_output(print(real_region(3L)), "facets: none")
 
   expect_match(
     format(simplex_region(vertices = diag(3))),

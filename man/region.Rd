@@ -7,10 +7,12 @@
 region()
 }
 \description{
-A \code{region} is a subset of a family's parameter space: the set a null
-hypothesis is stated over, or the support of a truncated prior. The \verb{_region}
-suffix marks the parameter space side of the package throughout, as \verb{_space}
-marks the sample space side.
+A \code{region} is a subset of \eqn{\mathbb{R}^d}{R^d} carrying convex geometry:
+the set a null hypothesis is stated over, the space a family's parameters
+live in, or the support of a truncated prior. It is the branch of \link{space}
+that can be charted, projected onto and composed with the set algebra, and
+the \verb{_region} suffix marks that branch throughout. A \link{count_space} is a
+space with none of it to offer.
 }
 \details{
 \code{region} is abstract and splits in two. A \link{convex_region} is one that is

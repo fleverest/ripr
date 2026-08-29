@@ -1,4 +1,4 @@
-#' @include sample_space.R
+#' @include space.R
 #' @include polyhedra.R
 NULL
 
@@ -6,10 +6,12 @@ NULL
 
 #' Regions of a parameter space
 #'
-#' A `region` is a subset of a family's parameter space: the set a null
-#' hypothesis is stated over, or the support of a truncated prior. The `_region`
-#' suffix marks the parameter space side of the package throughout, as `_space`
-#' marks the sample space side.
+#' A `region` is a subset of \eqn{\mathbb{R}^d}{R^d} carrying convex geometry:
+#' the set a null hypothesis is stated over, the space a family's parameters
+#' live in, or the support of a truncated prior. It is the branch of [space]
+#' that can be charted, projected onto and composed with the set algebra, and
+#' the `_region` suffix marks that branch throughout. A [count_space] is a
+#' space with none of it to offer.
 #'
 #' `region` is abstract and splits in two. A [convex_region] is one that is
 #' convex, and carries the geometry: [space_dim()], [contains()], [project()],
@@ -36,7 +38,7 @@ NULL
 #' S7::S7_inherits(u, region)
 #' S7::S7_inherits(u, convex_region)
 #' @export
-region <- new_class("region", abstract = TRUE)
+region <- new_class("region", parent = space, abstract = TRUE)
 
 
 #' The convex regions a region was declared as
@@ -174,14 +176,14 @@ n_cells <- function(space) length(cells(space))
 #' membership checking, projection, and a [chart()] that maps constrained
 #' generator coordinates to the region.
 #'
-#' Not to be confused with [sample_space]. Outcomes from a sample space are
-#' only validated, but in this package parameters need coordinates for a
-#' optimiser to search over, which is what [chart()] is for. There may be
-#' null geometries that do not permit a [chart()], but these are currently
-#' beyond the scope of this package.
+#' What separates a `convex_region` from a bare [space] is the [chart()].
+#' Membership is enough to say what a set is, but an optimiser needs
+#' coordinates to search over, and a projection needs somewhere to land. There
+#' may be null geometries that do not permit a [chart()], but these are
+#' currently beyond the scope of this package.
 #' @examples
 #' # `convex_region` is abstract; polytope_region(), simplex_region(),
-#' # halfspace_region(), point_region() and unconstrained_region() subclass it:
+#' # halfspace_region(), point_region() and real_region() subclass it:
 #' s <- simplex_region(vertices = diag(3))
 #' S7::S7_inherits(s, convex_region)
 #' space_dim(s)
@@ -234,23 +236,6 @@ convex_region <- new_class("convex_region", parent = region, abstract = TRUE)
 #' ch$to_theta(c(0, sqrt(2)))
 #' @export
 chart <- new_generic("chart", "space", function(space) S7::S7_dispatch())
-
-
-#' Does a parameter vector belong to the space?
-#' @param space A [convex_region].
-#' @param theta Parameter vector.
-#' @param tol Tolerance.
-#' @return `TRUE` or `FALSE`.
-#' @examples
-#' s <- simplex_region(vertices = diag(3))
-#' contains(s, c(1 / 3, 1 / 3, 1 / 3))
-#' contains(s, c(2, -1, 0))
-#' @export
-contains <- new_generic(
-  "contains",
-  "space",
-  function(space, theta, tol = 1e-8) S7::S7_dispatch()
-)
 
 
 #' Euclidean projection onto a parameter space
@@ -342,7 +327,7 @@ method(v_rep, convex_region) <- function(space) from_vmatrix(q_vrep(space))
 #' flag columns intact. Composing operations here rather than on the double
 #' form is what keeps a chain of them exact.
 #'
-#' `q_hrep()` of an [unconstrained_region] is the trivially true row
+#' `q_hrep()` of an [real_region] is the trivially true row
 #' `0 . x <= 1` rather than no rows at all, because cddlib needs a row to work
 #' with. `h_rep()` reports the same region as zero rows, which is the honest
 #' answer for a caller reading facets.
@@ -378,7 +363,7 @@ q_vrep <- new_generic("q_vrep", "space", function(space) S7::S7_dispatch())
 #'
 #' # Nor is a single point, or the whole space:
 #' is_empty(point_region(theta = c(0.5, 0.3, 0.2)))
-#' is_empty(unconstrained_region(3L))
+#' is_empty(real_region(3L))
 #' @export
 is_empty <- new_generic(
   "is_empty",
@@ -432,7 +417,7 @@ method(is_bounded, convex_region) <- function(space) {
 #' @examples
 #' region_dim(point_region(theta = c(0.5, 0.3, 0.2)))
 #' region_dim(simplex_region(vertices = diag(3)))
-#' region_dim(unconstrained_region(3L))
+#' region_dim(real_region(3L))
 #' @export
 region_dim <- new_generic("region_dim", "space", function(space) {
   S7::S7_dispatch()

@@ -9,7 +9,7 @@ NULL
 #' induces the law \eqn{P_W}{P_W} over outcomes; see [induced_distribution()].
 #'
 #' This is the parameter-side counterpart of [distribution], which is a law over
-#' a [sample_space]. The two are peers rather than branches of a common type:
+#' a [space]. The two are peers rather than branches of a common type:
 #' a mixing measure is asked for its support and for parameter draws, and an
 #' outcome law for a density and outcome draws, so there is no interface they
 #' share.

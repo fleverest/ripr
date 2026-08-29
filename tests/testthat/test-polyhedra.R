@@ -164,7 +164,7 @@ test_that("is_empty is FALSE for regions that hold something", {
   expect_false(is_empty(plurality_cell()))
   expect_false(is_empty(simplex_region(vertices = diag(3))))
   expect_false(is_empty(point_region(theta = c(0.5, 0.3, 0.2))))
-  expect_false(is_empty(unconstrained_region(3L)))
+  expect_false(is_empty(real_region(3L)))
   expect_false(is_empty(halfspace_region(normal = c(1, -1, 0))))
 })
 
@@ -199,7 +199,7 @@ test_that("is_bounded distinguishes the bounded regions from the unbounded", {
   expect_true(is_bounded(plurality_cell()))
 
   expect_false(is_bounded(halfspace_region(normal = c(1, -1, 0))))
-  expect_false(is_bounded(unconstrained_region(3L)))
+  expect_false(is_bounded(real_region(3L)))
 })
 
 

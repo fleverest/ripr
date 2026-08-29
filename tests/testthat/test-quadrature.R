@@ -63,10 +63,10 @@ test_that("the exact engine refuses a family with no enumerable support", {
   expect_error(
     resolve_engine(
       exact_engine(),
-      direct(sample_space = real_space(1L)),
+      direct(sample_space = real_region(1L)),
       toy(
-        sample_space = real_space(1L),
-        parameter_space = unconstrained_region(1L)
+        sample_space = real_region(1L),
+        parameter_space = real_region(1L)
       )
     ),
     "cannot be enumerated"

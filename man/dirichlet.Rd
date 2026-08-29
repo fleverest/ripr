@@ -4,6 +4,7 @@
 \alias{dirichlet_mixing}
 \alias{truncated_dirichlet}
 \alias{dirichlet_type}
+\alias{dirichlet}
 \alias{induced_log_density,ripr::dirichlet_type,ripr::multinomial_family-method}
 \title{Dirichlet priors over the simplex}
 \usage{

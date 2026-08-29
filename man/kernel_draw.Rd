@@ -19,7 +19,7 @@ taken as a single column.}
 Take one draw per column of \code{theta_mat}, so the number of draws is the number
 of parameters. To take repeated draws from a single parameter value you would
 repeat the parameter value across columns, which is what
-\code{\link[=induced_distribution]{induced_distribution()}} does for a point mass.
+\code{\link[=mixture]{mixture()}} does for a point mass.
 }
 \details{
 Users should sample via \code{draw(fam(theta), n)}, which does the same thing and

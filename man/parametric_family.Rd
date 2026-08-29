@@ -38,7 +38,7 @@ else it offers is a way of navigating that map.
 Families are callable, which is that map written down: \code{fam(theta)} is the
 \link{distribution} \eqn{p_\theta}{p_theta}. A kernel extends canonically from
 points to distributions, so \code{fam(W)} for a \link{distribution} `W`` over the
-parameter space is the same map and gives the \code{\link[=induced_distribution]{induced_distribution()}}
+parameter space is the same map and gives the \code{\link[=mixture]{mixture()}}
 \eqn{P_W}{P_W}.
 
 Not marked abstract, because S7 forbids that alongside a \code{class_function}

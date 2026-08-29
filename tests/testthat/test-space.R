@@ -124,10 +124,25 @@ test_that("a count space answers contains(), agreeing with validate_outcome", {
   expect_false(contains(s, c(2.5, 1, 0.5))) # not whole
   expect_false(contains(s, c(2L, 2L))) # wrong length
 
-  # The two agree on every point of the enumerated space, which is what makes
-  # the predicate a faithful lift of the checks validate_outcome already made.
-  outcomes <- enumerate_space(s)
-  expect_true(all(apply(outcomes, 1L, function(x) contains(s, x))))
+  # `contains()` and `validate_outcome()` restate the same three conditions
+  # rather than sharing one implementation: the predicate returns a single
+  # boolean, so layering it under validate_outcome would cost the specific
+  # messages that say *which* condition failed. The duplication is only safe
+  # while the two agree, so that is pinned here in both directions.
+  agrees <- function(x) {
+    valid <- !inherits(try(validate_outcome(s, x), silent = TRUE), "try-error")
+    contains(s, x) == valid
+  }
+  expect_true(all(apply(enumerate_space(s), 1L, agrees)))
+  for (bad in list(
+    c(2L, 1L, 0L),      # sums to 3, not 4
+    c(5L, 0L, -1L),     # negative
+    c(2.5, 1, 0.5),     # not whole
+    c(0L, 0L, 0L),      # sums to 0
+    c(4L, 1L, -1L)      # sums correctly, but negative
+  )) {
+    expect_true(agrees(bad))
+  }
 })
 
 

@@ -119,6 +119,15 @@ continuous_dist <- new_class(
 )
 
 
+#' @description Check that a [discrete_dist] is supported in a space. Returns
+#' `TRUE` is all of `dist`s atoms are contained in `space`.
+#' @rdname supported_in
+#' @usage NULL
+method(supported_in, discrete_dist) <- function(dist, space) {
+  all(apply(atoms(dist), 2L, function(theta) contains(space, theta)))
+}
+
+
 #' Number of atoms in a distribution
 #' @param x A [distribution] over a parameter space.
 #' @return Integer.
@@ -227,6 +236,40 @@ method(weights, continuous_dist) <- function(object, ...) {
 }
 
 
+#' Replace a distribution with a finite one comprised of atoms drawn from it
+#'
+#' Constructs a [finite_dist] comprising `n` draws from `dist` as equally
+#' weighted atoms. It is the empirical distribution based on a sample drawn
+#' from it. Converges to `dist` as `n` grows.
+#'
+#' This can be used as a convenient way to approximate a mixture distribution
+#' if no closed-form exists. See examples.
+#'
+#' @param dist A [distribution] to sample.
+#' @param n Number of draws.
+#' @return A [finite_dist] on `n` equally weighted atoms.
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 6L, k = 3L)
+#'
+#' W <- dirichlet(alpha = c(4, 3, 2))
+#' approx <- discretise(W, 500L)
+#' n_atoms(approx)
+#'
+#' x <- enumerate_space(fam@sample_space)
+#' log_density(fam(W), c(2,2,2))
+#' log_density(fam(approx), c(2,2,2))
+#' @export
+discretise <- function(dist, n) {
+  rlang::check_number_whole(n, min = 1, max = 2147483647)
+  n <- as.integer(n)
+  finite_dist(
+    components = t(draw(dist, n)),
+    weights = rep(1 / n, n)
+  )
+}
+
+
 #' Drop atoms below a weight threshold and renormalise
 #'
 #' Atoms are pruned by weight only, never merged, so survivors may still
@@ -317,7 +360,7 @@ method(reference_point, finite_dist) <- function(x) {
 }
 
 
-method(induced_log_density, list(dirac, parametric_family)) <- function(
+method(mixture_log_density, list(dirac, parametric_family)) <- function(
   mixing,
   family,
   x
@@ -326,7 +369,7 @@ method(induced_log_density, list(dirac, parametric_family)) <- function(
 }
 
 
-method(induced_log_density, list(finite_dist, parametric_family)) <- function(
+method(mixture_log_density, list(finite_dist, parametric_family)) <- function(
   mixing,
   family,
   x
@@ -338,7 +381,7 @@ method(induced_log_density, list(finite_dist, parametric_family)) <- function(
 }
 
 
-method(induced_log_density, list(continuous_dist, parametric_family)) <-
+method(mixture_log_density, list(continuous_dist, parametric_family)) <-
   function(mixing, family, x) {
     stop(
       "no induced density is implemented for a `",
@@ -347,9 +390,9 @@ method(induced_log_density, list(continuous_dist, parametric_family)) <-
       attr(S7_class(family), "name"),
       "`. Mixing a continuous measure through a kernel is an integral, and ",
       "only some pairings have one in closed or quadrature form.\n",
-      "This is deliberately not approximated by Monte Carlo by default, ",
-      "see `draw()` if you wish to approximate the mixing distribution ",
-      "with random draws instead.",
+      "This is not approximated by Monte Carlo by default, see ",
+      "`discretise(mixing, n)` if you would like to approximate the ",
+      "mixture by sampling atoms for a mixing measure.",
       call. = FALSE
     )
   }

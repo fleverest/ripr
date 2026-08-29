@@ -47,6 +47,6 @@ resolves it and hands the engine to the step verbs.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+Q <- mixture(fam, dirac(c(0.5, 0.5)))
 resolve_engine(exact_engine(), Q, fam)
 }

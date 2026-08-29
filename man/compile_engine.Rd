@@ -27,7 +27,7 @@ own; in normal use the step verbs compile the engine for you.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+Q <- mixture(fam, dirac(c(0.5, 0.5)))
 engine <- resolve_engine(exact_engine(), Q, fam)
 ll <- compile_engine(engine)
 ll(cbind(c(0.5, 0.5), c(0.2, 0.8)))

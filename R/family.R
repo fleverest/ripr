@@ -15,7 +15,7 @@ NULL
 #' Families are callable, which is that map written down: `fam(theta)` is the
 #' [distribution] \eqn{p_\theta}{p_theta}. A kernel extends canonically from
 #' points to distributions, so `fam(W)` for a [distribution] `W`` over the
-#' parameter space is the same map and gives the [induced_distribution()]
+#' parameter space is the same map and gives the [mixture()]
 #' \eqn{P_W}{P_W}.
 #'
 #' Not marked abstract, because S7 forbids that alongside a `class_function`
@@ -71,7 +71,7 @@ parametric_family <- new_class(
 #' @keywords internal
 #' @noRd
 at_theta <- function(at) {
-  induced_distribution(sys.function(), at)
+  mixture(sys.function(), at)
 }
 
 
@@ -187,7 +187,7 @@ score <- new_generic("score", "family", function(family, theta, x) {
 #' Take one draw per column of `theta_mat`, so the number of draws is the number
 #' of parameters. To take repeated draws from a single parameter value you would
 #' repeat the parameter value across columns, which is what
-#' [induced_distribution()] does for a point mass.
+#' [mixture()] does for a point mass.
 #'
 #' Users should sample via `draw(fam(theta), n)`, which does the same thing and
 #' routes here.

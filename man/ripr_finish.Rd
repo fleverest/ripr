@@ -33,7 +33,7 @@ filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
 \item{max_rounds}{Cap on refinement rounds.}
 }
 \value{
-A list with \code{W0} (a \link{finite_dist}), \code{P_star} (a \link{induced_distribution}), \code{kl} of
+A list with \code{W0} (a \link{finite_dist}), \code{P_star} (a \link{mixture}), \code{kl} of
 the returned mixture, \code{gap_fit} (the last Frank--Wolfe gap recorded during
 fitting, \code{NA} if none was), \code{gap_final} (a fresh Frank--Wolfe gap over the
 returned mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms},

@@ -28,7 +28,7 @@ NULL
 #' @return A `quadrature`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' resolve_engine(exact_engine(), Q, fam)
 #' @export
 quadrature <- new_class(
@@ -64,7 +64,7 @@ quadrature <- new_class(
 #' @return Integer.
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' n_nodes(resolve_engine(exact_engine(), Q, fam))
 #' @export
 n_nodes <- function(engine) nrow(engine@nodes)
@@ -83,7 +83,7 @@ n_nodes <- function(engine) nrow(engine@nodes)
 #' @return `TRUE` or `FALSE`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' deterministic(resolve_engine(exact_engine(), Q, fam))
 #' deterministic(resolve_engine(mc_engine(100L), Q, fam))
 #' @export
@@ -106,7 +106,7 @@ deterministic <- function(engine) isTRUE(engine@deterministic)
 #' @return A function of `theta_mat`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' engine <- resolve_engine(exact_engine(), Q, fam)
 #' ll <- compile_engine(engine)
 #' ll(cbind(c(0.5, 0.5), c(0.2, 0.8)))
@@ -129,7 +129,7 @@ compile_engine <- function(engine) {
 #' @return Numeric scalar.
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' engine <- resolve_engine(exact_engine(), Q, fam)
 #' expect_q(engine, engine@nodes[, 1])
 #' @export
@@ -152,7 +152,7 @@ expect_q <- function(engine, v) {
 #' @return Numeric scalar.
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' engine <- resolve_engine(exact_engine(), Q, fam)
 #' log_expect_q(engine, log(engine@nodes[, 1] + 1))
 #' @export
@@ -175,7 +175,7 @@ log_expect_q <- function(engine, log_v) {
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' engine <- resolve_engine(mc_engine(200L), Q, fam)
 #' expect_se(engine, engine@nodes[, 1])
 #' @export
@@ -211,7 +211,7 @@ new_engine_spec <- function(fn) {
 #' @return An engine spec for [resolve_engine()].
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' resolve_engine(exact_engine(), Q, fam)
 #' @export
 exact_engine <- function() {
@@ -241,7 +241,7 @@ exact_engine <- function() {
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' resolve_engine(mc_engine(200L), Q, fam)
 #' @export
 mc_engine <- function(n_draws) {
@@ -281,7 +281,7 @@ mc_engine <- function(n_draws) {
 #' @return A [quadrature].
 #' @examples
 #' fam <- multinomial_family(n_trials = 3L, k = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0.5, 0.5)))
+#' Q <- mixture(fam, dirac(c(0.5, 0.5)))
 #' resolve_engine(exact_engine(), Q, fam)
 #' @export
 resolve_engine <- function(spec, alternative, family, tol = 1e-8) {
@@ -322,8 +322,8 @@ gaussian_moments <- new_generic("gaussian_moments", "dist", function(dist) {
 
 method(gaussian_moments, distribution) <- function(dist) NULL
 
-method(gaussian_moments, induced_distribution) <- function(dist) {
-  induced_gaussian_moments(dist@mixing, dist@family)
+method(gaussian_moments, mixture) <- function(dist) {
+  mixture_gaussian_moments(dist@mixing, dist@family)
 }
 
 #' Mean and covariance of the induced mixture, when that mixture is Gaussian
@@ -342,14 +342,14 @@ method(gaussian_moments, induced_distribution) <- function(dist) {
 #' @param family A [parametric_family].
 #' @return `list(mean = , cov = )`, or `NULL`.
 #' @keywords internal
-induced_gaussian_moments <- new_generic(
-  "induced_gaussian_moments",
+mixture_gaussian_moments <- new_generic(
+  "mixture_gaussian_moments",
   c("mixing", "family"),
   function(mixing, family) S7::S7_dispatch()
 )
 
 method(
-  induced_gaussian_moments,
+  mixture_gaussian_moments,
   list(distribution, parametric_family)
 ) <- function(mixing, family) {
   NULL
@@ -413,7 +413,7 @@ gauss_hermite <- function(n) {
 #'   \insertRef{GolubWelsch1969}{ripr}
 #' @examples
 #' fam <- gaussian_family(dim = 2L)
-#' Q <- induced_distribution(fam, dirac(c(0, 0)))
+#' Q <- mixture(fam, dirac(c(0, 0)))
 #' resolve_engine(gh_engine(n_nodes = 10L), Q, fam)
 #' @export
 gh_engine <- function(n_nodes, max_nodes = 1e6) {

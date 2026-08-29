@@ -15,8 +15,8 @@ fixture <- function(n = 8L, k = 3L) {
   list(
     family = fam,
     space = fam@sample_space,
-    Q = induced_distribution(fam, dirac(theta)),
-    P = induced_distribution(fam, dirac(rep(1 / k, k)))
+    Q = mixture(fam, dirac(theta)),
+    P = mixture(fam, dirac(rep(1 / k, k)))
   )
 }
 
@@ -94,7 +94,7 @@ test_that("infinite values are allowed", {
   # numerator does not, and that is reachable: a mixture with an atom at a
   # simplex vertex gives zero probability to almost every outcome.
   f <- fixture()
-  vertex <- induced_distribution(f$family, dirac(c(1, 0, 0)))
+  vertex <- mixture(f$family, dirac(c(1, 0, 0)))
   R <- likelihood(f$Q) / likelihood(vertex)
   expect_true(is.infinite(R(c(4, 2, 2))))
   expect_true(R(c(8, 0, 0)) < Inf)
@@ -229,7 +229,7 @@ test_that("brackets appear only where they change the reading", {
 
 test_that("a long label is shortened", {
   f <- fixture()
-  long <- likelihood(induced_distribution(f$family, dirac(c(0.5, 0.3, 0.2))))
+  long <- likelihood(mixture(f$family, dirac(c(0.5, 0.3, 0.2))))
   expect_true(nchar(rv_expression(long)) <= 24L)
   expect_match(rv_expression(long), "\\.\\.\\.$")
 })
@@ -243,7 +243,7 @@ test_that("printing returns the variable invisibly", {
 
 test_that("format() gives the expression, and does not error", {
   family <- multinomial_family(n_trials = 4L, k = 3L)
-  Q <- induced_distribution(family, dirac(c(0.5, 0.3, 0.2)))
+  Q <- mixture(family, dirac(c(0.5, 0.3, 0.2)))
   x <- likelihood(Q, label = "Q")
   p <- likelihood(Q, label = "P*")
 

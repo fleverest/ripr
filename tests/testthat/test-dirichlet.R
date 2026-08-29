@@ -492,12 +492,20 @@ test_that("a Dirichlet mixed through the wrong family errors naming both", {
     log_density(wrong, c(0, 0, 0)),
     "not approximated by Monte Carlo"
   )
-  expect_error(log_density(wrong, c(0, 0, 0)), "`draw\\(\\)`")
+  expect_error(log_density(wrong, c(0, 0, 0)), "discretise")
 })
 
 test_that("the concentration count must match the family's categories", {
+  # Caught when the mixture is built, not when it is first evaluated: a
+  # `Dir(2, 2)` lives in 2 dimensions and a 3-category family's parameters in 3.
   expect_error(
-    log_density(k3_family(4L)(dirichlet(c(2, 2))), c(2L, 1L, 1L)),
+    k3_family(4L)(dirichlet(c(2, 2))),
+    "over 2 dimensions but the family's parameters have 3"
+  )
+  # The density method keeps its own check, now only reachable by calling it
+  # directly, since no mixture over a mismatched pair can be constructed.
+  expect_error(
+    ripr:::mixture_log_density(dirichlet(c(2, 2)), k3_family(4L), c(2L, 1L, 1L)),
     "2 entries but the family has 3 categories"
   )
 })

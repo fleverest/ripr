@@ -141,3 +141,56 @@ test_that("reference_point works for a family too, so ripr_init always has one",
   g <- gaussian_family(dim = 2L)
   expect_true(contains(g@parameter_space, reference_point(g)))
 })
+
+
+# --- discretise ---------------------------------------------------------------
+
+test_that("discretise turns any distribution into equally weighted atoms", {
+  set.seed(1)
+  W <- dirichlet(alpha = c(4, 3, 2))
+  a <- discretise(W, 500L)
+
+  expect_true(S7::S7_inherits(a, finite_dist))
+  expect_equal(n_atoms(a), 500L)
+  expect_equal(weights(a), rep(1 / 500, 500L))
+  # Atoms are draws from W, so they lie in its support.
+  expect_equal(colSums(atoms(a)), rep(1, 500L))
+})
+
+test_that("discretise unblocks a pairing that has no induced density", {
+  # A Dirichlet over a Gaussian family: the spaces are compatible (the simplex
+  # sits inside R^3), so the mixture builds
+  set.seed(1)
+  fam <- gaussian_family(dim = 3L)
+  W <- dirichlet(alpha = c(4, 3, 2))
+
+  expect_error(log_density(fam(W), c(0, 0, 0)), "no induced density")
+  expect_error(log_density(fam(W), c(0, 0, 0)), "discretise")
+
+  # Discretised, every family can mix over it.
+  approx <- log_density(fam(discretise(W, 200L)), c(0.5, 0.3, 0.2))
+  expect_true(is.finite(approx))
+})
+
+test_that("a discretised mixture approaches the exact one, and is not it", {
+  # Where the exact mixture does exist, the discretised one is near it rather
+  # than equal to it.
+  set.seed(1)
+  fam <- multinomial_family(n_trials = 6L, k = 3L)
+  W <- dirichlet(alpha = c(4, 3, 2))
+  x <- enumerate_space(fam@sample_space)
+  exact <- exp(log_density(fam(W), x))
+
+  err <- vapply(
+    c(200L, 20000L),
+    function(n) {
+      max(abs(exp(log_density(fam(discretise(W, n)), x)) - exact))
+    },
+    numeric(1)
+  )
+
+  expect_gt(err[1], 1e-4) # not equal, at any n
+  expect_lt(err[2], err[1] / 2) # but converging
+  # And it is a proper distribution in its own right at every n.
+  expect_equal(sum(exp(log_density(fam(discretise(W, 200L)), x))), 1)
+})

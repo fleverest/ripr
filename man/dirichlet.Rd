@@ -4,7 +4,7 @@
 \alias{dirichlet}
 \alias{truncated_dirichlet}
 \alias{dirichlet_dist}
-\alias{induced_log_density,ripr::dirichlet_dist,ripr::multinomial_family-method}
+\alias{mixture_log_density,ripr::dirichlet_dist,ripr::multinomial_family-method}
 \title{Dirichlet priors over the simplex}
 \usage{
 dirichlet(alpha)

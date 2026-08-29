@@ -9,10 +9,10 @@ NULL
 #' and [draw()], over the points its `sample_space` admits.
 #'
 #' \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
-#' and is usable everywhere an [induced_distribution()] is.
+#' and is usable everywhere an [mixture()] is.
 #' @param sample_space The [space] this is a law over.
 #' @examples
-#' # `distribution` is abstract; induced_distribution() subclasses it, e.g.
+#' # `distribution` is abstract; mixture() subclasses it, e.g.
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' Q <- fam(c(0.5, 0.3, 0.2))
 #' S7::S7_inherits(Q, distribution)
@@ -82,30 +82,31 @@ method(family, distribution) <- function(object, ...) NULL
 #'
 #' A kernel extends canonically from points to measures, so the degenerate case
 #' is not a separate type: a bare parameter vector is taken as a point mass, and
-#' `induced_distribution(fam, theta)` is the family at `theta`. Calling a family
+#' `mixture(fam, theta)` is the family at `theta`. Calling a family
 #' directly is the shorthand for both, and usually reads better:
 #' `fam(theta)` and `fam(W)`.
 #'
 #' @param family The [parametric_family] whose kernel is pushed forward.
 #' @param mixing A [distribution] over its parameter space, or a parameter
 #'   vector for a point mass.
-#' @return An `induced_distribution`.
+#' @return An `mixture`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' induced_distribution(fam, c(0.5, 0.3, 0.2))
-#' induced_distribution(fam, finite_dist(
+#' mixture(fam, c(0.5, 0.3, 0.2))
+#' mixture(fam, finite_dist(
 #'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
 #'   weights = c(0.5, 0.5)
 #' ))
 #' @export
-induced_distribution <- new_class(
-  "induced_distribution",
+mixture <- new_class(
+  "mixture",
   parent = distribution,
   properties = list(family = parametric_family, mixing = distribution),
   constructor = function(family, mixing) {
     if (!S7_inherits(mixing, distribution)) {
       mixing <- dirac(theta = as.numeric(mixing))
     }
+    check_mixes_over(mixing, family@parameter_space)
     new_object(
       S7_object(),
       sample_space = family@sample_space,
@@ -116,32 +117,75 @@ induced_distribution <- new_class(
 )
 
 
-method(family, induced_distribution) <- function(object, ...) object@family
+#' Check that a distribution is supported inside a space
+#' @param dist A [distribution] over a parameter space.
+#' @param space The [space] it must be supported in.
+#' @return `TRUE` or `FALSE`.
+#' @keywords internal
+supported_in <- new_generic("supported_in", "dist", function(dist, space) {
+  S7::S7_dispatch()
+})
 
 
-method(log_density, induced_distribution) <- function(dist, x) {
-  induced_log_density(dist@mixing, dist@family, x)
-}
-
-
-method(draw, induced_distribution) <- function(dist, n_obs) {
-  induced_draw(dist@mixing, dist@family, n_obs)
-}
-
-
-#' @rdname induced_distribution
+#' @description The declared space must lie inside the target, decided exactly.
+#' @rdname supported_in
 #' @usage NULL
-method(print, induced_distribution) <- function(x, ...) {
-  cat("<induced_distribution>", format(x), "\n")
+method(supported_in, distribution) <- function(dist, space) {
+  region_subset(dist@sample_space, space)
+}
+
+
+#' The refusal a mixture owes a measure that does not live on its parameters
+#' @keywords internal
+#' @noRd
+check_mixes_over <- function(mixing, parameter_space) {
+  if (space_dim(mixing@sample_space) != space_dim(parameter_space)) {
+    stop(
+      "`mixing` is over ",
+      space_dim(mixing@sample_space),
+      " dimensions but the family's parameters have ",
+      space_dim(parameter_space),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (!supported_in(mixing, parameter_space)) {
+    stop(
+      "`mixing` puts mass outside the family's parameter space, where the ",
+      "family has no density. A mixture over it would not be a distribution.",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
+}
+
+
+method(family, mixture) <- function(object, ...) object@family
+
+
+method(log_density, mixture) <- function(dist, x) {
+  mixture_log_density(dist@mixing, dist@family, x)
+}
+
+
+method(draw, mixture) <- function(dist, n_obs) {
+  mixture_draw(dist@mixing, dist@family, n_obs)
+}
+
+
+#' @rdname mixture
+#' @usage NULL
+method(print, mixture) <- function(x, ...) {
+  cat("<mixture>", format(x), "\n")
   invisible(x)
 }
 
 
 #' @description `format()` names the family and how it was mixed, distinguishing
 #'   a point mass from a genuine mixture.
-#' @rdname induced_distribution
+#' @rdname mixture
 #' @usage NULL
-method(format, induced_distribution) <- function(x, ...) {
+method(format, mixture) <- function(x, ...) {
   name <- attr(S7_class(x@family), "name")
   n <- n_atoms(x@mixing)
   detail <- if (S7_inherits(x@mixing, dirac)) {
@@ -167,8 +211,8 @@ method(format, induced_distribution) <- function(x, ...) {
 #' @param x `(M, K)` matrix of outcomes.
 #' @return Length-`M` numeric vector.
 #' @keywords internal
-induced_log_density <- new_generic(
-  "induced_log_density",
+mixture_log_density <- new_generic(
+  "mixture_log_density",
   c("mixing", "family"),
   function(mixing, family, x) S7::S7_dispatch()
 )
@@ -180,8 +224,8 @@ induced_log_density <- new_generic(
 #' @param n_obs Number of draws.
 #' @return `(n_obs, K)` numeric matrix.
 #' @keywords internal
-induced_draw <- new_generic(
-  "induced_draw",
+mixture_draw <- new_generic(
+  "mixture_draw",
   c("mixing", "family"),
   function(mixing, family, n_obs) S7::S7_dispatch()
 )
@@ -190,9 +234,9 @@ induced_draw <- new_generic(
 #' @description Sampling from a mixture can be done easily by sampling once
 #' from the mixing distribution, then sampling from the family at that parameter
 #' value.
-#' @rdname induced_draw
+#' @rdname mixture_draw
 #' @usage NULL
-method(induced_draw, list(distribution, parametric_family)) <- function(
+method(mixture_draw, list(distribution, parametric_family)) <- function(
   mixing,
   family,
   n_obs

@@ -11,7 +11,7 @@
 
 plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   fam <- multinomial_family(n_trials = 12, k = k)
-  Q <- induced_distribution(fam, dirac(theta = q))
+  Q <- mixture(fam, dirac(theta = q))
   parts <- lapply(2:k, function(j) {
     basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
       replace(numeric(k), i, 1)
@@ -31,7 +31,7 @@ plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
 # so this is the one problem here with a known answer.
 binomial <- function(p = 0.75, ...) {
   fam <- multinomial_family(n_trials = 10, k = 2)
-  Q <- induced_distribution(fam, dirac(theta = c(p, 1 - p)))
+  Q <- mixture(fam, dirac(theta = c(p, 1 - p)))
   ripr_init(
     Q,
     null_model(
@@ -81,7 +81,7 @@ test_that("initialisation does not depend on the engine's randomness", {
   # nodes, so a stochastic engine must not make the starting mixture depend on
   # the seed.
   fam <- multinomial_family(n_trials = 12, k = 4)
-  Q <- induced_distribution(fam, dirac(c(0.42, 0.31, 0.16, 0.11)))
+  Q <- mixture(fam, dirac(c(0.42, 0.31, 0.16, 0.11)))
   sub <- list(simplex_region(
     vertices = cbind(
       c(0, 1, 0, 0),
@@ -215,7 +215,7 @@ test_that("record_gap makes a gap available to the predicate", {
 
 test_that("ripr_init refuses an atoms list that mismatches the parts", {
   fam <- multinomial_family(n_trials = 4L, k = 3L)
-  Q <- induced_distribution(fam, dirac(theta = c(0.5, 0.3, 0.2)))
+  Q <- mixture(fam, dirac(theta = c(0.5, 0.3, 0.2)))
   null <- null_model(
     fam,
     list(
@@ -491,7 +491,7 @@ test_that("a polytope null fits and certifies end to end", {
     )
   )
   null <- null_model(fam, list(square))
-  Q <- induced_distribution(fam, dirac(theta = c(0.7, 0.2, 0.1)))
+  Q <- mixture(fam, dirac(theta = c(0.7, 0.2, 0.1)))
 
   fit <- ripr_init(
     Q,

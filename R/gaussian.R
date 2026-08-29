@@ -156,7 +156,7 @@ gaussian_dist <- new_class(
 )
 
 
-method(induced_log_density, list(gaussian_dist, gaussian_family)) <- function(
+method(mixture_log_density, list(gaussian_dist, gaussian_family)) <- function(
   mixing,
   family,
   x
@@ -169,7 +169,7 @@ method(induced_log_density, list(gaussian_dist, gaussian_family)) <- function(
 }
 
 
-method(induced_draw, list(gaussian_dist, gaussian_family)) <- function(
+method(mixture_draw, list(gaussian_dist, gaussian_family)) <- function(
   mixing,
   family,
   n_obs
@@ -198,7 +198,7 @@ method(reference_point, gaussian_dist) <- function(x) x@prior_mean
 # --- Moments, for Gauss-Hermite quadrature ------------------------------------
 
 method(
-  induced_gaussian_moments,
+  mixture_gaussian_moments,
   list(dirac, gaussian_family)
 ) <- function(
   mixing,
@@ -209,7 +209,7 @@ method(
 
 
 method(
-  induced_gaussian_moments,
+  mixture_gaussian_moments,
   list(gaussian_dist, gaussian_family)
 ) <- function(
   mixing,

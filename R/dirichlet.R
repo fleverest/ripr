@@ -182,7 +182,7 @@ log_region_integral <- new_generic(
 
 #' @rdname dirichlet
 #' @usage NULL
-method(induced_log_density, list(dirichlet_dist, multinomial_family)) <-
+method(mixture_log_density, list(dirichlet_dist, multinomial_family)) <-
   function(mixing, family, x) {
     k <- length(mixing@alpha)
     if (k != family@k) {

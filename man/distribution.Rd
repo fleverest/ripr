@@ -17,10 +17,10 @@ and \code{\link[=draw]{draw()}}, over the points its \code{sample_space} admits.
 }
 \details{
 \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
-and is usable everywhere an \code{\link[=induced_distribution]{induced_distribution()}} is.
+and is usable everywhere an \code{\link[=mixture]{mixture()}} is.
 }
 \examples{
-# `distribution` is abstract; induced_distribution() subclasses it, e.g.
+# `distribution` is abstract; mixture() subclasses it, e.g.
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 Q <- fam(c(0.5, 0.3, 0.2))
 S7::S7_inherits(Q, distribution)

@@ -10,7 +10,7 @@
 
 plurality <- function(n = 12, k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
   fam <- multinomial_family(n_trials = n, k = k)
-  Q <- induced_distribution(fam, dirac(theta = q))
+  Q <- mixture(fam, dirac(theta = q))
   parts <- lapply(2:k, function(j) {
     basis <- lapply(setdiff(seq_len(k), 1L), function(i) {
       replace(numeric(k), i, 1)
@@ -594,7 +594,7 @@ test_that("the EM M-step survives a node its atom gives zero probability", {
 # so this is where the cell wiring has anything to do.
 square_null <- function(n = 12, q = c(0.15, 0.35, 0.5), ...) {
   fam <- multinomial_family(n_trials = n, k = 3L)
-  Q <- induced_distribution(fam, dirac(theta = q))
+  Q <- mixture(fam, dirac(theta = q))
   square <- polytope_region(
     vertices = cbind(
       c(0.5, 0.5, 0),

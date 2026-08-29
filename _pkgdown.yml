@@ -89,7 +89,7 @@ reference:
   - log_density
   - draw
   - family.distribution
-  - induced_distribution
+  - mixture
   - discrete_dist
   - dirac
   - finite_dist
@@ -99,6 +99,7 @@ reference:
   - n_atoms
   - atoms
   - weights.distribution
+  - discretise
   - prune
   - reference_point
 

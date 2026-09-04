@@ -95,28 +95,17 @@ library(ripr)
 
 The idea it rests on is simpler than the projection itself. For any non-negative, bounded random variable `X`, if `b` is any number at least `sup_{theta in Theta_0} E_theta[X]`, then `X / b` has null expectation at most one. Specifically, `E = X / b` is an *e-variable*.
 
-**This means the projection need not be fit exactly:** any approximation can
-be used, so long as the resulting likelihood ratio is corrected against a
-*proven* bound to yield a valid e-variable. The quality of the approximation
-determines only how much e-power survives the correction. That splits a
-hard, non-convex optimisation problem into an easy one (approximate) and a
-proof (bound), and this split is what `ripr` facilitates: fitting is handled
-by a Frank--Wolfe [@Jaggi2013] and EM hybrid over mixing measures, and
-certification by a branch-and-bound algorithm (currently implemented for
-multinomial families via the Bernstein enclosure).
+**This means the projection need not be fit exactly:**
+any approximation can be used, so long as the resulting likelihood ratio is corrected against a *proven* bound to yield a valid e-variable.
+The quality of the approximation determines only how much e-power survives the correction.
+That splits a hard, non-convex optimisation problem into an easy one (approximate) and a proof (bound), and this split is what `ripr` facilitates: fitting is handled by a Frank--Wolfe [@Jaggi2013] and EM hybrid over mixing measures, and certification by a branch-and-bound algorithm (currently implemented for multinomial families via the Bernstein enclosure).
 
-This vignette walks through both halves on a worked example, then shows what
-happens when the fit is deliberately bad, and finally contrasts a proven
-bound against an uncertified search.
+This vignette walks through both halves on a worked example, then shows what happens when the fit is deliberately bad, and finally contrasts a proven bound against an uncertified search.
 
 ## A first null: the plurality null
 
-Take a three-category multinomial distribution (`n = 20`) and the plurality
-null: candidate 1 does not win outright,
-`H0 = union_j {theta : theta_1 <= theta_j}`.
-This null is a union of convex parts (one region where `theta_1 <= theta_2`
-and another where `theta_1 <= theta_3`, each part a simplex), so the plurality
-null is a single `null_model` holding two `simplex_region` parts.
+Take a three-category multinomial distribution (`n = 20`) and the plurality null: candidate 1 does not win outright, `H0 = union_j {theta : theta_1 <= theta_j}`.
+This null is a union of convex parts (one region where `theta_1 <= theta_2` and another where `theta_1 <= theta_3`, each part a simplex), so the plurality null is a single `null_model` holding two `simplex_region` parts.
 
 ```{r problem}
 K <- 3L
@@ -137,9 +126,7 @@ plurality <- null_model(
 )
 ```
 
-We nominate a discrete mixture-multinomial distribution as the alternative.
-Here the mixing measure is a single dirac at `q = (0.40, 0.35, 0.25)`,
-yielding a simple `Multinomial(20, q)` alternative.
+We nominate a discrete mixture-multinomial distribution as the alternative.  Here the mixing measure is a single dirac at `q = (0.40, 0.35, 0.25)`, yielding a simple `Multinomial(20, q)` alternative.
 
 ```{r alternative}
 Q <- family(c(0.40, 0.35, 0.25))
@@ -155,18 +142,14 @@ plot_null(
 )
 ```
 
-The two parts overlap, and the alternative sits in the cap above them,
-where candidate 1 leads.
+The two parts overlap, and the alternative sits in the cap above them, where candidate 1 leads.
+
 
 ## Fitting the projection
 
-The fitting procedure is a sequence of steps: `fw_step()` for Frank--Wolfe
-updates and `em_step()` for EM (also `lb_step()` for Li--Barron
-[@LiBarron1999], though it is not generally recommended -- see
-`?oracles`). There is no fixed pipeline; which algorithm runs is decided by
-which verbs are called, and in what order. Here we run 40 steps of
-Frank--Wolfe, then use `ripr_finish()` to solve the weights and drop any
-low-mass atoms.
+The fitting procedure is a sequence of steps: `fw_step()` for Frank--Wolfe updates and `em_step()` for EM (also `lb_step()` for Li--Barron [@LiBarron1999], though it is not generally recommended: see `?oracles`).
+There is no fixed pipeline; which algorithm runs is decided by which verbs are called, and in what order.
+Here we run 40 steps of Frank--Wolfe, then use `ripr_finish()` to solve the weights and drop any low-mass atoms.
 
 ```{r fit}
 set.seed(1)
@@ -190,19 +173,15 @@ plot_null(
 )
 ```
 
-The fit attains a KL divergence (from `Q`) of approximately
-`r round(fit$kl, 4)`. The `gap` quantity is a Frank--Wolfe duality gap:
-at its true value it bounds the expectation of `Q / P*` over the null by
-`1 + gap`. The `gap` recorded *during* a fit (`state@trace$gap`, or
-`fit$gap_fit`) is only an estimate, though -- it is not itself an upper
-bound, so it cannot be used directly to certify an e-value. `fit$gap_final`,
-requested here via `record_gap = TRUE`, is a fresh sweep over the *returned*
-mixture, and is what we compare against the true certified bound below.
+The fit attains a KL divergence (from `Q`) of approximately `r round(fit$kl, 4)`.
+The `gap` quantity is a Frank--Wolfe duality gap: at its true value it bounds the expectation of `Q / P*` over the null by `1 + gap`.
+The `gap` recorded *during* a fit (`state@trace$gap`, or `fit$gap_fit`) is only an estimate, so it is not itself an upper bound and cannot be used directly to get an e-variable.
+`fit$gap_final`, requested here via `record_gap = TRUE`, is a fresh sweep over the *returned* mixture, and is what we compare against the true certified bound below.
 
 ## From a fit to an e-variable
 
-With a fitted projection in hand, we can construct a `random_variable` that
-computes the mixture likelihood ratio `Q / P*` -- our candidate e-variable:
+With a fitted projection in hand, we can construct a `random_variable` that computes the mixture likelihood ratio `X = Q / P*`.
+This is our candidate e-variable:
 
 ```{r ratio}
 X <- likelihood(Q, label = "Q") /
@@ -210,8 +189,7 @@ X <- likelihood(Q, label = "Q") /
 X
 ```
 
-`random_variable`s are callable: they map elements of the sample space to
-their realisation.
+`random_variable`s are callable: they map elements of the sample space to their realisation.
 
 ```{r rv_outcome}
 outcomes <- rbind(
@@ -221,10 +199,8 @@ outcomes <- rbind(
 X(outcomes)
 ```
 
-`certify()` proves an upper bound on the null expectation of `X`. It returns
-the proven upper bound alongside the largest value its internal search
-actually attained; the two bracket the true supremum, which is generally
-unknown.
+`certify()` computes an upper bound on the null expectation of `X`.
+It returns the upper bound alongside the largest value its internal search actually attained; the interval formed contains the true supremum, which is generally unknown.
 
 ```{r certify}
 cert <- certify(X, plurality, tol = 1e-9)
@@ -235,15 +211,13 @@ c(
 )
 ```
 
-The bound lands just above one: it is exactly `1 + gap`, where `gap` is the
-*true* Frank--Wolfe duality gap that the fit stopped on.
+The bound lands just above one: it is exactly `1 + gap`, where `gap` is the *true* Frank--Wolfe duality gap that the fit stopped on.
 
 ```{r identity}
 c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
 ```
 
-The rescaled random variable `E = X / cert$sup_ub` is then a genuine
-e-variable for `plurality`:
+The rescaled random variable `E = X / cert$sup_ub` is then a genuine e-variable for `plurality`:
 
 ```{r evariable}
 E <- X / cert$sup_ub
@@ -253,10 +227,8 @@ print(E(outcomes))
 
 ## The correction doesn't need a good fit
 
-The whole point of splitting fitting from certification is that validity
-does not depend on the quality of the fit. To demonstrate, replace the
-projection with something that is not the RIPr at all -- a uniform point
-mass -- and certify the resulting ratio:
+The whole point of splitting fitting from certification is that validity does not depend on the quality of the fit.
+To demonstrate, replace the projection with something that is not the RIPr at all (a uniform point mass) and certify the resulting ratio:
 
 ```{r bad-fit}
 bad <- family(rep(1 / K, K))
@@ -267,9 +239,8 @@ cert_bad <- certify(X_bad, plurality, tol = 1e-9)
 c(good = cert$sup_ub, bad = cert_bad$sup_ub)
 ```
 
-Both rescale to valid e-variables. What differentiates them is e-power --
-the log-growth, or expected log e-value under the alternative, that
-compounds over a sequential procedure:
+Both rescale to valid e-variables.
+What differentiates them is e-power: the log-growth, or expected log e-value under the alternative:
 
 ```{r growth}
 growth <- function(E, Q) {
@@ -286,16 +257,13 @@ E_gr <- growth(E, Q)
 c(good = E_gr, bad = growth(X_bad / cert_bad$sup_ub, Q))
 ```
 
-A negative growth rate means evidence is lost on average even when the
-alternative is true -- useless, but not invalid. **Validity is free from the
-certification and correction procedure; fitting a good approximation is what
-buys e-power.**
+A negative growth rate means evidence is lost on average even when the alternative is true.
+This means our e-variable is useless, but not invalid.
+**Validity is free from the certification and correction procedure; fitting a good approximation is what buys e-power.**
 
-When `P*` is the true RIPr of `Q` onto the null, the attained KL divergence
-`KL(Q || P*)` is precisely the growth rate of the resulting e-variable. For
-any fitted `P` the KL divergence sits above that optimum, so `fit$kl` upper
-bounds the optimal growth rate. The true optimum therefore lies somewhere
-between the growth this fit achieved and `fit$kl`:
+When `P*` is the true RIPr of `Q` onto the null, the attained KL divergence `KL(Q || P*)` is precisely the growth rate of the resulting e-variable.
+For any fitted `P` the KL divergence sits above that optimum, so `fit$kl` upper bounds the optimal growth rate.
+The true optimum therefore lies somewhere between the growth this fit achieved and `fit$kl`:
 
 ```{r growth-kl-gap}
 c(
@@ -307,12 +275,8 @@ c(
 
 ## A second worked example: composing step verbs
 
-Because `fw_step()`, `lb_step()`, `em_step()` and `weight_step()` are
-independent verbs rather than a fixed pipeline, they compose freely. Here we
-demonstrate a null where candidate 1, 2 and 3 all fail to reach a majority
-(`H0: theta_1, theta_2, theta_3 <= 1/2`, the medial triangle), fit with a
-loop that interleaves Frank--Wolfe and EM steps, and nominate an alternative
-with one dirac per section, equally weighted.
+Because `fw_step()`, `lb_step()`, `em_step()` and `weight_step()` are independent verbs rather than a fixed pipeline, they compose freely.
+Here we demonstrate a null where candidate 1, 2 and 3 all fail to reach a majority (`H0: theta_1, theta_2, theta_3 <= 1/2`, the medial triangle), fit with a loop that interleaves Frank--Wolfe and EM steps, and nominate an alternative with one dirac per section, equally weighted.
 
 ```{r medial}
 medial <- null_model(
@@ -370,19 +334,15 @@ plot_null(
 
 ## Searching vs. proving
 
-`sup_lb()` hunts for the largest null expectation by multi-start gradient
-ascent. It is much cheaper than proving a bound, and it works on families
-and geometries that have no implemented bounding procedure -- but it is
-**not** a certificate. It reports a *lower* bound on the supremum: something
-larger may sit somewhere gradient ascent could not reach.
+`sup_lb()` hunts for the largest null expectation by multi-start gradient ascent.
+It is much cheaper than proving a bound, and it works on families and geometries that have no implemented bounding procedure, but it is **not** a gap certificate.
+It reports a *lower* bound on the supremum: something larger may sit somewhere gradient ascent could not reach.
 
 ```{r sup-lb}
 c(searched = sup_lb(X, plurality)$sup_lb, certified = cert$sup_ub)
 ```
 
-Where no bounding method has been implemented for a given combination of
-family and region geometry, `certify()` refuses outright, rather than
-silently returning something unproven:
+Where no bounding method has been implemented for a given combination of family and region geometry, `certify()` refuses outright:
 
 ```{r refuse, error = TRUE}
 gaussian <- gaussian_family(dim = 2L)
@@ -394,8 +354,7 @@ Y <- likelihood(gaussian(c(0, 0)))
 certify(Y, null)
 ```
 
-`sup_lb()` still works here, since it needs no bounding method -- only a
-search.
+`sup_lb()` still works here as it needs no bounding method, only a search.
 
 ## Where to go next
 

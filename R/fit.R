@@ -29,7 +29,12 @@ NULL
 #'   examples use. Empty parts are `ncol = 0` matrices, which the loop handles
 #'   without a special case.
 #' @param weights Optional list matching `atoms`; defaults to uniform.
-#' @param control From [ripr_control()].
+#' @param record_gap Sweep the Frank--Wolfe oracle over the starting mixture,
+#'   filling `gap` and `gap_theta` on the init row. Off by default, as in the
+#'   verbs: the sweep costs about as much as a [fw_step()]. With it,
+#'   `record_gap = TRUE` throughout gives every row a gap, the init row included.
+#' @param control From [ripr_control()]. Its `snapshot` setting applies here as
+#'   it does for other verbs.
 #' @return A [ripr_state] with no iterations run.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -49,8 +54,10 @@ ripr_init <- function(
   engine = exact_engine(),
   atoms = NULL,
   weights = NULL,
+  record_gap = FALSE,
   control = ripr_control()
 ) {
+  started <- proc.time()[["elapsed"]]
   resolved <- resolve_engine(engine, alternative, null@family)
 
   if (is.null(atoms)) {
@@ -98,7 +105,23 @@ ripr_init <- function(
     snapshots = list(),
     iters = c(fw = 0L, lb = 0L, em = 0L, weight = 0L)
   )
-  record(state, phase = "init", kl = kl_divergence(state))
+  ld <- compile_engine(resolved)
+  log_p <- log_p_at_nodes(state, ld)
+  swept <- if (record_gap) {
+    linear_gap(state, log_p, ld, flat_atoms(state))
+  }
+  state <- record(
+    state,
+    phase = "init",
+    kl = kl_divergence(state, log_p),
+    gap = if (is.null(swept)) NA_real_ else swept$gap,
+    gap_theta = swept$theta,
+    elapsed = proc.time()[["elapsed"]] - started
+  )
+  if (wants_snapshot(state, last = TRUE)) {
+    state <- snapshot_state(state, "init")
+  }
+  state
 }
 
 
@@ -199,7 +222,9 @@ support_gap_below <- function(tol = 1e-8) {
 #' Run a verb's loop, recording and snapshotting as it goes
 #'
 #' The shared skeleton: `advance` takes the state and the compiled log-density
-#' and returns the state plus whatever `record` needs.
+#' and returns the state plus whatever `record` needs. The clock runs around
+#' `advance` alone: a snapshot's cost belongs to the control setting that asked
+#' for it, not to the step rule being timed.
 #' @keywords internal
 #' @noRd
 run_steps <- function(state, times, until, counter, phase, advance) {
@@ -207,11 +232,13 @@ run_steps <- function(state, times, until, counter, phase, advance) {
   ld <- compile_engine(state@engine)
 
   for (i in seq_len(times)) {
+    started <- proc.time()[["elapsed"]]
     stepped <- advance(state, ld)
+    elapsed <- proc.time()[["elapsed"]] - started
     state <- bump(stepped$state, counter)
     state <- do.call(
       record,
-      c(list(state, phase = phase), stepped$row)
+      c(list(state, phase = phase, elapsed = elapsed), stepped$row)
     )
     if (wants_snapshot(state, i == times)) {
       state <- snapshot_state(state, phase)

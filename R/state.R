@@ -262,6 +262,10 @@ kl_divergence <- function(state, log_p = NULL, ld = NULL) {
 #' type: a family whose parameter is a matrix -- a covariance, say -- could not
 #' be recorded at all. `NA` marks a row with no such point, matching how the
 #' rest of the trace says "not recorded", so `is.na()` reads them.
+#'
+#' `elapsed` is the wall-clock seconds spent producing the row, per row rather
+#' than cumulative so that a subset of the trace still reads correctly;
+#' `cumsum(trace$elapsed)` is the total time taken.
 #' @keywords internal
 #' @noRd
 empty_trace <- function() {
@@ -279,6 +283,7 @@ empty_trace <- function() {
     direction = character(0),
     support_size = integer(0),
     max_weight = numeric(0),
+    elapsed = numeric(0),
     stringsAsFactors = FALSE
   )
   tr$gap_theta <- list()
@@ -305,7 +310,8 @@ trace_columns <- function() {
     "step_size",
     "direction",
     "support_size",
-    "max_weight"
+    "max_weight",
+    "elapsed"
   )
 }
 
@@ -327,7 +333,8 @@ record <- function(
   oracle_theta = NULL,
   part = NA_integer_,
   step_size = NA_real_,
-  direction = NA_character_
+  direction = NA_character_,
+  elapsed = NA_real_
 ) {
   w <- flat_weights(state)
   row <- data.frame(
@@ -344,6 +351,7 @@ record <- function(
     direction = direction,
     support_size = length(w),
     max_weight = if (length(w)) max(w) else NA_real_,
+    elapsed = elapsed,
     stringsAsFactors = FALSE
   )
   row$gap_theta <- theta_cell(gap_theta)

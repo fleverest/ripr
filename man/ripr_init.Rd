@@ -10,6 +10,7 @@ ripr_init(
   engine = exact_engine(),
   atoms = NULL,
   weights = NULL,
+  record_gap = FALSE,
   control = ripr_control()
 )
 }
@@ -28,7 +29,13 @@ without a special case.}
 
 \item{weights}{Optional list matching \code{atoms}; defaults to uniform.}
 
-\item{control}{From \code{\link[=ripr_control]{ripr_control()}}.}
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the starting mixture,
+filling \code{gap} and \code{gap_theta} on the init row. Off by default, as in the
+verbs: the sweep costs about as much as a \code{\link[=fw_step]{fw_step()}}. With it,
+\code{record_gap = TRUE} throughout gives every row a gap, the init row included.}
+
+\item{control}{From \code{\link[=ripr_control]{ripr_control()}}. Its \code{snapshot} setting applies here as
+it does for other verbs.}
 }
 \value{
 A \link{ripr_state} with no iterations run.

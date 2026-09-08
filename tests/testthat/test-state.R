@@ -187,6 +187,14 @@ test_that("unfilled columns come back as NA of the right type", {
   expect_identical(st@trace$part, NA_integer_)
   expect_identical(st@trace$direction, NA_character_)
   expect_identical(st@trace$gap, NA_real_)
+  expect_identical(st@trace$elapsed, NA_real_)
+})
+
+test_that("record takes elapsed from the caller", {
+  # It cannot measure the time itself: it does not know when the work behind
+  # the row began.
+  st <- record(fixture(), phase = "fw", kl = 0.1, elapsed = 0.25)
+  expect_identical(st@trace$elapsed, 0.25)
 })
 
 # --- Snapshots ----------------------------------------------------------------

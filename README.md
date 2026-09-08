@@ -85,6 +85,7 @@ c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 
 <img src="man/figures/README-plot-plurality-fit-1.svg" alt="Plurality null, with the support of the alternative mixing distribution W1 and the fitted null mixture W0." width="60%" />
 <p class="caption">
+
 Plurality null, with the support of the alternative mixing distribution
 W1 and the fitted null mixture W0.
 </p>
@@ -150,16 +151,15 @@ region interface and set algebra (`union()`, `intersect()`, `setdiff()`,
 <div id="ref-Garloff1986" class="csl-entry">
 
 Garloff, Jürgen. 1985. “Convergent Bounds for the Range of Multivariate
-Polynomials.” In *International Symposium on Interval Mathematics*,
-37–56. Springer.
+Polynomials.” *International Symposium on Interval Mathematics*, 37–56.
 
 </div>
 
 <div id="ref-Jaggi2013" class="csl-entry">
 
 Jaggi, Martin. 2013. “Revisiting Frank-Wolfe: Projection-Free Sparse
-Convex Optimization.” In *International Conference on Machine Learning*,
-427–35. PMLR.
+Convex Optimization.” *International Conference on Machine Learning*,
+427–35.
 
 </div>
 

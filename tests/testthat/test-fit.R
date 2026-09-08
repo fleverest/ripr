@@ -9,7 +9,12 @@
 # after every verb and fails only if the arithmetic and the state have come
 # apart.
 
-plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
+plurality <- function(
+  k = 4,
+  q = c(0.42, 0.31, 0.16, 0.11),
+  record_gap = FALSE,
+  ...
+) {
   fam <- multinomial_family(n_trials = 12, k = k)
   Q <- mixture(fam, dirac(theta = q))
   parts <- lapply(2:k, function(j) {
@@ -23,6 +28,7 @@ plurality <- function(k = 4, q = c(0.42, 0.31, 0.16, 0.11), ...) {
     Q,
     null_model(fam, parts),
     exact_engine(),
+    record_gap = record_gap,
     control = ripr_control(n_seeds = 30L, n_restarts = 4L, ...)
   )
 }
@@ -122,6 +128,22 @@ test_that("a trace row carries the counters as at that row", {
   expect_identical(em_rows$em, c(1L, 2L))
 })
 
+test_that("every row records the wall-clock time it took", {
+  # The clock is the fair axis between step rules whose iterations differ in
+  # cost by an order of magnitude, and it can only be measured from inside a
+  # `times` loop. Per row rather than cumulative, so a subset still reads.
+  st <- plurality()
+  outer <- system.time(
+    st <- st |> fw_step(2L) |> em_step(2L) |> weight_step(1L) |> lb_step(1L)
+  )[["elapsed"]]
+  tr <- st@trace
+  expect_type(tr$elapsed, "double")
+  expect_false(anyNA(tr$elapsed))
+  expect_true(all(tr$elapsed >= 0))
+  # Each row's clock ran inside the call that produced it.
+  expect_lte(sum(tr$elapsed[tr$phase != "init"]), outer + 1e-6)
+})
+
 # --- The algebraic identity ---------------------------------------------------
 
 test_that("the identity survives every verb", {
@@ -210,6 +232,17 @@ test_that("record_gap makes a gap available to the predicate", {
   # And through the weight verb too, which sweeps after its step.
   st <- weight_step(st, 1L, record_gap = TRUE)
   expect_true(!is.na(utils::tail(st@trace$gap, 1L)))
+})
+
+test_that("ripr_init can record the starting mixture's gap", {
+  # So `record_gap = TRUE` throughout leaves no row without one, and the
+  # predicate can be asked before any step is taken.
+  st <- plurality(record_gap = TRUE)
+  expect_false(is.na(st@trace$gap))
+  expect_false(anyNA(st@trace$gap_theta[[1L]]))
+  expect_silent(gap_below(1e-8)(st))
+  # Unasked, the init row is like any other: no sweep, no gap.
+  expect_true(is.na(plurality()@trace$gap))
 })
 
 
@@ -381,12 +414,26 @@ test_that("a misspelt direction is caught with a suggestion", {
 # --- Snapshots ----------------------------------------------------------------
 
 test_that("snapshot counts calls under step and iterations under all", {
+  # `ripr_init()` is one call and one iteration, so it contributes one
+  # snapshot under either, and none under "none".
   expect_length(fw_step(plurality(snapshot = "none"), 4L)@snapshots, 0L)
-  expect_length(fw_step(plurality(snapshot = "step"), 4L)@snapshots, 1L)
-  expect_length(fw_step(plurality(snapshot = "all"), 4L)@snapshots, 4L)
+  expect_length(fw_step(plurality(snapshot = "step"), 4L)@snapshots, 2L)
+  expect_length(fw_step(plurality(snapshot = "all"), 4L)@snapshots, 5L)
   # Which means composition is how the granularity is chosen.
   st <- plurality(snapshot = "step")
-  expect_length(fw_step(fw_step(st, 1L), 1L)@snapshots, 2L)
+  expect_length(fw_step(fw_step(st, 1L), 1L)@snapshots, 3L)
+})
+
+test_that("the first snapshot is the starting mixture", {
+  # A snapshot sequence that began at the first step could not show where the
+  # fit started from.
+  st <- plurality(snapshot = "step")
+  expect_length(st@snapshots, 1L)
+  first <- st@snapshots[[1L]]
+  expect_identical(first$phase, "init")
+  expect_identical(first$atoms, st@atoms)
+  expect_identical(first$weights, st@weights)
+  expect_identical(first$iters, c(fw = 0L, lb = 0L, em = 0L, weight = 0L))
 })
 
 # --- Finishing ----------------------------------------------------------------

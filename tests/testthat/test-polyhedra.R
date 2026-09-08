@@ -84,7 +84,11 @@ test_that("halfspace_region's own generators agree with cddlib's", {
   expect_true(contains(s, ours$v[, 1L]))
   expect_true(contains(s, theirs$v[, 1L]))
 
-  expect_equal(projector(theirs$l), projector(ours$l), tolerance = rounding_tol(1))
+  expect_equal(
+    projector(theirs$l),
+    projector(ours$l),
+    tolerance = rounding_tol(1)
+  )
 
   # A ray is only determined modulo the lineality space, so compare the two
   # after projecting the lineality directions out.

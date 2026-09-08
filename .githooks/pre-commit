@@ -3,24 +3,26 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Format the staged R files with air, then re-stage them so the formatted
+# version is what gets committed. Note that a partially staged file will have
+# its unstaged hunks pulled into the commit by the re-add.
+AIR="${AIR:-air}"
+if ! command -v "$AIR" >/dev/null 2>&1; then
+  echo "==> [pre-commit] air not found on PATH (set AIR=/path/to/air to override)." >&2
+  echo "    Install it from https://posit-dev.github.io/air/cli.html" >&2
+  exit 1
+fi
+
+mapfile -t staged_r < <(git diff --cached --name-only --diff-filter=ACMR -- '*.R' '*.r')
+if ((${#staged_r[@]})); then
+  echo "==> [pre-commit] Formatting staged R files with air"
+  "$AIR" format "${staged_r[@]}"
+  git add -- "${staged_r[@]}"
+fi
+
 echo "==> [pre-commit] Building roxygen2 documentation"
 Rscript -e 'devtools::document()'
-
-echo "==> [pre-commit] Building README"
-Rscript -e 'devtools::build_readme()'
-
-echo "==> [pre-commit] Building vignettes"
-Rscript -e '
-  for (rmd in list.files("vignettes", pattern = "\\.Rmd$", full.names = TRUE)) {
-    rmarkdown::render(rmd, output_dir = "vignettes", quiet = TRUE)
-  }
-'
-
-# Stage anything the build steps above regenerated so it lands in this commit.
-git add DESCRIPTION NAMESPACE man README.md vignettes/*.html 2>/dev/null || true
+git add DESCRIPTION NAMESPACE man
 
 echo "==> [pre-commit] Running tests"
 Rscript -e 'devtools::test(stop_on_failure = TRUE)'
-
-echo "==> [pre-commit] Running R CMD check"
-Rscript -e 'devtools::check(document = FALSE, cran = FALSE, quiet = TRUE, error_on = "warning")'

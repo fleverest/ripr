@@ -432,9 +432,13 @@ test_that("draw on an untruncated Dirichlet lands in the simplex", {
 
 test_that("a region the prior barely reaches errors rather than looping", {
   set.seed(1)
-  corner <- simplex_region(vertices = cbind(
-    c(1, 0, 0), c(0.999, 0.001, 0), c(0.999, 0, 0.001)
-  ))
+  corner <- simplex_region(
+    vertices = cbind(
+      c(1, 0, 0),
+      c(0.999, 0.001, 0),
+      c(0.999, 0, 0.001)
+    )
+  )
   pinched <- truncated(c(1, 1, 1), corner)
   expect_error(draw(pinched, 10L), "rejection sampling")
   expect_error(draw(pinched, 10L), "proposals")
@@ -505,7 +509,11 @@ test_that("the concentration count must match the family's categories", {
   # The density method keeps its own check, now only reachable by calling it
   # directly, since no mixture over a mismatched pair can be constructed.
   expect_error(
-    ripr:::mixture_log_density(dirichlet(c(2, 2)), k3_family(4L), c(2L, 1L, 1L)),
+    ripr:::mixture_log_density(
+      dirichlet(c(2, 2)),
+      k3_family(4L),
+      c(2L, 1L, 1L)
+    ),
     "2 entries but the family has 3 categories"
   )
 })

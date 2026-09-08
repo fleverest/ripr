@@ -54,7 +54,8 @@ test_that("score matches a central finite difference", {
   for (j in 1:2) {
     e <- numeric(2)
     e[j] <- eps
-    fd <- (kernel_loglik(fam, theta + e, x) - kernel_loglik(fam, theta - e, x)) /
+    fd <- (kernel_loglik(fam, theta + e, x) -
+      kernel_loglik(fam, theta - e, x)) /
       (2 * eps)
     expect_equal(s[, j], fd, tolerance = 1e-6)
   }

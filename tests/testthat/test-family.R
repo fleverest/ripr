@@ -31,7 +31,11 @@ test_that("the multinomial pmf sums to 1 over its support", {
     c(0.7, 0.2, 0.1),
     c(0.5, 0.5, 0) # a boundary parameter: log(0) = -Inf in the kernel
   )) {
-    expect_equal(sum(exp(kernel_loglik(fam, theta, x))), 1, tolerance = rounding_tol(1))
+    expect_equal(
+      sum(exp(kernel_loglik(fam, theta, x))),
+      1,
+      tolerance = rounding_tol(1)
+    )
   }
 })
 

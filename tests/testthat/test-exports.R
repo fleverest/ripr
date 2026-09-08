@@ -12,7 +12,11 @@ pkgdown_root <- function() {
 # topics, not exports, so an export documented under a shared topic --
 # `gap_below` under `predicates`, say -- is covered by that topic's entry.
 rd_aliases <- function(root) {
-  files <- list.files(file.path(root, "man"), pattern = "[.]Rd$", full.names = TRUE)
+  files <- list.files(
+    file.path(root, "man"),
+    pattern = "[.]Rd$",
+    full.names = TRUE
+  )
   out <- lapply(files, function(f) {
     hits <- grep("^\\\\alias\\{", readLines(f, warn = FALSE), value = TRUE)
     aliases <- gsub("^\\\\alias\\{(.*)\\}\\s*$", "\\1", hits)

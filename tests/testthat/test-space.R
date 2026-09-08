@@ -135,11 +135,11 @@ test_that("a count space answers contains(), agreeing with validate_outcome", {
   }
   expect_true(all(apply(enumerate_space(s), 1L, agrees)))
   for (bad in list(
-    c(2L, 1L, 0L),      # sums to 3, not 4
-    c(5L, 0L, -1L),     # negative
-    c(2.5, 1, 0.5),     # not whole
-    c(0L, 0L, 0L),      # sums to 0
-    c(4L, 1L, -1L)      # sums correctly, but negative
+    c(2L, 1L, 0L), # sums to 3, not 4
+    c(5L, 0L, -1L), # negative
+    c(2.5, 1, 0.5), # not whole
+    c(0L, 0L, 0L), # sums to 0
+    c(4L, 1L, -1L) # sums correctly, but negative
   )) {
     expect_true(agrees(bad))
   }

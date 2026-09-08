@@ -110,12 +110,18 @@ test_that("a likelihood and the arithmetic over it carry a log form", {
   R <- likelihood(f$Q) / likelihood(f$P)
 
   expect_equal(log_evaluate(R, x), log(R(x)))
-  expect_equal(log_evaluate(likelihood(f$Q) * likelihood(f$P), x), log(
-    likelihood(f$Q)(x) * likelihood(f$P)(x)
-  ))
-  expect_equal(log_evaluate(likelihood(f$Q) + likelihood(f$P), x), log(
-    likelihood(f$Q)(x) + likelihood(f$P)(x)
-  ))
+  expect_equal(
+    log_evaluate(likelihood(f$Q) * likelihood(f$P), x),
+    log(
+      likelihood(f$Q)(x) * likelihood(f$P)(x)
+    )
+  )
+  expect_equal(
+    log_evaluate(likelihood(f$Q) + likelihood(f$P), x),
+    log(
+      likelihood(f$Q)(x) + likelihood(f$P)(x)
+    )
+  )
   expect_equal(log_evaluate(2 * R, x), log(2 * R(x)))
 })
 

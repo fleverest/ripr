@@ -51,6 +51,7 @@ ripr_init <- function(
   weights = NULL,
   control = ripr_control()
 ) {
+  started <- proc.time()[["elapsed"]]
   resolved <- resolve_engine(engine, alternative, null@family)
 
   if (is.null(atoms)) {
@@ -98,7 +99,12 @@ ripr_init <- function(
     snapshots = list(),
     iters = c(fw = 0L, lb = 0L, em = 0L, weight = 0L)
   )
-  record(state, phase = "init", kl = kl_divergence(state))
+  record(
+    state,
+    phase = "init",
+    kl = kl_divergence(state),
+    elapsed = proc.time()[["elapsed"]] - started
+  )
 }
 
 
@@ -199,7 +205,9 @@ support_gap_below <- function(tol = 1e-8) {
 #' Run a verb's loop, recording and snapshotting as it goes
 #'
 #' The shared skeleton: `advance` takes the state and the compiled log-density
-#' and returns the state plus whatever `record` needs.
+#' and returns the state plus whatever `record` needs. The clock runs around
+#' `advance` alone: a snapshot's cost belongs to the control setting that asked
+#' for it, not to the step rule being timed.
 #' @keywords internal
 #' @noRd
 run_steps <- function(state, times, until, counter, phase, advance) {
@@ -207,11 +215,13 @@ run_steps <- function(state, times, until, counter, phase, advance) {
   ld <- compile_engine(state@engine)
 
   for (i in seq_len(times)) {
+    started <- proc.time()[["elapsed"]]
     stepped <- advance(state, ld)
+    elapsed <- proc.time()[["elapsed"]] - started
     state <- bump(stepped$state, counter)
     state <- do.call(
       record,
-      c(list(state, phase = phase), stepped$row)
+      c(list(state, phase = phase, elapsed = elapsed), stepped$row)
     )
     if (wants_snapshot(state, i == times)) {
       state <- snapshot_state(state, phase)

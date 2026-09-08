@@ -122,6 +122,22 @@ test_that("a trace row carries the counters as at that row", {
   expect_identical(em_rows$em, c(1L, 2L))
 })
 
+test_that("every row records the wall-clock time it took", {
+  # The clock is the fair axis between step rules whose iterations differ in
+  # cost by an order of magnitude, and it can only be measured from inside a
+  # `times` loop. Per row rather than cumulative, so a subset still reads.
+  st <- plurality()
+  outer <- system.time(
+    st <- st |> fw_step(2L) |> em_step(2L) |> weight_step(1L) |> lb_step(1L)
+  )[["elapsed"]]
+  tr <- st@trace
+  expect_type(tr$elapsed, "double")
+  expect_false(anyNA(tr$elapsed))
+  expect_true(all(tr$elapsed >= 0))
+  # Each row's clock ran inside the call that produced it.
+  expect_lte(sum(tr$elapsed[tr$phase != "init"]), outer + 1e-6)
+})
+
 # --- The algebraic identity ---------------------------------------------------
 
 test_that("the identity survives every verb", {

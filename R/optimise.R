@@ -22,6 +22,32 @@ objective <- function(value, grad, value_batch = NULL) {
 }
 
 
+#' Remember the most recent call
+#'
+#' Similar to memoise::memoise, but only remembers the last call.
+#'
+#' `f` runs only when its argument differs from the last one, compared by
+#' `identical()`. A caller that asks two questions of the same point in turn,
+#' as an optimiser does wanting the value and then the gradient, pays for one
+#' answer, and nothing more than the latest is kept.
+#' @param f A function of one argument.
+#' @return A function of one argument.
+#' @keywords internal
+#' @noRd
+memoise_last <- function(f) {
+  last_arg <- NULL
+  last <- NULL
+  function(a) {
+    if (!is.null(last_arg) && identical(a, last_arg)) {
+      return(last)
+    }
+    last <<- f(a)
+    last_arg <<- a
+    last
+  }
+}
+
+
 #' Maximise an objective over a parameter space
 #'
 #' Multi-start SLSQP in the space's own [chart()]: seed coordinates are scored
@@ -62,20 +88,13 @@ maximise_over <- function(
   }
 
   # slsqp() calls fn and gr separately at the same point, so cache the pair.
-  last_u <- NULL
-  last <- NULL
-  fn_gr <- function(u) {
-    if (!is.null(last_u) && identical(u, last_u)) {
-      return(last)
-    }
+  fn_gr <- memoise_last(function(u) {
     theta <- ch$to_theta(u)
-    last_u <<- u
-    last <<- list(
+    list(
       value = -obj$value(theta),
       gradient = -as.numeric(obj$grad(theta) %*% ch$jacobian(u))
     )
-    last
-  }
+  })
 
   refine <- function(u0, fallback) {
     res <- tryCatch(

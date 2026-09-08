@@ -651,7 +651,21 @@ outright:</p>
 <span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="co">#&gt; No bounding method is implemented for gaussian_family expectations over halfspace_region.</span></span>
 <span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; Certifying this requires deriving and implementing a bound on gaussian_family expectations over halfspace_region. Nothing here says one does not exist. In the meantime, `sup_lb()` still searches, and reports a lower bound.</span></span></code></pre></div>
 <p><code>sup_lb()</code> still works here as it needs no bounding
-method, only a search.</p>
+method, only a search. The Gaussian sample space cannot be enumerated,
+so the expectation at each parameter is taken by quadrature instead: the
+same <code>engine</code> argument as <code>ripr_init()</code> takes,
+integrating under <code>P_theta</code> rather than under the
+alternative.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>found <span class="ot">&lt;-</span> <span class="fu">sup_lb</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>  Y,</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  null,</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">engine =</span> <span class="fu">gh_engine</span>(<span class="dv">15</span>),</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  <span class="at">n_seeds =</span> <span class="dv">50</span><span class="dt">L</span>,</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  <span class="at">n_restarts =</span> <span class="dv">5</span><span class="dt">L</span></span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>)</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a><span class="fu">c</span>(<span class="at">searched =</span> found<span class="sc">$</span>sup_lb, <span class="at">theta_star =</span> found<span class="sc">$</span>theta)</span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a><span class="co">#&gt;      searched   theta_star1   theta_star2 </span></span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a><span class="co">#&gt;  7.957749e-02 -1.644381e-10 -1.522252e-10</span></span></code></pre></div>
 </div>
 <div id="where-to-go-next" class="section level2">
 <h2>Where to go next</h2>

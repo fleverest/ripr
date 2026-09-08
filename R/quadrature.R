@@ -421,6 +421,25 @@ gh_engine <- function(n_nodes, max_nodes = 1e6) {
   if (length(n_nodes) != 1L || is.na(n_nodes) || n_nodes <= 0L) {
     stop("`n_nodes` must be a single positive integer.", call. = FALSE)
   }
+
+  grids <- list()
+  tensor_grid <- function(d) {
+    key <- as.character(d)
+    if (!is.null(grids[[key]])) {
+      return(grids[[key]])
+    }
+    gh <- gauss_hermite(n_nodes)
+    idx <- as.matrix(expand.grid(rep(list(seq_len(n_nodes)), d)))
+    grids[[key]] <<- list(
+      t_mat = matrix(gh$nodes[idx], nrow = nrow(idx), ncol = d),
+      # Weights are the product of the univariate weights; dividing by pi^(d/2)
+      # normalises them to sum to one, which resolve_engine() then verifies.
+      log_w = rowSums(matrix(log(gh$weights[idx]), nrow = nrow(idx))) -
+        0.5 * d * log(pi)
+    )
+    grids[[key]]
+  }
+
   new_engine_spec(function(alternative, family) {
     mom <- gaussian_moments(alternative)
     if (is.null(mom)) {
@@ -448,18 +467,11 @@ gh_engine <- function(n_nodes, max_nodes = 1e6) {
       )
     }
 
-    gh <- gauss_hermite(n_nodes)
-    grid <- as.matrix(expand.grid(rep(list(seq_len(n_nodes)), d)))
-    t_mat <- matrix(gh$nodes[grid], nrow = nrow(grid), ncol = d)
-    # Weights are the product of the univariate weights; dividing by pi^(d/2)
-    # normalises them to sum to one, which resolve_engine() then verifies.
-    log_w <- rowSums(matrix(log(gh$weights[grid]), nrow = nrow(grid))) -
-      0.5 * d * log(pi)
-
-    nodes <- t(t(chol(mom$cov)) %*% (sqrt(2) * t(t_mat)) + mom$mean)
+    grid <- tensor_grid(d)
+    nodes <- t(t(chol(mom$cov)) %*% (sqrt(2) * t(grid$t_mat)) + mom$mean)
     quadrature(
       nodes = nodes,
-      log_w = log_w,
+      log_w = grid$log_w,
       log_q = log_density(alternative, nodes),
       family = family,
       deterministic = TRUE

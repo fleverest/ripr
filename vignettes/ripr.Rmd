@@ -355,6 +355,18 @@ certify(Y, null)
 ```
 
 `sup_lb()` still works here as it needs no bounding method, only a search.
+The Gaussian sample space cannot be enumerated, so the expectation at each parameter is taken by quadrature instead: the same `engine` argument as `ripr_init()` takes, integrating under `P_theta` rather than under the alternative.
+
+```{r sup-lb-gaussian}
+found <- sup_lb(
+  Y,
+  null,
+  engine = gh_engine(15),
+  n_seeds = 50L,
+  n_restarts = 5L
+)
+c(searched = found$sup_lb, theta_star = found$theta)
+```
 
 ## Where to go next
 

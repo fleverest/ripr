@@ -11,7 +11,8 @@ random_variable(
   sample_space,
   label = "<rv>",
   op = NA_character_,
-  operands = list()
+  operands = list(),
+  log_f = NULL
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ by \link{random_variable_arithmetic}; there is rarely a reason to pass it.}
 
 \item{operands}{The operands \code{op} combined, or an empty list for a leaf. Set
 alongside \code{op}, and used only for printing.}
+
+\item{log_f}{(Optional) The same mapping in log space, for a variable that is
+non-negative everywhere: \code{log_f(x)} must equal \code{log(f(x))}. \code{NULL} when
+it may take negative values.}
 }
 \value{
 A callable \code{random_variable}.

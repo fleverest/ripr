@@ -4,17 +4,21 @@
 \alias{sup_lb}
 \title{Estimate the largest null expectation of a random variable}
 \usage{
-sup_lb(x, null, n_seeds = 200L, n_restarts = 25L)
+sup_lb(x, null, engine = exact_engine(), n_seeds = 200L, n_restarts = 25L)
 }
 \arguments{
 \item{x}{A \link{random_variable}.}
 
 \item{null}{A \link{null_model}.}
 
+\item{engine}{An engine spec for the expectation under \code{P_theta}, e.g.
+\code{\link[=exact_engine]{exact_engine()}}, \code{\link[=gh_engine]{gh_engine()}} or \code{\link[=mc_engine]{mc_engine()}}.}
+
 \item{n_seeds, n_restarts}{Resolution of the search.}
 }
 \value{
-A list with \code{sup_lb} and the \code{theta} attaining it.
+A list with \code{sup_lb}, its logarithm \code{log_sup_lb}, the \code{theta}
+attaining it and the \code{part} that \code{theta} lies in.
 }
 \description{
 Multi-start local ascent, a \strong{lower} bound on the supremum: it reports the
@@ -27,6 +31,9 @@ upper bounds where supported.
 Cheap by comparison, and defined wherever the search is. An unbounded part
 or a continuous parameter space can still be searched, though the lower bound
 may sit far below the supremum.
+
+A variable that knows its own logarithm, e.g. one created via \code{\link[=likelihood]{likelihood()}}
+or combinations of likelihoods (\code{*}, \code{/} and \code{+}), is integrated in log space.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -39,6 +46,23 @@ plurality <- null_model(
 )
 X <- likelihood(fam(c(0.4, 0.35, 0.25)))
 sup_lb(X, plurality)
+
+# A continuous sample space is searched the same way, under a rule that
+# integrates over it. Every evaluation is a quadrature rule here, so the
+# search is run at a lower resolution than the enumerable one above.
+gaussian <- gaussian_family(dim = 2L)
+halfspace <- null_model(
+  gaussian,
+  halfspace_region(normal = c(1, -1), offset = 0)
+)
+Y <- likelihood(gaussian(c(0, 0)))
+sup_lb(
+  Y,
+  halfspace,
+  engine = gh_engine(n_nodes = 9L),
+  n_seeds = 20L,
+  n_restarts = 2L
+)
 }
 \seealso{
 \code{\link[=certify]{certify()}}

@@ -100,6 +100,64 @@ test_that("infinite values are allowed", {
   expect_true(R(c(8, 0, 0)) < Inf)
 })
 
+# --- The log form -------------------------------------------------------------
+
+test_that("a likelihood and the arithmetic over it carry a log form", {
+  # The log form is what an integrator reads when the values themselves have
+  # left the range of a double. Where both agree it must be the same variable.
+  f <- fixture()
+  x <- rbind(c(4, 2, 2), c(8, 0, 0))
+  R <- likelihood(f$Q) / likelihood(f$P)
+
+  expect_equal(log_evaluate(R, x), log(R(x)))
+  expect_equal(log_evaluate(likelihood(f$Q) * likelihood(f$P), x), log(
+    likelihood(f$Q)(x) * likelihood(f$P)(x)
+  ))
+  expect_equal(log_evaluate(likelihood(f$Q) + likelihood(f$P), x), log(
+    likelihood(f$Q)(x) + likelihood(f$P)(x)
+  ))
+  expect_equal(log_evaluate(2 * R, x), log(2 * R(x)))
+})
+
+test_that("the log form agrees with the values where those are infinite", {
+  # A ratio is infinite where its denominator vanishes, and the log form has to
+  # say so too: `log(Inf + Inf)` is `Inf`, not `NaN`.
+  f <- fixture()
+  vertex <- mixture(f$family, dirac(c(1, 0, 0)))
+  R <- likelihood(f$Q) / likelihood(vertex)
+  x <- rbind(c(4, 2, 2), c(8, 0, 0))
+
+  expect_equal(log_evaluate(R + R, x), log(R(x) + R(x)))
+  expect_identical(log_evaluate(R + R, c(4, 2, 2)), Inf)
+})
+
+test_that("a variable that can be negative has no log form", {
+  # Nothing here approximates a logarithm it does not have: subtraction drops
+  # the log form, and so does a negative constant.
+  f <- fixture()
+  R <- likelihood(f$Q) / likelihood(f$P)
+
+  expect_null(log_evaluate(R - 1, c(4, 2, 2)))
+  expect_null(log_evaluate(likelihood(f$Q) - likelihood(f$P), c(4, 2, 2)))
+  expect_null(log_evaluate(-1 * R, c(4, 2, 2)))
+  # A plain function is one nobody has told the logarithm of.
+  plain <- random_variable(function(x) R(x), sample_space = f$space)
+  expect_null(log_evaluate(plain, c(4, 2, 2)))
+})
+
+test_that("`log_f` must be a function, or nothing at all", {
+  f <- fixture()
+  expect_match(
+    error_message(random_variable(
+      function(x) 1,
+      sample_space = f$space,
+      log_f = 0
+    )),
+    "`log_f` must be a function"
+  )
+})
+
+
 # --- Refusing what is not an outcome ------------------------------------------
 
 test_that("input must have the right shape", {

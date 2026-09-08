@@ -996,6 +996,90 @@ test_that("sup_lb() rejects a non-random_variable", {
   expect_error(sup_lb(function(x) 1, null), "must be a `random_variable`")
 })
 
+test_that("sup_lb() rejects an `engine` that is not an engine spec", {
+  null <- plurality_null(n = 4L, k = 3L)
+  x <- likelihood(null@family(c(0.4, 0.35, 0.25)))
+  expect_error(sup_lb(x, null, engine = gh_engine), "must be an engine spec")
+})
+
+test_that("sup_lb() searches a sample space it cannot enumerate", {
+  # `E_theta[p_0]` is the integral of one `N(0, I)` density against another,
+  # i.e. a `N(0, 2I)` density evaluated at `theta`. Over the halfspace
+  # `{theta_1 <= theta_2}` that is largest at the origin, on the boundary,
+  # where it is `1 / (4 pi)`.
+  set.seed(11)
+  family <- gaussian_family(dim = 2L)
+  null <- null_model(
+    family,
+    halfspace_region(normal = c(1, -1), offset = 0)
+  )
+  x <- likelihood(family(c(0, 0)))
+
+  found <- sup_lb(
+    x,
+    null,
+    engine = gh_engine(n_nodes = 9L),
+    n_seeds = 20L,
+    n_restarts = 2L
+  )
+
+  expect_equal(found$sup_lb, 1 / (4 * pi), tolerance = 1e-3)
+  expect_equal(found$theta, c(0, 0), tolerance = 1e-3)
+  expect_equal(found$log_sup_lb, log(found$sup_lb))
+})
+
+test_that("sup_lb() reads a ratio at nodes where the ratio itself is NaN", {
+  # `E_theta[q / p]` for two Gaussian densities is `exp(theta'a + |a|^2 / 2 +
+  # (|m_p|^2 - |m_q|^2) / 2)` with `a = m_q - m_p`: an exponential of a linear
+  # function of theta, whatever the distance involved.
+  family <- gaussian_family(dim = 2L)
+  m_q <- c(0.5, -0.25)
+  m_p <- c(0, 0.25)
+  x <- likelihood(family(m_q)) / likelihood(family(m_p))
+  far <- c(40, 40)
+  null <- null_model(family, point_region(theta = far))
+  a <- m_q - m_p
+  truth <- sum(far * a) + sum(a^2) / 2 + (sum(m_p^2) - sum(m_q^2)) / 2
+
+  engine <- gh_engine(n_nodes = 9L)
+  found <- sup_lb(x, null, engine = engine)
+  expect_equal(found$log_sup_lb, truth)
+  expect_equal(found$sup_lb, exp(truth))
+
+  # The same variable evaluated directly, which is what the log form is for:
+  # both densities have underflowed at nodes this far out, and every node
+  # comes back `0 / 0`.
+  nodes <- resolve_engine(engine, family(far), family)@nodes
+  expect_true(all(is.nan(x(nodes))))
+
+  # And with the log form stripped off there is nothing left to report.
+  direct <- random_variable(
+    function(y) x(y),
+    sample_space = family@sample_space
+  )
+  expect_error(sup_lb(direct, null, engine = engine), "is `NaN` at every part")
+})
+
+test_that("log space changes the range of sup_lb(), not its answer", {
+  set.seed(12)
+  null <- plurality_null(n = 8L, k = 3L)
+  family <- null@family
+  x <- likelihood(family(c(0.5, 0.3, 0.2)))
+  outcomes <- enumerate_space(family@sample_space)
+  # The same variable, tabulated, so it carries no log form and is integrated
+  # directly rather than in log space.
+  direct <- tabulated_rv(family, x(outcomes))
+
+  set.seed(13)
+  in_log <- sup_lb(x, null, n_seeds = 50L, n_restarts = 5L)
+  set.seed(13)
+  linear <- sup_lb(direct, null, n_seeds = 50L, n_restarts = 5L)
+
+  expect_equal(in_log$sup_lb, linear$sup_lb)
+  expect_equal(in_log$theta, linear$theta)
+  expect_equal(in_log$log_sup_lb, linear$log_sup_lb)
+})
+
 
 # --- Convex nulls that are not simplices --------------------------------------
 

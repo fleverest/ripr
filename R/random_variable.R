@@ -33,6 +33,9 @@ NULL
 #'   by [random_variable_arithmetic]; there is rarely a reason to pass it.
 #' @param operands The operands `op` combined, or an empty list for a leaf. Set
 #'   alongside `op`, and used only for printing.
+#' @param log_f (Optional) The same mapping in log space, for a variable that is
+#'   non-negative everywhere: `log_f(x)` must equal `log(f(x))`. `NULL` when
+#'   it may take negative values.
 #' @return A callable `random_variable`.
 #' @seealso [likelihood()], [random_variable_arithmetic]
 #' @examples
@@ -46,39 +49,90 @@ random_variable <- new_class(
     sample_space = space,
     label = class_character,
     op = class_character,
-    operands = class_list
+    operands = class_list,
+    log_f = class_any
   ),
   constructor = function(
     f,
     sample_space,
     label = "<rv>",
     op = NA_character_,
-    operands = list()
+    operands = list(),
+    log_f = NULL
   ) {
     # Forced so the closure captures values, not promises: `saveRDS` on a
     # `class_function` parent serialises whatever the environment holds.
     force(f)
     force(sample_space)
+    force(log_f)
     if (!is.function(f)) {
       stop("`f` must be a function.", call. = FALSE)
     }
+    if (!is.null(log_f) && !is.function(log_f)) {
+      stop("`log_f` must be a function, or NULL.", call. = FALSE)
+    }
 
     new_object(
-      function(x) {
-        force(x)
-        out <- f(validate_outcome(sample_space, x))
-        if (!is.numeric(out)) {
-          stop("a random variable must return numbers.", call. = FALSE)
-        }
-        as.vector(out)
-      },
+      checked_mapping(f, sample_space),
       sample_space = sample_space,
       label = label,
       op = op,
-      operands = operands
+      operands = operands,
+      log_f = if (!is.null(log_f)) checked_mapping(log_f, sample_space)
     )
   }
 )
+
+
+#' A mapping that checks its input and its output
+#'
+#' The input must be an outcome of `sample_space`, as [validate_outcome()]
+#' decides, and the output must be numbers. The value form and the log form of
+#' a variable are wrapped alike.
+#' @keywords internal
+#' @noRd
+checked_mapping <- function(f, sample_space) {
+  force(f)
+  force(sample_space)
+  function(x) {
+    force(x)
+    out <- f(validate_outcome(sample_space, x))
+    if (!is.numeric(out)) {
+      stop("a random variable must return numbers.", call. = FALSE)
+    }
+    as.vector(out)
+  }
+}
+
+
+#' Evaluate a random variable in log space
+#'
+#' \eqn{\log X(x)}{log X(x)} at each of `outcomes`, or `NULL` when the variable
+#' carries no log form. Every caller should handle the `NULL`, since a variable
+#' need not have a log form, e.g. if it takes negative values.
+#'
+#' @param x A [random_variable].
+#' @param outcomes Outcomes to evaluate at, as [validate_outcome()] accepts.
+#' @return Numeric vector of log values, or `NULL`.
+#' @keywords internal
+#' @noRd
+log_evaluate <- function(x, outcomes) {
+  if (!has_log_form(x)) {
+    return(NULL)
+  }
+  x@log_f(outcomes)
+}
+
+
+#' Does this variable have a known log form?
+#'
+#' Whether `log_evaluate()` will answer with numbers rather than `NULL`.
+#'
+#' @param x A [random_variable].
+#' @return `TRUE` or `FALSE`.
+#' @keywords internal
+#' @noRd
+has_log_form <- function(x) !is.null(x@log_f)
 
 
 # --- Printing -----------------------------------------------------------------
@@ -186,7 +240,10 @@ likelihood <- function(dist, label = NULL) {
   random_variable(
     function(x) exp(log_density(dist, x)),
     sample_space = dist@sample_space,
-    label = label
+    label = label,
+    # A density is non-negative, and the distribution already answers in log
+    # space, so the log form here is the honest one rather than `log(exp(.))`.
+    log_f = function(x) log_density(dist, x)
   )
 }
 
@@ -248,11 +305,55 @@ shared_space <- function(e1, e2) {
 }
 
 
+#' An operand's log form, for building the derived variable's own
+#'
+#' A random variable answers with its `log_f`, which may be absent; a constant
+#' answers with its logarithm, which exists only where the constant is
+#' non-negative. `NULL` means there is none, and it propagates: a derived
+#' variable has a log form only if both its operands do.
+#' @keywords internal
+#' @noRd
+log_operand <- function(e) {
+  if (S7_inherits(e, random_variable)) {
+    return(e@log_f)
+  }
+  value <- as.numeric(e)
+  if (length(value) != 1L || is.na(value) || value < 0) {
+    return(NULL)
+  }
+  # A scalar, which every combiner recycles against the other operand.
+  function(x) log(value)
+}
+
+
+#' How an operator acts on operands held in log space
+#'
+#' Multiplication and division are addition and subtraction of logs, and
+#' addition is a row-wise log-sum-exp over the pair. Subtraction has no entry:
+#' `X - Y` is negative wherever `Y` exceeds `X`, so no log form exists for it in
+#' general and `NULL` says so.
+#' @keywords internal
+#' @noRd
+log_combiner <- function(symbol) {
+  switch(
+    symbol,
+    "*" = `+`,
+    "/" = `-`,
+    "+" = function(a, b) row_logsumexp(cbind(a, b)),
+    NULL
+  )
+}
+
+
 #' Build the derived variable for a binary operator
 #'
 #' Evaluates each operand in turn, so the input is checked once per operand
 #' rather than once. That is a few microseconds against a mixture density, and
 #' it keeps every variable independently valid rather than trusting a caller.
+#'
+#' The log form is carried along the same way the value is, so a ratio of two
+#' likelihoods keeps one: `log X - log Y` stays finite over outcomes where
+#' `X / Y` is near `0 / 0`.
 #' @keywords internal
 #' @noRd
 combine_rv <- function(e1, e2, symbol) {
@@ -276,6 +377,13 @@ combine_rv <- function(e1, e2, symbol) {
     )
   }
 
+  log_left <- log_operand(e1)
+  log_right <- log_operand(e2)
+  log_op <- log_combiner(symbol)
+  log_f <- if (!is.null(log_left) && !is.null(log_right) && !is.null(log_op)) {
+    function(x) log_op(log_left(x), log_right(x))
+  }
+
   random_variable(
     function(x) {
       force(x)
@@ -285,7 +393,8 @@ combine_rv <- function(e1, e2, symbol) {
     },
     sample_space = space,
     op = symbol,
-    operands = list(e1, e2)
+    operands = list(e1, e2),
+    log_f = log_f
   )
 }
 

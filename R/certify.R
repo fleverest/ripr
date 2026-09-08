@@ -549,25 +549,48 @@ unimplemented_message <- function(family, cell) {
 
 #' The expectation of a random variable as a function of the parameter
 #'
-#' \eqn{E_\theta[X] = \sum_x P_\theta(x) X(x)}{E_theta[X] = sum_x P_theta(x) X(x)},
-#' with `X` evaluated once at the whole sample space and reused.
+#' \eqn{E_\theta[X]}{E_theta[X]} under the rule `spec` resolves to at
+#' \eqn{P_\theta}{P_theta}: e.g. a sum over the sample space under
+#' [exact_engine()], or a quadrature rule such as [gh_engine()] for gaussian
+#' expectations.
+#'
+#' Reported in log space where `x` has a log form.
+#'
+#' The gradient is the gradient of \eqn{E_\theta[X]}{E_theta[X]}
+#' approximated by the same rule.
+#' @param family A [parametric_family].
+#' @param x A [random_variable].
+#' @param spec An engine spec, e.g. from [exact_engine()] or [gh_engine()].
+#' @return An [objective()], on log scale when `x` has a log form.
 #' @keywords internal
 #' @noRd
-expectation_objective <- function(family, values) {
-  loglik <- compile_loglik(family, enumerate_space(family@sample_space))
+expectation_objective <- function(family, x, spec) {
+  log_scale <- has_log_form(x)
+  terms <- memoise_last(function(theta) {
+    engine <- resolve_engine(spec, family(theta), family)
+    nodes <- engine@nodes
+    if (log_scale) {
+      # `log P_theta(x) + log X(x)` at every node: the summands of the
+      # expectation, in log space.
+      log_terms <- engine@log_w + log_evaluate(x, nodes)
+      value <- logsumexp_vec(log_terms)
+      weight <- if (is.finite(value)) {
+        exp(log_terms - value)
+      } else {
+        numeric(length(log_terms))
+      }
+    } else {
+      weight <- exp(engine@log_w) * x(nodes)
+      value <- sum(weight)
+    }
+    list(value = value, weight = weight, nodes = nodes)
+  })
+
   objective(
-    value = function(theta) {
-      sum(exp(as.vector(loglik(matrix(theta, ncol = 1L)))) * values)
-    },
+    value = function(theta) terms(theta)$value,
     grad = function(theta) {
-      weight <- exp(as.vector(loglik(matrix(theta, ncol = 1L)))) * values
-      as.vector(crossprod(
-        score(family, theta, enumerate_space(family@sample_space)),
-        weight
-      ))
-    },
-    value_batch = function(theta_mat) {
-      as.vector(crossprod(exp(loglik(theta_mat)), values))
+      at <- terms(theta)
+      as.vector(crossprod(score(family, theta, at$nodes), at$weight))
     }
   )
 }
@@ -584,10 +607,16 @@ expectation_objective <- function(family, values) {
 #' Cheap by comparison, and defined wherever the search is. An unbounded part
 #' or a continuous parameter space can still be searched, though the lower bound
 #' may sit far below the supremum.
+#'
+#' A variable that knows its own logarithm, e.g. one created via [likelihood()]
+#' or combinations of likelihoods (`*`, `/` and `+`), is integrated in log space.
 #' @param x A [random_variable].
 #' @param null A [null_model].
+#' @param engine An engine spec for the expectation under `P_theta`, e.g.
+#'   [exact_engine()], [gh_engine()] or [mc_engine()].
 #' @param n_seeds,n_restarts Resolution of the search.
-#' @return A list with `sup_lb` and the `theta` attaining it.
+#' @return A list with `sup_lb`, its logarithm `log_sup_lb`, the `theta`
+#'   attaining it and the `part` that `theta` lies in.
 #' @seealso [certify()]
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -600,15 +629,36 @@ expectation_objective <- function(family, values) {
 #' )
 #' X <- likelihood(fam(c(0.4, 0.35, 0.25)))
 #' sup_lb(X, plurality)
+#'
+#' # A continuous sample space is searched the same way, under a rule that
+#' # integrates over it. Every evaluation is a quadrature rule here, so the
+#' # search is run at a lower resolution than the enumerable one above.
+#' gaussian <- gaussian_family(dim = 2L)
+#' halfspace <- null_model(
+#'   gaussian,
+#'   halfspace_region(normal = c(1, -1), offset = 0)
+#' )
+#' Y <- likelihood(gaussian(c(0, 0)))
+#' sup_lb(
+#'   Y,
+#'   halfspace,
+#'   engine = gh_engine(n_nodes = 9L),
+#'   n_seeds = 20L,
+#'   n_restarts = 2L
+#' )
 #' @export
-sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
+sup_lb <- function(
+  x,
+  null,
+  engine = exact_engine(),
+  n_seeds = 200L,
+  n_restarts = 25L
+) {
   if (!S7_inherits(x, random_variable)) {
     stop("`x` must be a `random_variable`.", call. = FALSE)
   }
 
-  family <- null@family
-  values <- x(enumerate_space(family@sample_space))
-  obj <- expectation_objective(family, values)
+  obj <- expectation_objective(null@family, x, engine)
 
   found <- lapply(
     parts(null@region),
@@ -616,9 +666,23 @@ sup_lb <- function(x, null, n_seeds = 200L, n_restarts = 25L) {
       maximise_over(s, obj, n_seeds = n_seeds, n_restarts = n_restarts)
     }
   )
-  best <- which.max(vapply(found, function(f) f$value, numeric(1)))
+  values <- vapply(found, function(f) f$value, numeric(1))
+  best <- which.max(values)
+  if (length(best) == 0L) {
+    # `which.max()` has nothing to choose between when every value is `NaN`,
+    # which is what a variable read at nodes where it underflows gives back.
+    stop(
+      "the expectation is `NaN` at every part, so there is nothing to report. ",
+      "A likelihood ratio evaluated where both of its densities have ",
+      "underflowed is `0 / 0`.",
+      call. = FALSE
+    )
+  }
+  value <- values[[best]]
+  log_scale <- has_log_form(x)
   list(
-    sup_lb = found[[best]]$value,
+    sup_lb = if (log_scale) exp(value) else value,
+    log_sup_lb = if (log_scale) value else suppressWarnings(log(value)),
     theta = found[[best]]$theta,
     part = best
   )

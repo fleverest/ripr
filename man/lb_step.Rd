@@ -19,10 +19,8 @@ lb_step(
 
 \item{times}{Steps to take.}
 
-\item{directions}{Any of \code{"forward"}, \code{"pairwise"}, \code{"away"}. More than one
-means the step takes whichever the linear model prefers, as Frank--Wolfe
-does: the direction maximising \eqn{\langle -\nabla f, d\rangle}{<-grad f,
-d>}, and only then a step length along it.}
+\item{directions}{Any of \code{"forward"}, \code{"pairwise"}, \code{"away"}; more than one
+means the step takes whichever the linear model prefers.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 

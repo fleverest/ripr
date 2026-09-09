@@ -290,10 +290,13 @@ run_steps <- function(
 #'
 #' @param state A [ripr_state].
 #' @param times Steps to take.
-#' @param directions Any of `"forward"`, `"pairwise"`, `"away"`. More than one
-#'   means the step takes whichever the linear model prefers, as Frank--Wolfe
-#'   does: the direction maximising \eqn{\langle -\nabla f, d\rangle}{<-grad f,
-#'   d>}, and only then a step length along it.
+#' @param variant Which Frank--Wolfe algorithm to run. `"standard"` moves only
+#'   towards the atom the oracle found. `"away-step"` may instead move away from
+#'   the worst atom the mixture already carries, taking whichever of the two the
+#'   linear model prefers (i.e. the one that maximises \eqn{\langle -\nabla f, d\rangle}{<-grad f, d>})
+#'   and then chooses a step length in that direction. `"pairwise"` moves mass
+#'   from that worst atom to the new oracle atom directly, leaving every other
+#'   weight untouched.
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
 #' @param correct Whether to use "fully-corrective" steps that re-solve for the
 #'   weights with the atoms held fixed, run to `fc_tol` and `fc_max_iter` from
@@ -328,17 +331,13 @@ run_steps <- function(
 fw_step <- function(
   state,
   times = 1L,
-  directions = "forward",
+  variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
   record_gap = FALSE,
   until = NULL
 ) {
-  directions <- rlang::arg_match(
-    directions,
-    c("forward", "pairwise", "away"),
-    multiple = TRUE
-  )
+  directions <- variant_directions(rlang::arg_match(variant))
   size <- rlang::arg_match(size)
 
   run_steps(state, times, until, "fw", "fw", record_gap, function(state, ld) {
@@ -381,6 +380,8 @@ fw_step <- function(
 #' expensive than [fw_step()]; see [oracles].
 #'
 #' @inheritParams fw_step
+#' @param directions Any of `"forward"`, `"pairwise"`, `"away"`; more than one
+#'   means the step takes whichever the linear model prefers.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
 #'   *produced*, filling `gap` and `gap_theta`. `FALSE` by default.
 #' @return The updated [ripr_state].

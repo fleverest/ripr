@@ -519,6 +519,28 @@ path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
 }
 
 
+#' The directions a named Frank--Wolfe variant may move in
+#'
+#' The published variants differ only in which directions their step is allowed
+#' to take, so the rest of the step layer works in directions and this is the
+#' only place the names appear. `"away-step"` offers the two Algorithm 1 chooses
+#' between; `"pairwise"` offers the single direction Algorithm 2 replaces that
+#' choice with. There is deliberately no way to spell a set that names no
+#' algorithm: the pairwise direction is the sum of the other two, so its
+#' first-order value is their sum and it would win every comparison it were
+#' entered into, silently discarding them.
+#' @keywords internal
+#' @noRd
+variant_directions <- function(variant) {
+  switch(
+    variant,
+    standard = "forward",
+    "away-step" = c("forward", "away"),
+    pairwise = "pairwise"
+  )
+}
+
+
 #' The directions on offer this step
 #'
 #' One path per requested direction, unavailable ones dropped, each carrying the

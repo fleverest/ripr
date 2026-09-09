@@ -176,7 +176,7 @@ test_that("the identity survives every verb", {
   st <- plurality()
   for (advance in list(
     function(s) fw_step(s, 2L),
-    function(s) fw_step(s, 2L, directions = c("forward", "away")),
+    function(s) fw_step(s, 2L, variant = "away-step"),
     function(s) em_step(s, 2L),
     function(s) weight_step(s, 5L),
     function(s) lb_step(s, 1L)
@@ -344,7 +344,7 @@ test_that("oracle_theta is the atom the step added", {
 test_that("an away step records where the oracle looked but adds nothing", {
   # `oracle_theta` says what the oracle proposed; `part` says whether the
   # step took it. An away step proposes a point and then moves the other way.
-  st <- fw_step(plurality(), 12L, directions = c("forward", "away"))
+  st <- fw_step(plurality(), 12L, variant = "away-step")
   away <- st@trace[!is.na(st@trace$direction) & st@trace$direction == "away", ]
   skip_if(nrow(away) == 0L, "no away step was taken")
   expect_true(all(is.na(away$part)))
@@ -431,7 +431,7 @@ test_that("only the stepping verbs can grow the support", {
 # --- Directions ---------------------------------------------------------------
 
 test_that("a misspelt direction is caught with a suggestion", {
-  expect_error(fw_step(plurality(), directions = "awya"), "Did you mean")
+  expect_error(fw_step(plurality(), variant = "awaystep"), "Did you mean")
   expect_error(fw_step(plurality(), size = "linesearch"), "must be one of")
 })
 

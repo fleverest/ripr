@@ -7,7 +7,7 @@
 fw_step(
   state,
   times = 1L,
-  directions = "forward",
+  variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
   record_gap = FALSE,
@@ -19,10 +19,13 @@ fw_step(
 
 \item{times}{Steps to take.}
 
-\item{directions}{Any of \code{"forward"}, \code{"pairwise"}, \code{"away"}. More than one
-means the step takes whichever the linear model prefers, as Frank--Wolfe
-does: the direction maximising \eqn{\langle -\nabla f, d\rangle}{<-grad f,
-d>}, and only then a step length along it.}
+\item{variant}{Which Frank--Wolfe algorithm to run. \code{"standard"} moves only
+towards the atom the oracle found. \code{"away-step"} may instead move away from
+the worst atom the mixture already carries, taking whichever of the two the
+linear model prefers (i.e. the one that maximises \eqn{\langle -\nabla f, d\rangle}{<-grad f, d>})
+and then chooses a step length in that direction. \code{"pairwise"} moves mass
+from that worst atom to the new oracle atom directly, leaving every other
+weight untouched.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 

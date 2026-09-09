@@ -70,8 +70,9 @@ the candidate rather than moving away from it.}
 \item{\code{kl}, \code{gap}, \code{gap_theta}}{The mixture the row \emph{produced}. \code{gap} and
 \code{gap_theta} need \code{record_gap = TRUE} and are \code{NA} otherwise, since the
 sweep is not free.}
-\item{\code{elapsed}}{Time spent producing the row, including any \code{record_gap}
-sweep. It is per row, not cumulative, so for the cumulative time spent
+\item{\code{elapsed}}{Time the step rule took to execute, excluding any
+diagnostics (e.g. \code{record_gap} and \code{snapshot}).
+It is per step, not cumulative, so for the cumulative time spent stepping
 use \code{cumsum(trace$elapsed)}.}
 }
 

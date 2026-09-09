@@ -104,8 +104,9 @@ NULL
 #'   \item{`kl`, `gap`, `gap_theta`}{The mixture the row *produced*. `gap` and
 #'   `gap_theta` need `record_gap = TRUE` and are `NA` otherwise, since the
 #'   sweep is not free.}
-#'   \item{`elapsed`}{Time spent producing the row, including any `record_gap`
-#'    sweep. It is per row, not cumulative, so for the cumulative time spent
+#'   \item{`elapsed`}{Time the step rule took to execute, excluding any
+#'    diagnostics (e.g. `record_gap` and `snapshot`).
+#'    It is per step, not cumulative, so for the cumulative time spent stepping
 #'    use `cumsum(trace$elapsed)`.}
 #' }
 #'

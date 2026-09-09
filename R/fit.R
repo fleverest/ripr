@@ -107,16 +107,20 @@ ripr_init <- function(
   )
   ld <- compile_engine(resolved)
   log_p <- log_p_at_nodes(state, ld)
+  kl <- kl_divergence(state, log_p)
+  # The clock stops here: the sweep below is a diagnostic the caller asked for,
+  # and its cost belongs to `record_gap` rather than to initialising.
+  elapsed <- proc.time()[["elapsed"]] - started
   swept <- if (record_gap) {
     linear_gap(state, log_p, ld, flat_atoms(state))
   }
   state <- record(
     state,
     phase = "init",
-    kl = kl_divergence(state, log_p),
+    kl = kl,
     gap = if (is.null(swept)) NA_real_ else swept$gap,
     gap_theta = swept$theta,
-    elapsed = proc.time()[["elapsed"]] - started
+    elapsed = elapsed
   )
   if (wants_snapshot(state, last = TRUE)) {
     state <- snapshot_state(state, "init")
@@ -222,12 +226,23 @@ support_gap_below <- function(tol = 1e-8) {
 #' Run a verb's loop, recording and snapshotting as it goes
 #'
 #' The shared skeleton: `advance` takes the state and the compiled log-density
-#' and returns the state plus whatever `record` needs. The clock runs around
-#' `advance` alone: a snapshot's cost belongs to the control setting that asked
-#' for it, not to the step rule being timed.
+#' and returns the state it produced, that state's log-density at the nodes, and
+#' whatever else `record` needs. The clock runs around `advance` alone: the cost
+#' of a snapshot, or of the `record_gap` sweep, belongs to the setting that
+#' asked for it, not to the step rule being timed. The sweep can cost thirty
+#' times the step it follows, so folding it in would make `elapsed` say more
+#' about the settings than about the rule.
 #' @keywords internal
 #' @noRd
-run_steps <- function(state, times, until, counter, phase, advance) {
+run_steps <- function(
+  state,
+  times,
+  until,
+  counter,
+  phase,
+  record_gap,
+  advance
+) {
   rlang::check_number_whole(times, min = 1, max = 2147483647)
   ld <- compile_engine(state@engine)
 
@@ -236,9 +251,21 @@ run_steps <- function(state, times, until, counter, phase, advance) {
     stepped <- advance(state, ld)
     elapsed <- proc.time()[["elapsed"]] - started
     state <- bump(stepped$state, counter)
+    swept <- if (record_gap) {
+      linear_gap(state, stepped$log_p, ld, flat_atoms(state))
+    }
     state <- do.call(
       record,
-      c(list(state, phase = phase, elapsed = elapsed), stepped$row)
+      c(
+        list(
+          state,
+          phase = phase,
+          elapsed = elapsed,
+          gap = if (is.null(swept)) NA_real_ else swept$gap,
+          gap_theta = swept$theta
+        ),
+        stepped$row
+      )
     )
     if (wants_snapshot(state, i == times)) {
       state <- snapshot_state(state, phase)
@@ -301,7 +328,7 @@ fw_step <- function(
   )
   size <- rlang::arg_match(size)
 
-  run_steps(state, times, until, "fw", "fw", function(state, ld) {
+  run_steps(state, times, until, "fw", "fw", record_gap, function(state, ld) {
     log_p <- log_p_at_nodes(state, ld)
     found <- search_null(state, linear_oracle(state, log_p, ld))
     planned <- plan_step(
@@ -316,20 +343,14 @@ fw_step <- function(
       at = insert_index(state, found$part)
     )(found$theta)
 
-    stepped <- commit_step(state, found$theta, found$part, planned)
-    # `planned$log_p` is already the stepped mixture's density, and
-    # `commit_step()` does not touch the engine, so the sweep needs no
-    # recomputation beyond its own optimisation.
-    swept <- if (record_gap) {
-      linear_gap(stepped, planned$log_p, ld, flat_atoms(stepped))
-    }
-
     list(
-      state = stepped,
+      state = commit_step(state, found$theta, found$part, planned),
+      # `planned$log_p` is already the stepped mixture's density, and
+      # `commit_step()` does not touch the engine, so a `record_gap` sweep
+      # needs no recomputation beyond its own optimisation.
+      log_p = planned$log_p,
       row = list(
         kl = planned$kl,
-        gap = if (is.null(swept)) NA_real_ else swept$gap,
-        gap_theta = swept$theta,
         oracle_value = found$value,
         oracle_theta = found$theta,
         part = if (planned$uses_candidate) found$part else NA_integer_,
@@ -384,7 +405,7 @@ lb_step <- function(
   )
   size <- rlang::arg_match(size)
 
-  run_steps(state, times, until, "lb", "lb", function(state, ld) {
+  run_steps(state, times, until, "lb", "lb", record_gap, function(state, ld) {
     log_p <- log_p_at_nodes(state, ld)
     obj <- nonlinear_oracle(
       state,
@@ -407,17 +428,11 @@ lb_step <- function(
       at = insert_index(state, found$part)
     )(found$theta)
 
-    stepped <- commit_step(state, found$theta, found$part, planned)
-    swept <- if (record_gap) {
-      linear_gap(stepped, planned$log_p, ld, flat_atoms(stepped))
-    }
-
     list(
-      state = stepped,
+      state = commit_step(state, found$theta, found$part, planned),
+      log_p = planned$log_p,
       row = list(
         kl = planned$kl,
-        gap = if (is.null(swept)) NA_real_ else swept$gap,
-        gap_theta = swept$theta,
         oracle_value = found$value,
         oracle_theta = found$theta,
         part = if (planned$uses_candidate) found$part else NA_integer_,
@@ -456,19 +471,13 @@ lb_step <- function(
 #' state@trace$kl
 #' @export
 em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
-  run_steps(state, times, until, "em", "em", function(state, ld) {
+  run_steps(state, times, until, "em", "em", record_gap, function(state, ld) {
     stepped <- em_sweep(state, ld)
     log_p <- log_p_at_nodes(stepped, ld)
-    swept <- if (record_gap) {
-      linear_gap(stepped, log_p, ld, flat_atoms(stepped))
-    }
     list(
       state = stepped,
-      row = list(
-        kl = kl_divergence(stepped, log_p = log_p),
-        gap = if (is.null(swept)) NA_real_ else swept$gap,
-        gap_theta = swept$theta
-      )
+      log_p = log_p,
+      row = list(kl = kl_divergence(stepped, log_p = log_p))
     )
   })
 }
@@ -507,34 +516,39 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' state@trace$kl
 #' @export
 weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
-  run_steps(state, times, until, "weight", "weight", function(state, ld) {
-    ld_all <- ld(flat_atoms(state))
-    log_p <- log_p_at_nodes(state, ld)
-    sweep <- weight_sweep(
-      ld_all,
-      flat_weights(state),
-      log_p,
-      engine = state@engine
-    )
-    stepped <- set_weights(state, sweep$weights)
-    new_log_p <- log_p_at_nodes(stepped, ld)
-    swept <- if (record_gap) {
-      linear_gap(stepped, new_log_p, ld, flat_atoms(stepped))
-    }
-    list(
-      state = stepped,
-      row = list(
-        kl = kl_divergence(stepped, log_p = new_log_p),
-        # The residual is the gap over the current support, measured before the
-        # sweep, so it says what this sweep had left to gain. It is a maximum
-        # over the atoms rather than over the null, so no `oracle_theta` goes
-        # with it -- the location is already in the mixture.
-        oracle_value = sweep$residual + 1,
-        gap = if (is.null(swept)) NA_real_ else swept$gap,
-        gap_theta = swept$theta
+  run_steps(
+    state,
+    times,
+    until,
+    "weight",
+    "weight",
+    record_gap,
+    function(state, ld) {
+      ld_all <- ld(flat_atoms(state))
+      log_p <- log_p_at_nodes(state, ld)
+      sweep <- weight_sweep(
+        ld_all,
+        flat_weights(state),
+        log_p,
+        engine = state@engine
       )
-    )
-  })
+      stepped <- set_weights(state, sweep$weights)
+      new_log_p <- log_p_at_nodes(stepped, ld)
+      list(
+        state = stepped,
+        log_p = new_log_p,
+        row = list(
+          kl = kl_divergence(stepped, log_p = new_log_p),
+          # The residual is the gap over the current support, measured
+          # before the sweep, so it says what this sweep had left to gain.
+          # It is a maximum over the atoms rather than over the null, so no
+          # `oracle_theta` goes with it -- the location is already in the
+          # mixture.
+          oracle_value = sweep$residual + 1
+        )
+      )
+    }
+  )
 }
 
 

@@ -9,6 +9,7 @@ fw_step(
   times = 1L,
   directions = "forward",
   size = c("line-search", "fixed"),
+  correct = FALSE,
   record_gap = FALSE,
   until = NULL
 )
@@ -22,6 +23,12 @@ fw_step(
 means each is tried and whichever reaches the lowest KL is taken.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
+
+\item{correct}{Whether to use "fully-corrective" steps that re-solve for the
+weights with the atoms held fixed, run to \code{fc_tol} and \code{fc_max_iter} from
+\code{\link[=ripr_control]{ripr_control()}}. Can be quite expensive. Note that the step size found by
+the method selected via \code{size} is only used as a seed for the
+fully-corrective solve.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the step
 \emph{produced}, filling \code{gap} and \code{gap_theta}. Off by default: the sweep costs
@@ -37,6 +44,12 @@ The updated \link{ripr_state}.
 \description{
 Maximises \eqn{G(\theta)}{G(theta)} over the null, then moves the iterate
 towards the maximiser. See \link{oracles} for technical details.
+}
+\details{
+\code{correct = TRUE} yields the fully-corrective Frank--Wolfe scheme: the step
+is taken, then every weight is re-solved with the atoms held fixed. It is
+effectively the same thing as \code{fw_step(1) |> weight_step(big_num)}, but as
+a single verb rather than two.
 }
 \examples{
 set.seed(1)

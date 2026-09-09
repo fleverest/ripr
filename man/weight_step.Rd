@@ -25,8 +25,12 @@ The updated \link{ripr_state}.
 held fixed: the exact M-step for the weights, guaranteed monotone in KL.
 Iterated to convergence this is the corrective half of fully-corrective
 Frank--Wolfe, so \code{fw_step(1) |> weight_step(big_num)} is one FCFW iteration.
-Note however that \code{lb_step(1) |> weight_step(big_num)} is not one Li--Barron
-step with fully corrective weights incorporated as the inner optimisation.
+\code{fw_step(1, correct = TRUE)} is the same iteration taken in one verb, which
+is what to reach for when a row should price the whole of it; this verb is
+for correcting weights on its own account, with its own rows and its own
+stopping rule. Note that \code{lb_step(1) |> weight_step(big_num)} is \emph{not} one
+Li--Barron step with fully corrective weights incorporated as the inner
+optimisation.
 }
 \details{
 \code{until = support_gap_below(tol)} is the natural stopping rule, and is what

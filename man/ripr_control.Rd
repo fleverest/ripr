@@ -7,8 +7,8 @@
 ripr_control(
   n_seeds = 200L,
   n_restarts = 25L,
-  lb_fc_tol = 1e-10,
-  lb_fc_max_iter = 500L,
+  fc_tol = 1e-10,
+  fc_max_iter = 500L,
   snapshot = c("none", "step", "all")
 )
 }
@@ -18,11 +18,10 @@ ripr_control(
 \item{n_restarts}{Number of top seeds to be refined by SLSQP per oracle
 call.}
 
-\item{lb_fc_tol}{Convergence tolerance for a corrective weight solve in
-the Li--Barron greedy oracle inner loop.}
+\item{fc_tol}{Convergence tolerance for a corrective weight solve, used
+wherever \code{correct = TRUE}.}
 
-\item{lb_fc_max_iter}{Cap on corrective weight sweeps within the Li--Barron
-inner loop.}
+\item{fc_max_iter}{Cap on the sweeps such a solve may take.}
 
 \item{snapshot}{How often to record the fitted mixture alongside the trace.
 \code{"none"} (default) never records the state; \code{"step"} records the atoms and

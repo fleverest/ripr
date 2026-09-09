@@ -29,10 +29,9 @@ NULL
 #'   The trace is always recorded as it costs only a row of scalars per event.
 #'   Snapshots copy the whole mixture, so the memory cost grows with support
 #'   size, so snapshotting is `"none"` by default.
-#' @param lb_fc_tol Convergence tolerance for a corrective weight solve in
-#'   the Li--Barron greedy oracle inner loop.
-#' @param lb_fc_max_iter Cap on corrective weight sweeps within the Li--Barron
-#'   inner loop.
+#' @param fc_tol Convergence tolerance for a corrective weight solve, used
+#'   wherever `correct = TRUE`.
+#' @param fc_max_iter Cap on the sweeps such a solve may take.
 #' @return A list of control settings for [ripr_init()].
 #' @examples
 #' ripr_control(n_seeds = 50L, snapshot = "step")
@@ -40,20 +39,20 @@ NULL
 ripr_control <- function(
   n_seeds = 200L,
   n_restarts = 25L,
-  lb_fc_tol = 1e-10,
-  lb_fc_max_iter = 500L,
+  fc_tol = 1e-10,
+  fc_max_iter = 500L,
   snapshot = c("none", "step", "all")
 ) {
   snapshot <- rlang::arg_match(snapshot)
   rlang::check_number_whole(n_seeds, min = 0, max = 2147483647)
   rlang::check_number_whole(n_restarts, min = 1, max = 2147483647)
-  rlang::check_number_decimal(lb_fc_tol, min = 0)
-  rlang::check_number_whole(lb_fc_max_iter, min = 1, max = 2147483647)
+  rlang::check_number_decimal(fc_tol, min = 0)
+  rlang::check_number_whole(fc_max_iter, min = 1, max = 2147483647)
   list(
     n_seeds = as.integer(n_seeds),
     n_restarts = as.integer(n_restarts),
-    lb_fc_tol = lb_fc_tol,
-    lb_fc_max_iter = as.integer(lb_fc_max_iter),
+    fc_tol = fc_tol,
+    fc_max_iter = as.integer(fc_max_iter),
     snapshot = snapshot
   )
 }

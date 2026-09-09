@@ -24,8 +24,11 @@ means each is tried and whichever reaches the lowest KL is taken.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 
-\item{correct}{Re-solve every weight inside each candidate evaluation, using
-\code{lb_fc_tol} and \code{lb_fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}.}
+\item{correct}{Whether to use "fully-corrective" steps that re-solve for the
+weights with the atoms held fixed, run to \code{fc_tol} and \code{fc_max_iter} from
+\code{\link[=ripr_control]{ripr_control()}}. Can be quite expensive. Note that the step size found by
+the method selected via \code{size} is only used as a seed for the
+fully-corrective solve.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the step
 \emph{produced}, filling \code{gap} and \code{gap_theta}. \code{FALSE} by default.}

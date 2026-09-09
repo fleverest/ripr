@@ -283,11 +283,21 @@ run_steps <- function(
 #' Maximises \eqn{G(\theta)}{G(theta)} over the null, then moves the iterate
 #' towards the maximiser. See [oracles] for technical details.
 #'
+#' `correct = TRUE` yields the fully-corrective Frank--Wolfe scheme: the step
+#' is taken, then every weight is re-solved with the atoms held fixed. It is
+#' effectively the same thing as `fw_step(1) |> weight_step(big_num)`, but as
+#' a single verb rather than two.
+#'
 #' @param state A [ripr_state].
 #' @param times Steps to take.
 #' @param directions Any of `"forward"`, `"pairwise"`, `"away"`. More than one
 #'   means each is tried and whichever reaches the lowest KL is taken.
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
+#' @param correct Whether to use "fully-corrective" steps that re-solve for the
+#'   weights with the atoms held fixed, run to `fc_tol` and `fc_max_iter` from
+#'   [ripr_control()]. Can be quite expensive. Note that the step size found by
+#'   the method selected via `size` is only used as a seed for the
+#'   fully-corrective solve.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
 #'   *produced*, filling `gap` and `gap_theta`. Off by default: the sweep costs
 #'   about as much as the step itself. The oracle value the step got for free is
@@ -318,6 +328,7 @@ fw_step <- function(
   times = 1L,
   directions = "forward",
   size = c("line-search", "fixed"),
+  correct = FALSE,
   record_gap = FALSE,
   until = NULL
 ) {
@@ -340,6 +351,7 @@ fw_step <- function(
       # Only Frank--Wolfe steps advance the schedule; EM sweeps between two of
       # them must not.
       gamma_fixed = schedule_gamma(length(flat_weights(state))),
+      correct = correct,
       at = insert_index(state, found$part)
     )(found$theta)
 
@@ -369,8 +381,6 @@ fw_step <- function(
 #' expensive than [fw_step()]; see [oracles].
 #'
 #' @inheritParams fw_step
-#' @param correct Re-solve every weight inside each candidate evaluation, using
-#'   `lb_fc_tol` and `lb_fc_max_iter` from [ripr_control()].
 #' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
 #'   *produced*, filling `gap` and `gap_theta`. `FALSE` by default.
 #' @return The updated [ripr_state].
@@ -489,8 +499,12 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' held fixed: the exact M-step for the weights, guaranteed monotone in KL.
 #' Iterated to convergence this is the corrective half of fully-corrective
 #' Frank--Wolfe, so `fw_step(1) |> weight_step(big_num)` is one FCFW iteration.
-#' Note however that `lb_step(1) |> weight_step(big_num)` is not one Li--Barron
-#' step with fully corrective weights incorporated as the inner optimisation.
+#' `fw_step(1, correct = TRUE)` is the same iteration taken in one verb, which
+#' is what to reach for when a row should price the whole of it; this verb is
+#' for correcting weights on its own account, with its own rows and its own
+#' stopping rule. Note that `lb_step(1) |> weight_step(big_num)` is *not* one
+#' Li--Barron step with fully corrective weights incorporated as the inner
+#' optimisation.
 #'
 #' `until = support_gap_below(tol)` is the natural stopping rule, and is what
 #' makes `times` a budget rather than a target. Expect to reach it: the rate

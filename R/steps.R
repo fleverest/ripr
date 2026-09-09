@@ -226,6 +226,9 @@ inner_directions <- function(directions) {
 #'
 #' @param at Index the candidate should occupy, or `NULL` for last.
 #' @param correct Re-solve every weight after the step, as Li and Barron allow.
+#'   The solve is multiplicative, so it scales the weights the step chose
+#'   without changing which of them are zero: `uses_candidate`, read off the
+#'   pre-correction weights, still describes the corrected step.
 #' @return A function of `theta` giving `weights`, `log_p`, `kl`, `gamma`,
 #'   `direction`, `uses_candidate`, plus `ld_new` and `new_idx` for the caller.
 #' @keywords internal
@@ -275,8 +278,8 @@ plan_step <- function(
         ld_all,
         res$weights,
         engine,
-        tol = ctl$lb_fc_tol,
-        max_iter = ctl$lb_fc_max_iter
+        tol = ctl$fc_tol,
+        max_iter = ctl$fc_max_iter
       )
       res$log_p <- mixture_log_p(ld_all, res$weights)
       res$kl <- expect_q(engine, engine@log_q - res$log_p)

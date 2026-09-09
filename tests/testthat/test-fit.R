@@ -144,6 +144,30 @@ test_that("every row records the wall-clock time it took", {
   expect_lte(sum(tr$elapsed[tr$phase != "init"]), outer + 1e-6)
 })
 
+test_that("`correct` makes one fw call one fully-corrective iteration", {
+  # The two-verb pipeline and the argument solve the same problem, so they
+  # agree on the weights. What differs is the bookkeeping: the pipeline splits
+  # one FCFW iteration across two verbs, so no row prices the iteration and the
+  # `weight` counter counts sweeps that belong to the Frank--Wolfe step.
+  st <- fw_step(plurality(), 3L)
+  ctl <- st@control
+  one <- fw_step(st, 1L, correct = TRUE)
+  two <- weight_step(
+    fw_step(st, 1L),
+    ctl$fc_max_iter,
+    until = support_gap_below(ctl$fc_tol)
+  )
+  expect_equal(flat_weights(one), flat_weights(two), tolerance = 1e-6)
+
+  added <- one@trace[seq(nrow(st@trace) + 1L, nrow(one@trace)), ]
+  expect_identical(nrow(added), 1L)
+  expect_identical(added$phase, "fw")
+  expect_identical(added$weight, st@trace$weight[nrow(st@trace)])
+  # The row's KL is the corrected mixture's, not the stepped one's.
+  expect_equal(added$kl, kl_divergence(one), tolerance = 1e-12)
+  expect_lt(added$kl, utils::tail(fw_step(st, 1L)@trace$kl, 1L))
+})
+
 # --- The algebraic identity ---------------------------------------------------
 
 test_that("the identity survives every verb", {

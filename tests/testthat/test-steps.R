@@ -343,30 +343,6 @@ test_that("the linear oracle's gradient matches finite differences", {
   expect_equal(sum(obj$grad(theta) * d), fd, tolerance = 1e-6)
 })
 
-test_that("away is stripped from the Li-Barron inner directions", {
-  # An away path never touches the candidate, so it scores identically for every
-  # one and its gradient is exactly zero -- a plateau that strands any restart
-  # landing on it. Dropping it costs nothing, since the outer step still weighs
-  # away aGst whatever the oracle returns.
-  expect_identical(inner_directions(c("forward", "away")), "forward")
-  expect_identical(inner_directions("away"), "forward")
-  expect_identical(
-    inner_directions(c("forward", "pairwise")),
-    c("forward", "pairwise")
-  )
-
-  st <- plurality()
-  ld <- compile_engine(st@engine)
-  log_p <- log_p_at_nodes(st, ld)
-  theta <- c(0.30, 0.40, 0.20, 0.10)
-  expect_equal(
-    nonlinear_oracle(st, log_p, ld, directions = c("forward", "away"))$value(
-      theta
-    ),
-    nonlinear_oracle(st, log_p, ld, directions = "forward")$value(theta)
-  )
-})
-
 test_that("the Li-Barron gradient matches finite differences", {
   # Under `size = "fixed"` the step size does not depend on theta, so the
   # objective is smooth. Under a line search it is flat wherever G <= 1, since

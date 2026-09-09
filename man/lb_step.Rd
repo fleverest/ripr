@@ -7,7 +7,6 @@
 lb_step(
   state,
   times = 1L,
-  directions = "forward",
   size = c("line-search", "fixed"),
   correct = FALSE,
   record_gap = FALSE,
@@ -18,9 +17,6 @@ lb_step(
 \item{state}{A \link{ripr_state}.}
 
 \item{times}{Steps to take.}
-
-\item{directions}{Any of \code{"forward"}, \code{"pairwise"}, \code{"away"}; more than one
-means the step takes whichever the linear model prefers.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 

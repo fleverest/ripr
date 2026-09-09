@@ -380,8 +380,6 @@ fw_step <- function(
 #' expensive than [fw_step()]; see [oracles].
 #'
 #' @inheritParams fw_step
-#' @param directions Any of `"forward"`, `"pairwise"`, `"away"`; more than one
-#'   means the step takes whichever the linear model prefers.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
 #'   *produced*, filling `gap` and `gap_theta`. `FALSE` by default.
 #' @return The updated [ripr_state].
@@ -403,17 +401,11 @@ fw_step <- function(
 lb_step <- function(
   state,
   times = 1L,
-  directions = "forward",
   size = c("line-search", "fixed"),
   correct = FALSE,
   record_gap = FALSE,
   until = NULL
 ) {
-  directions <- rlang::arg_match(
-    directions,
-    c("forward", "pairwise", "away"),
-    multiple = TRUE
-  )
   size <- rlang::arg_match(size)
 
   run_steps(state, times, until, "lb", "lb", record_gap, function(state, ld) {
@@ -422,7 +414,6 @@ lb_step <- function(
       state,
       log_p,
       ld,
-      directions = directions,
       size = size,
       gamma_fixed = schedule_gamma(schedule_index(state)),
       correct = correct
@@ -432,7 +423,6 @@ lb_step <- function(
       state,
       log_p,
       ld,
-      directions = directions,
       size = size,
       gamma_fixed = schedule_gamma(schedule_index(state)),
       correct = correct,

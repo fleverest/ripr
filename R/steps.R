@@ -191,23 +191,6 @@ linear_gap <- function(state, log_p, ld, seeds) {
   list(gap = found$value - 1, theta = found$theta, part = found$part)
 }
 
-#' Directions the Li--Barron inner optimisation may use
-#'
-#' `"away"` is dropped. `path_away` never touches the candidate column, so an
-#' away path yields the same mixture for every candidate, and the gradient is
-#' exactly zero. Leaving it in lays a plateau over the objective and strands
-#' at its seed every restart landing on it. Dropping it costs nothing: the
-#' outer step still weighs the away direction against the candidate the oracle
-#' returns, and when away wins the candidate is discarded regardless of what it
-#' was.
-#' @keywords internal
-#' @noRd
-inner_directions <- function(directions) {
-  d <- setdiff(directions, "away")
-  if (length(d)) d else "forward"
-}
-
-
 #' What a step towards `theta` would do, without doing it
 #'
 #' Returns a function of `theta` reporting the weights, mixture and KL that a
@@ -341,7 +324,6 @@ nonlinear_oracle <- function(
   state,
   log_p,
   ld,
-  directions = "forward",
   size = "line-search",
   gamma_fixed = NULL,
   correct = FALSE
@@ -350,7 +332,6 @@ nonlinear_oracle <- function(
     state,
     log_p,
     ld,
-    directions = inner_directions(directions),
     size = size,
     gamma_fixed = gamma_fixed,
     correct = correct

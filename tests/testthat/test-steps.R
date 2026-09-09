@@ -200,6 +200,35 @@ test_that("a line search cannot increase KL", {
   }
 })
 
+test_that("a line search can land on the cap, so a drop step really drops", {
+  # `optimize()` searches the open interval, so a minimum at `gamma_max` used to
+  # come back a whisker short, leaving the worst atom a weight of ~1e-13 rather
+  # than zero. `worst_atom()` counts that as active and keeps choosing it, which
+  # caps every later away step at ~1e-13 and retires the direction. So what is
+  # asserted is exactness, not smallness.
+  st <- plurality()
+  cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))
+  w <- cand$w
+  dropped <- 0L
+  for (i in 1:3) {
+    log_p <- mixture_log_p(cand$ld_all, w)
+    worst <- worst_atom(cand$ld_all, w, log_p, cand$engine)
+    w <- apply_step(
+      cand$ld_all,
+      w,
+      cand$new_idx,
+      log_p,
+      cand$engine,
+      directions = "away"
+    )$weights
+    dropped <- dropped + (w[worst] == 0)
+  }
+  expect_gt(dropped, 0L)
+  # Nothing is left in the limbo between dropped and carrying mass.
+  expect_false(any(w > 0 & w < 1e-9))
+  expect_equal(sum(w), 1, tolerance = rounding_tol(1))
+})
+
 test_that("the fixed schedule is capped at the path's own maximum", {
   # Pairwise and away cap below 1; an uncapped schedule value would take the
   # weights off the simplex.

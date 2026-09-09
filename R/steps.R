@@ -586,11 +586,9 @@ line_search <- function(log_p_at, gamma_max, engine) {
   if (!is.finite(gamma_max) || gamma_max <= 0) {
     return(0)
   }
-  stats::optimize(
-    \(gamma) expect_q(engine, engine@log_q - log_p_at(gamma)),
-    interval = c(0, gamma_max),
-    tol = 1e-12
-  )$minimum
+  kl <- \(gamma) expect_q(engine, engine@log_q - log_p_at(gamma))
+  found <- stats::optimize(kl, interval = c(0, gamma_max), tol = 1e-12)
+  if (kl(gamma_max) <= found$objective) gamma_max else found$minimum
 }
 
 

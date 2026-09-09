@@ -248,35 +248,6 @@ test_that("the fixed schedule is capped at the path's own maximum", {
   expect_true(all(res$weights >= 0))
 })
 
-test_that("apply_step takes whichever offered direction reaches the lowest KL", {
-  st <- plurality()
-  cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))
-  single <- vapply(
-    c("forward", "pairwise", "away"),
-    function(d) {
-      apply_step(
-        cand$ld_all,
-        cand$w,
-        cand$new_idx,
-        cand$log_p,
-        cand$engine,
-        directions = d
-      )$kl
-    },
-    numeric(1)
-  )
-  both <- apply_step(
-    cand$ld_all,
-    cand$w,
-    cand$new_idx,
-    cand$log_p,
-    cand$engine,
-    directions = c("forward", "pairwise", "away")
-  )
-  expect_equal(both$kl, min(single))
-  expect_identical(both$direction, names(single)[which.min(single)])
-})
-
 test_that("uses_candidate is derived from the weight it ends with", {
   st <- plurality()
   cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))

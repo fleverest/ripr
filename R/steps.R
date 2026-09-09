@@ -380,19 +380,36 @@ mixture_log_p <- function(ld_all, w) {
 }
 
 
+#' `G(theta_c)` for every column of `ld_all`
+#'
+#' \eqn{G(\theta) = E_Q[p_\theta / P]}{G(theta) = E_Q[p_theta / P]}. The
+#' gradient of KL in the weights is \eqn{-G}{-G}, so every first-order quantity
+#' the step layer needs is read off this one vector.
+#' @keywords internal
+#' @noRd
+atom_g <- function(ld_all, log_p, engine) {
+  exp(col_logsumexp(ld_all - log_p + engine@log_w))
+}
+
+
 #' The active atom with the smallest `G`, or `NULL` if fewer than two are active
 #'
-#' Fewer than two leaves nothing to move away from: emptying the only active
-#' atom would empty the mixture.
+#' \eqn{\arg\max_{v \in S} \langle \nabla f, e_v \rangle}{argmax_v <grad f,
+#' e_v>} over the active set, which is the argmin of `G` because the gradient is
+#' \eqn{-G}{-G}. Fewer than two leaves nothing to move away from: emptying the
+#' only active atom would empty the mixture.
 #' @keywords internal
 #' @noRd
 worst_atom <- function(ld_all, w, log_p, engine) {
+  worst_of(atom_g(ld_all, log_p, engine), w)
+}
+
+worst_of <- function(g, w) {
   active <- which(w > 0)
   if (length(active) < 2L) {
     return(NULL)
   }
-  g <- exp(col_logsumexp(ld_all[, active, drop = FALSE] - log_p + engine@log_w))
-  active[which.min(g)]
+  active[which.min(g[active])]
 }
 
 
@@ -402,9 +419,10 @@ worst_atom <- function(ld_all, w, log_p, engine) {
 #' the way. One shape for every direction, so one line search serves all of them.
 #' @keywords internal
 #' @noRd
-weight_path <- function(direction, gamma_max, w_of, log_p_at) {
+weight_path <- function(direction, value, gamma_max, w_of, log_p_at) {
   list(
     direction = direction,
+    value = value,
     gamma_max = gamma_max,
     w_of = w_of,
     log_p_at = log_p_at
@@ -418,10 +436,11 @@ weight_path <- function(direction, gamma_max, w_of, log_p_at) {
 #' \eqn{w \leftarrow (1-\gamma) w + \gamma e_{new}}{w <- (1 - gamma) w + gamma e_new}.
 #' @keywords internal
 #' @noRd
-path_forward <- function(ld_all, w, new_idx, log_p) {
+path_forward <- function(ld_all, w, new_idx, log_p, value) {
   ld_new <- ld_all[, new_idx]
   weight_path(
     direction = "forward",
+    value = value,
     gamma_max = 1,
     w_of = function(gamma) {
       out <- (1 - gamma) * w
@@ -455,7 +474,7 @@ path_forward <- function(ld_all, w, new_idx, log_p) {
 #'   \insertRef{LacosteJulienJaggi2015}{ripr}
 #' @keywords internal
 #' @noRd
-path_pairwise <- function(ld_all, w, new_idx, log_p, worst) {
+path_pairwise <- function(ld_all, w, new_idx, log_p, worst, value) {
   # No two-column shortcut here: mass leaves one atom and arrives at another, so
   # the mixture is rebuilt.
   move <- function(gamma) {
@@ -466,6 +485,7 @@ path_pairwise <- function(ld_all, w, new_idx, log_p, worst) {
   }
   weight_path(
     direction = "pairwise",
+    value = value,
     gamma_max = w[worst],
     w_of = move,
     log_p_at = function(gamma) mixture_log_p(ld_all, move(gamma))
@@ -482,7 +502,7 @@ path_pairwise <- function(ld_all, w, new_idx, log_p, worst) {
 #'   \insertRef{LacosteJulienJaggi2015}{ripr}
 #' @keywords internal
 #' @noRd
-path_away <- function(ld_all, w, new_idx, log_p, worst) {
+path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
   # Cap is w_v/(1 - w_v): beyond it the worst atom's weight would go negative.
   w_of <- function(gamma) {
     out <- (1 + gamma) * w
@@ -491,6 +511,7 @@ path_away <- function(ld_all, w, new_idx, log_p, worst) {
   }
   weight_path(
     direction = "away",
+    value = value,
     gamma_max = w[worst] / (1 - w[worst]),
     w_of = w_of,
     log_p_at = function(gamma) mixture_log_p(ld_all, w_of(gamma))
@@ -500,11 +521,17 @@ path_away <- function(ld_all, w, new_idx, log_p, worst) {
 
 #' The directions on offer this step
 #'
-#' One path per requested direction, unavailable ones dropped. `apply_step`
-#' line searches each and keeps the lowest KL, so the set names a choice rather
-#' than a single move: `"forward"` alone is vanilla Frank--Wolfe,
-#' `c("forward", "away")` is away-step Frank--Wolfe, `"pairwise"` is pairwise
-#' Frank--Wolfe.
+#' One path per requested direction, unavailable ones dropped, each carrying the
+#' first-order value \eqn{\langle -\nabla f, d \rangle}{<-grad f, d>} that
+#' `apply_step` chooses on. Since \eqn{\nabla f = -G}{grad f = -G} and
+#' \eqn{\sum_c w_c G_c = 1}{sum_c w_c G_c = 1}, all three read off `atom_g()`:
+#' forward is \eqn{G_s - 1}{G_s - 1}, the Frank--Wolfe gap; away is
+#' \eqn{1 - G_v}{1 - G_v}; pairwise is \eqn{G_s - G_v}{G_s - G_v}, which is
+#' their sum and so always the largest of the three.
+#'
+#' The set names a choice rather than a single move: `"forward"` alone is
+#' vanilla Frank--Wolfe, `c("forward", "away")` is away-step Frank--Wolfe with
+#' its usual selection rule, `"pairwise"` is pairwise Frank--Wolfe.
 #'
 #' Only `"away"` can be unavailable, and only below two active atoms. Asking for
 #' it alone in that state is an error rather than a silent fallback -- a
@@ -514,21 +541,21 @@ path_away <- function(ld_all, w, new_idx, log_p, worst) {
 #' @keywords internal
 #' @noRd
 step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
-  worst <- worst_atom(ld_all, w, log_p, engine)
+  g <- atom_g(ld_all, log_p, engine)
+  worst <- worst_of(g, w)
   paths <- lapply(directions, function(d) {
     switch(
       d,
-      forward = path_forward(ld_all, w, new_idx, log_p),
+      forward = path_forward(ld_all, w, new_idx, log_p, g[new_idx] - 1),
       # `worst` is NULL below two active atoms; pairwise then uses the single
       # active atom and coincides with forward. See `path_pairwise`.
-      pairwise = path_pairwise(
-        ld_all,
-        w,
-        new_idx,
-        log_p,
-        if (is.null(worst)) which(w > 0)[1L] else worst
-      ),
-      away = if (!is.null(worst)) path_away(ld_all, w, new_idx, log_p, worst)
+      pairwise = {
+        v <- if (is.null(worst)) which(w > 0)[1L] else worst
+        path_pairwise(ld_all, w, new_idx, log_p, v, g[new_idx] - g[v])
+      },
+      away = if (!is.null(worst)) {
+        path_away(ld_all, w, new_idx, log_p, worst, 1 - g[worst])
+      }
     )
   })
   paths <- Filter(Negate(is.null), paths)
@@ -594,10 +621,9 @@ line_search <- function(log_p_at, gamma_max, engine) {
 
 #' Take one step, without a state and without a trace
 #'
-#' Compares every path on offer from `step_paths` and keeps the one with
-#' lowest KL. `size = "fixed"` does not search, taking `gamma_fixed` capped
-#' at the path's own maximum -- the cap matters, since pairwise and away cap
-#' below 1 and an uncapped schedule value would leave the simplex.
+#' `size = "fixed"` does not search, taking `gamma_fixed` capped at the path's
+#' own maximum -- the cap matters, since pairwise and away cap below 1 and an
+#' uncapped schedule value would leave the simplex.
 #' @return `list(weights, log_p, kl, gamma, direction, uses_candidate)`, with
 #'   `weights` of length `C + 1`.
 #' @keywords internal
@@ -612,32 +638,27 @@ apply_step <- function(
   size = "line-search",
   gamma_fixed = NULL
 ) {
-  take <- function(path) {
-    gamma <- if (size == "fixed") {
-      min(gamma_fixed, path$gamma_max)
-    } else {
-      line_search(path$log_p_at, path$gamma_max, engine)
-    }
-    stepped <- path$log_p_at(gamma)
-    weights <- pmax(path$w_of(gamma), 0)
-    list(
-      weights = weights,
-      log_p = stepped,
-      kl = expect_q(engine, engine@log_q - stepped),
-      gamma = gamma,
-      direction = path$direction,
-      # Derived, not declared: the candidate is used exactly when it ends with
-      # weight. False for away, which never touches it, and for any search that
-      # put nothing there.
-      uses_candidate = weights[new_idx] > 0
-    )
-  }
+  paths <- step_paths(directions, ld_all, w, new_idx, log_p, engine)
+  path <- paths[[which.max(vapply(paths, \(p) p$value, numeric(1)))]]
 
-  taken <- lapply(
-    step_paths(directions, ld_all, w, new_idx, log_p, engine),
-    take
+  gamma <- if (size == "fixed") {
+    min(gamma_fixed, path$gamma_max)
+  } else {
+    line_search(path$log_p_at, path$gamma_max, engine)
+  }
+  stepped <- path$log_p_at(gamma)
+  weights <- pmax(path$w_of(gamma), 0)
+  list(
+    weights = weights,
+    log_p = stepped,
+    kl = expect_q(engine, engine@log_q - stepped),
+    gamma = gamma,
+    direction = path$direction,
+    # Derived, not declared: the candidate is used exactly when it ends with
+    # weight. False for away, which never touches it, and for any search that
+    # put nothing there.
+    uses_candidate = weights[new_idx] > 0
   )
-  taken[[which.min(vapply(taken, \(r) r$kl, numeric(1)))]]
 }
 
 

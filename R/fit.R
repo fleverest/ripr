@@ -291,7 +291,9 @@ run_steps <- function(
 #' @param state A [ripr_state].
 #' @param times Steps to take.
 #' @param directions Any of `"forward"`, `"pairwise"`, `"away"`. More than one
-#'   means each is tried and whichever reaches the lowest KL is taken.
+#'   means the step takes whichever the linear model prefers, as Frank--Wolfe
+#'   does: the direction maximising \eqn{\langle -\nabla f, d\rangle}{<-grad f,
+#'   d>}, and only then a step length along it.
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
 #' @param correct Whether to use "fully-corrective" steps that re-solve for the
 #'   weights with the atoms held fixed, run to `fc_tol` and `fc_max_iter` from

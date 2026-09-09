@@ -573,29 +573,27 @@ step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
 #' The open-loop step size, for `size = "fixed"`
 #'
 #' The alternative to `line_search()`: a step size fixed in advance rather than
-#' chosen by minimising KL along the path. Kept to reproduce the open-loop
-#' results in the literature rather than because it is a good default -- it
-#' consults nothing, so it can and does increase KL.
+#' chosen by minimising KL along the path. Used only to be consistent with the
+#' algorithms in the classical literature. There they assign a weight of
+#' `2 / (k+2)`, where `k` counts the number of iterations.
 #'
-#' `k` is the number of components the mixture already carries, not the number
-#' of steps taken. Frank--Wolfe indexes from 0 and so opens with
-#' \eqn{\gamma = 1}{gamma = 1}, replacing the iterate wholesale with the atom
-#' the oracle just found. That is deliberate there and reasonable when the
-#' support is empty and the first atom must become the whole mixture. It is
-#' problematic when there is a reasonable initial support, e.g. defined via
-#' [ripr_init()] placing a considered atom per part, while the linear
-#' oracle returns the worst-case \eqn{\theta}{theta}, which puts near-zero mass
-#' where \eqn{Q}{Q} has some.
-#'
-#' Counting components rather than steps handles both cases without having to
-#' remember how the fit began, since a step that uses its candidate adds exactly
-#' one.
+#' Since we allow warm-starts with a few atoms in the support at iteration 0,
+#' we start at `k` equal to the number of atoms in the initial support, and
+#' increase `k` whenever we apply an oracle step (i.e. for both `lb_step` and
+#' `fw_step`).
 #' @references
 #'   \insertRef{Jaggi2013}{ripr}
 #'
 #'   \insertRef{LiBarron1999}{ripr}
 #' @keywords internal
 #' @noRd
+schedule_index <- function(state) {
+  state@iters[["fw"]] +
+    state@iters[["lb"]] +
+    state@trace$support_size[1L]
+}
+
+
 schedule_gamma <- function(k) {
   # Jaggi's 2/(k+2) from k = 0 and Li--Barron's 2/(k+1) from k = 1 are the same
   # sequence; the lineages differ in the oracle, not the schedule. `k` counts
@@ -864,11 +862,13 @@ search_null <- function(state, obj, seeds = flat_atoms(state)) {
 #' @keywords internal
 #' @noRd
 commit_step <- function(state, theta, part, planned) {
-  if (planned$uses_candidate) {
+  stepped <- if (planned$uses_candidate) {
     add_atom(state, theta, part, planned$weights)
   } else {
     set_weights(state, planned$weights[-planned$new_idx])
   }
+  # A drop step is a removal, not a zeroing. See `drop_empty()`.
+  drop_empty(stepped)
 }
 
 

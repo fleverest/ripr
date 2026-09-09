@@ -218,9 +218,9 @@ test_that("the fixed schedule does not discard a seeded initialisation", {
   expect_true(max(fw$kl) < 10 * st@trace$kl[1L])
 })
 
-test_that("the fixed schedule follows Jaggi's sequence in the component count", {
-  # gamma = 2/(k+2) where k is the number of components before the step, so a
-  # step that adds one moves the sequence on by exactly one place.
+test_that("the fixed schedule follows Jaggi's sequence in the step count", {
+  # gamma = 2/(k+2), k advancing by one per oracle step. While every step adds
+  # an atom that is also the component count, which is what this checks.
   st <- fw_step(plurality(), 5L, size = "fixed")
   fw <- st@trace[st@trace$phase == "fw", ]
   added <- !is.na(fw$part)

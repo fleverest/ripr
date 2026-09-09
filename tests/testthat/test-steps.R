@@ -248,6 +248,18 @@ test_that("the fixed schedule is capped at the path's own maximum", {
   expect_true(all(res$weights >= 0))
 })
 
+test_that("a drop step removes its atom from the support", {
+  st <- fw_step(plurality(), 6L)
+  before <- ncol(flat_atoms(st))
+  # Away adds nothing, so any shrinkage here is atoms being removed.
+  away <- fw_step(st, 5L, directions = "away")
+  expect_lt(ncol(flat_atoms(away)), before)
+  expect_true(all(flat_weights(away) > 0))
+  expect_identical(ncol(flat_atoms(away)), length(flat_weights(away)))
+  # The mixture is unchanged by the removal: a zero weight carried no density.
+  expect_equal(sum(flat_weights(away)), 1, tolerance = rounding_tol(1))
+})
+
 test_that("uses_candidate is derived from the weight it ends with", {
   st <- plurality()
   cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))

@@ -206,6 +206,24 @@ add_atom <- function(state, theta, part_index, weights) {
   )
 }
 
+#' Remove every atom the step left with no weight
+#'
+#' The active set is \eqn{\{v : \alpha_v > 0\}}{{v : alpha_v > 0}} and a drop
+#' step is specified to take its atom out of it.
+#' @keywords internal
+#' @noRd
+drop_empty <- function(state) {
+  keep <- lapply(state@weights, \(x) x > 0)
+  if (all(unlist(keep, use.names = FALSE))) {
+    return(state)
+  }
+  S7::set_props(
+    state,
+    atoms = Map(\(a, k) a[, k, drop = FALSE], state@atoms, keep),
+    weights = Map(\(x, k) x[k], state@weights, keep)
+  )
+}
+
 #' Redistribute a flat `(d, C)` atom matrix back into the per-part list
 #' @keywords internal
 #' @noRd

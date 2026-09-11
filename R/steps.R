@@ -123,9 +123,9 @@ NULL
 #' A row followed by an [fw_step()] row has `gap_after` equal to that row's
 #' `oracle_value - 1`: the step reads a recorded oracle back rather than
 #' searching the same mixture twice, so an fw run pays one search per step. An
-#' fw run's final row stays `NA` unless `until` stopped the run (the check's
-#' oracle fills it); `ripr_finish(record_gap = TRUE)` measures the mixture it
-#' returns.
+#' fw run's final row stays `NA` unless `record_gap = TRUE` swept it or
+#' `until` stopped the run (the check's oracle fills it);
+#' `ripr_finish(record_gap = TRUE)` measures the mixture it returns.
 #'
 #' # Which to use
 #'

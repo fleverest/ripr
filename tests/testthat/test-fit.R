@@ -400,6 +400,16 @@ test_that("a row's gap is the next step's oracle, not a second search", {
   expect_true(is.na(utils::tail(tr$gap_after, 1L)))
 })
 
+test_that("record_gap on fw_step completes the final row", {
+  st <- fw_step(plurality(), 3L, record_gap = TRUE)
+  fw <- st@trace[st@trace$phase == "fw", ]
+  expect_false(anyNA(fw$gap_after))
+  # Each sweep is the next step's oracle, read back rather than searched
+  # twice, and each later row prices the search it consumed.
+  expect_identical(fw$gap_after[-nrow(fw)], fw$oracle_value[-1L] - 1)
+  expect_true(all(fw$elapsed[-1L] >= fw$gap_after_elapsed[-nrow(fw)]))
+})
+
 test_that("a filled gap is the gap of the mixture the row produced", {
   # Measured independently of the bookkeeping that wrote it. `gap_below(Inf)`
   # holds everywhere, so the second call fills the last row and steps nowhere,

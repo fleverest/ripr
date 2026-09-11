@@ -89,9 +89,9 @@ that a family whose parameter is not a numeric vector still fits.
 A row followed by an \code{\link[=fw_step]{fw_step()}} row has \code{gap_after} equal to that row's
 \code{oracle_value - 1}: the step reads a recorded oracle back rather than
 searching the same mixture twice, so an fw run pays one search per step. An
-fw run's final row stays \code{NA} unless \code{until} stopped the run (the check's
-oracle fills it); \code{ripr_finish(record_gap = TRUE)} measures the mixture it
-returns.
+fw run's final row stays \code{NA} unless \code{record_gap = TRUE} swept it or
+\code{until} stopped the run (the check's oracle fills it);
+\code{ripr_finish(record_gap = TRUE)} measures the mixture it returns.
 }
 
 \section{Which to use}{

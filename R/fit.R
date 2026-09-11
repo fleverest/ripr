@@ -206,10 +206,8 @@ gap_below <- function(tol = 1e-8) {
     g <- tr$gap_after[fresh & !is.na(tr$gap_after)]
     if (!length(g)) {
       stop(
-        "no gap recorded for the current mixture. Use this predicate as ",
-        "`until` in a step verb, set `record_gap = TRUE` on `em_step()`, ",
-        "`lb_step()` or `weight_step()`, or measure the final mixture with ",
-        "`ripr_finish(record_gap = TRUE)`.",
+        "no gap recorded for the current mixture. Set `record_gap = TRUE` ",
+        "on the previous verb, or use this predicate as `until`.",
         call. = FALSE
       )
     }
@@ -369,6 +367,11 @@ oracle_at <- function(state, log_p, ld) {
 #'   [ripr_control()]. Can be quite expensive. Note that the step size found by
 #'   the method selected via `size` is only used as a seed for the
 #'   fully-corrective solve.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture
+#'   after each step, filling the `gap_after` columns. `FALSE` by default. Rows
+#'   before the last fill either way, from the next step's oracle reading the
+#'   sweep back, so `TRUE` buys the final row's measurement at the cost of
+#'   about one extra step.
 #' @param until (Optional) A predicate, tested before each step. It is given
 #'   the current state, and when it accepts two arguments the state the step
 #'   would make, so that a predicate can decide whether to stop early based
@@ -398,6 +401,7 @@ fw_step <- function(
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
+  record_gap = FALSE,
   until = NULL
 ) {
   directions <- variant_directions(rlang::arg_match(variant))
@@ -408,7 +412,7 @@ fw_step <- function(
     times,
     until,
     "fw",
-    record_gap = FALSE,
+    record_gap = record_gap,
     advance = function(state, ld) {
       log_p <- log_p_at_nodes(state, ld)
       oracle <- oracle_at(state, log_p, ld)

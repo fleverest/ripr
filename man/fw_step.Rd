@@ -10,6 +10,7 @@ fw_step(
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
+  record_gap = FALSE,
   until = NULL
 )
 }
@@ -33,6 +34,12 @@ weights with the atoms held fixed, run to \code{fc_tol} and \code{fc_max_iter} f
 \code{\link[=ripr_control]{ripr_control()}}. Can be quite expensive. Note that the step size found by
 the method selected via \code{size} is only used as a seed for the
 fully-corrective solve.}
+
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture each step
+\emph{produced}, filling the \code{gap_after} columns. \code{FALSE} by default. Rows
+before the last fill either way, from the next step's oracle reading the
+sweep back, so \code{TRUE} buys the final row's measurement at the cost of
+about one extra step.}
 
 \item{until}{(Optional) A predicate, tested before each step. It is given
 the current state, and when it accepts two arguments the state the step

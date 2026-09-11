@@ -156,6 +156,31 @@ gaussian_dist <- new_class(
 )
 
 
+#' @rdname gaussian_dist
+#' @usage NULL
+method(format, gaussian_dist) <- function(x, ...) {
+  sprintf("gaussian_dist: mean %s", theta_label(x@prior_mean))
+}
+
+
+#' @description `print()` shows the prior mean and covariance, summarising the
+#'   covariance by its size above eight dimensions.
+#' @rdname gaussian_dist
+#' @usage NULL
+method(print, gaussian_dist) <- function(x, ...) {
+  d <- length(x@prior_mean)
+  cat("<gaussian_dist>\n")
+  cat("  mean ", theta_label(x@prior_mean), "\n", sep = "")
+  if (d <= 8L) {
+    cat("  covariance:\n")
+    print(signif(x@prior_cov, 4L))
+  } else {
+    cat("  covariance ", d, " x ", d, " matrix\n", sep = "")
+  }
+  invisible(x)
+}
+
+
 method(mixture_log_density, list(gaussian_dist, gaussian_family)) <- function(
   mixing,
   family,

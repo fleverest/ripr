@@ -124,3 +124,19 @@ test_that("the prior covariance must match the prior mean", {
     "2 by 2"
   )
 })
+
+
+test_that("a Gaussian mixing measure prints its mean and covariance", {
+  prior <- gaussian_dist(prior_mean = c(0, 0), prior_cov = diag(2))
+  expect_equal(format(prior), "gaussian_dist: mean (0, 0)")
+  out <- paste(capture.output(print(prior)), collapse = "\n")
+  expect_match(out, "<gaussian_dist>", fixed = TRUE)
+  expect_match(out, "mean (0, 0)", fixed = TRUE)
+  expect_match(out, "covariance:", fixed = TRUE)
+  expect_no_match(out, "@")
+
+  # Above eight dimensions the covariance is summarised by its size.
+  wide <- gaussian_dist(prior_mean = rep(0, 9L), prior_cov = diag(9L))
+  out <- paste(capture.output(print(wide)), collapse = "\n")
+  expect_match(out, "covariance 9 x 9 matrix", fixed = TRUE)
+})

@@ -557,3 +557,29 @@ test_that("a truncated Dirichlet alternative fits against the plurality null", {
   expect_true(kl_flat(1e-5)(state))
   expect_lte(fit$kl, state@trace$kl[[1L]])
 })
+
+
+test_that("Dirichlet mixing measures print their concentration", {
+  expect_equal(
+    format(dirichlet(alpha = c(4, 3, 2))),
+    "dirichlet: alpha (4, 3, 2)"
+  )
+  out <- paste(
+    capture.output(print(dirichlet(alpha = c(4, 3, 2)))),
+    collapse = "\n"
+  )
+  expect_match(out, "alpha (4, 3, 2)", fixed = TRUE)
+  expect_no_match(out, "@")
+
+  region <- simplex_region(
+    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  out <- paste(
+    capture.output(print(truncated_dirichlet(alpha = c(4, 3, 2), region = region))),
+    collapse = "\n"
+  )
+  expect_match(out, "<truncated_dirichlet>", fixed = TRUE)
+  expect_match(out, "alpha  (4, 3, 2)", fixed = TRUE)
+  expect_match(out, "region simplex_region", fixed = TRUE)
+  expect_no_match(out, "@")
+})

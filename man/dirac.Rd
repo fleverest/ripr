@@ -2,6 +2,7 @@
 % Please edit documentation in R/mixing.R
 \name{dirac}
 \alias{dirac}
+\alias{format,ripr::dirac-method}
 \title{A point mass at a single parameter value}
 \usage{
 dirac(theta = integer(0))

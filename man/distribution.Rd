@@ -2,6 +2,8 @@
 % Please edit documentation in R/distribution.R
 \name{distribution}
 \alias{distribution}
+\alias{print,ripr::distribution-method}
+\alias{format,ripr::distribution-method}
 \title{Distributions over a space}
 \usage{
 distribution(sample_space = space())
@@ -14,6 +16,10 @@ A \code{distribution} is a law over a \link{space}: the type the RIPr problem
 consumes as the alternative \eqn{Q}{Q}, and the type it returns as
 \eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, \code{\link[=log_density]{log_density()}}
 and \code{\link[=draw]{draw()}}, over the points its \code{sample_space} admits.
+
+\code{print()} and \code{format()} summarise a distribution on one line
+rather than dumping its properties; subclasses with more to show override
+\code{print()}.
 }
 \details{
 \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a

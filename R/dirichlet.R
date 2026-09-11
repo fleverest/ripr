@@ -155,6 +155,17 @@ dirichlet_dist <- new_class(
 )
 
 
+#' @rdname dirichlet
+#' @usage NULL
+method(format, dirichlet_dist) <- function(x, ...) {
+  sprintf(
+    "%s: alpha %s",
+    attr(S7_class(x), "name"),
+    theta_label(x@alpha)
+  )
+}
+
+
 #' Log of the unnormalised Dirichlet integral over a region
 #'
 #' \eqn{\log \int_A \prod_j \theta_j^{\beta_j - 1} \mathrm{d}\theta}{
@@ -534,6 +545,18 @@ truncated_dirichlet <- new_class(
     )
   }
 )
+
+
+#' @description `print()` on a truncated Dirichlet shows the concentration and
+#'   the region it is truncated to.
+#' @rdname dirichlet
+#' @usage NULL
+method(print, truncated_dirichlet) <- function(x, ...) {
+  cat("<truncated_dirichlet>\n")
+  cat("  alpha  ", theta_label(x@alpha), "\n", sep = "")
+  cat("  region ", format(x@region), "\n", sep = "")
+  invisible(x)
+}
 
 
 #' Does a cell lie within the simplex?

@@ -119,6 +119,36 @@ mixture <- new_class(
 )
 
 
+#' A parameter vector as a printable tuple, e.g. "(0.5, 0.3, 0.2)"
+#' @keywords internal
+#' @noRd
+theta_label <- function(theta) {
+  paste0("(", toString(signif(theta, 3L)), ")")
+}
+
+
+#' @description `print()` and `format()` summarise a distribution on one line
+#'   rather than dumping its properties; subclasses with more to show override
+#'   `print()`.
+#' @rdname distribution
+#' @usage NULL
+method(print, distribution) <- function(x, ...) {
+  cat(format(x), "\n", sep = "")
+  invisible(x)
+}
+
+
+#' @rdname distribution
+#' @usage NULL
+method(format, distribution) <- function(x, ...) {
+  sprintf(
+    "%s over %s",
+    attr(S7_class(x), "name"),
+    space_label(x@sample_space)
+  )
+}
+
+
 #' Check that a distribution is supported inside a space
 #' @param dist A [distribution] over a parameter space.
 #' @param space The [space] it must be supported in.
@@ -198,11 +228,7 @@ method(format, mixture) <- function(x, ...) {
   name <- attr(S7_class(x@family), "name")
   n <- n_atoms(x@mixing)
   detail <- if (S7_inherits(x@mixing, dirac)) {
-    paste0(
-      "at theta = (",
-      paste(signif(x@mixing@theta, 3L), collapse = ", "),
-      ")"
-    )
+    paste0("at theta = ", theta_label(x@mixing@theta))
   } else if (is.na(n)) {
     paste0("mixed over ", attr(S7_class(x@mixing), "name"))
   } else {

@@ -2,6 +2,8 @@
 % Please edit documentation in R/mixing.R
 \name{finite_dist}
 \alias{finite_dist}
+\alias{format,ripr::finite_dist-method}
+\alias{print,ripr::finite_dist-method}
 \title{A distribution on finitely many atoms, \verb{sum_c w_c delta_\{theta_c\}}}
 \usage{
 finite_dist(components = NULL, weights = integer(0))
@@ -17,6 +19,10 @@ A \code{finite_dist}.
 \description{
 A discrete measure on finitely many parameter atoms; the shape of
 \eqn{\widehat{W}_0}{W0_hat}.
+
+\code{print()} shows the atoms and their weights as a table when
+there are at most eight, and the atom count with the heaviest atom
+otherwise; \code{\link[=atoms]{atoms()}} and \code{\link[=weights]{weights()}} give the full support either way.
 }
 \examples{
 d <- finite_dist(

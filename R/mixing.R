@@ -99,6 +99,60 @@ finite_dist <- new_class(
 )
 
 
+#' @rdname dirac
+#' @usage NULL
+method(format, dirac) <- function(x, ...) {
+  sprintf("dirac: point mass at %s", theta_label(x@theta))
+}
+
+
+#' @rdname finite_dist
+#' @usage NULL
+method(format, finite_dist) <- function(x, ...) {
+  sprintf(
+    "finite_dist: %s in R^%d",
+    count_label(ncol(x@components), "atom"),
+    nrow(x@components)
+  )
+}
+
+
+#' @description `print()` shows the atoms and their weights as a table when
+#'   there are at most eight, and the atom count with the heaviest atom
+#'   otherwise; [atoms()] and [weights()] give the full support either way.
+#' @rdname finite_dist
+#' @usage NULL
+method(print, finite_dist) <- function(x, ...) {
+  cat("<finite_dist>\n")
+  cat(
+    "  ",
+    count_label(ncol(x@components), "atom"),
+    " in R^",
+    nrow(x@components),
+    "\n",
+    sep = ""
+  )
+  if (ncol(x@components) <= 8L) {
+    m <- x@components
+    if (is.null(rownames(m))) {
+      rownames(m) <- paste0("theta", seq_len(nrow(m)))
+    }
+    print(signif(rbind(m, weight = x@weights), 4L))
+  } else {
+    i <- which.max(x@weights)
+    cat(
+      "  heaviest atom ",
+      theta_label(x@components[, i]),
+      " with weight ",
+      signif(x@weights[i], 3L),
+      "\n",
+      sep = ""
+    )
+  }
+  invisible(x)
+}
+
+
 #' Continuous distributions
 #'
 #' A [distribution] that is continuous rather than discrete, so it has a

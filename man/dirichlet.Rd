@@ -4,7 +4,9 @@
 \alias{dirichlet}
 \alias{truncated_dirichlet}
 \alias{dirichlet_dist}
+\alias{format,ripr::dirichlet_dist-method}
 \alias{mixture_log_density,ripr::dirichlet_dist,ripr::multinomial_family-method}
+\alias{print,ripr::truncated_dirichlet-method}
 \title{Dirichlet priors over the simplex}
 \usage{
 dirichlet(alpha)
@@ -38,6 +40,9 @@ The abstract parent of \code{\link[=dirichlet]{dirichlet()}} and \code{\link[=tr
 a Dirichlet law \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the
 probability simplex, possibly truncated to a particular \link{region}. Paired with
 a \code{\link[=multinomial_family]{multinomial_family()}} it induces a continuous mixture.
+
+\code{print()} on a truncated Dirichlet shows the concentration and
+the region it is truncated to.
 }
 \details{
 Concentrations must be positive. \code{\link[=truncated_dirichlet]{truncated_dirichlet()}} narrows that to

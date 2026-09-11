@@ -2,6 +2,8 @@
 % Please edit documentation in R/gaussian.R
 \name{gaussian_dist}
 \alias{gaussian_dist}
+\alias{format,ripr::gaussian_dist-method}
+\alias{print,ripr::gaussian_dist-method}
 \title{Gaussian mixing measure over the mean of a Gaussian family}
 \usage{
 gaussian_dist(prior_mean, prior_cov)
@@ -19,6 +21,9 @@ A prior \eqn{\mu \sim N(m, V)}{mu ~ N(m, V)} over the mean of a
 \code{\link[=gaussian_family]{gaussian_family()}}. Paired with that family it induces the mixture
 \eqn{N(m, \Sigma + V)}{N(m, sigma + V)} in closed form, so no numerical
 integration is needed to evaluate it.
+
+\code{print()} shows the prior mean and covariance, summarising the
+covariance by its size above eight dimensions.
 }
 \examples{
 fam <- gaussian_family(dim = 2L)

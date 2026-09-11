@@ -194,3 +194,43 @@ test_that("a discretised mixture approaches the exact one, and is not it", {
   # And it is a proper distribution in its own right at every n.
   expect_equal(sum(exp(log_density(fam(discretise(W, 200L)), x))), 1)
 })
+
+
+# --- Printing -----------------------------------------------------------------
+
+test_that("a mixing measure prints a summary, not a property dump", {
+  expect_equal(
+    format(dirac(theta = c(0.5, 0.3, 0.2))),
+    "dirac: point mass at (0.5, 0.3, 0.2)"
+  )
+  out <- paste(
+    capture.output(print(dirac(theta = c(0.5, 0.3, 0.2)))),
+    collapse = "\n"
+  )
+  expect_match(out, "point mass at (0.5, 0.3, 0.2)", fixed = TRUE)
+  expect_no_match(out, "@")
+
+  small <- finite_dist(
+    components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+    weights = c(0.3, 0.7)
+  )
+  expect_equal(format(small), "finite_dist: 2 atoms in R^3")
+  out <- paste(capture.output(print(small)), collapse = "\n")
+  expect_match(out, "<finite_dist>", fixed = TRUE)
+  expect_match(out, "2 atoms in R^3", fixed = TRUE)
+  # A small support is shown in full, atoms beside their weights.
+  expect_match(out, "weight", fixed = TRUE)
+  expect_match(out, "0.7", fixed = TRUE)
+  expect_no_match(out, "@")
+})
+
+test_that("a large finite_dist prints its heaviest atom instead of a table", {
+  big <- finite_dist(
+    components = matrix(rep(c(0.6, 0.4), 12L), nrow = 2L),
+    weights = c(0.23, rep(0.07, 11L))
+  )
+  out <- paste(capture.output(print(big)), collapse = "\n")
+  expect_match(out, "12 atoms in R^2", fixed = TRUE)
+  expect_match(out, "heaviest atom (0.6, 0.4) with weight 0.23", fixed = TRUE)
+  expect_no_match(out, "@")
+})

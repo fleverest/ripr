@@ -10,7 +10,6 @@ fw_step(
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
-  record_gap = FALSE,
   until = NULL
 )
 }
@@ -35,13 +34,10 @@ weights with the atoms held fixed, run to \code{fc_tol} and \code{fc_max_iter} f
 the method selected via \code{size} is only used as a seed for the
 fully-corrective solve.}
 
-\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the step
-\emph{produced}, filling \code{gap} and \code{gap_theta}. Off by default: the sweep costs
-about as much as the step itself. The oracle value the step got for free is
-recorded regardless, in \code{oracle_value} and \code{oracle_theta}, that effectively
-measures the \code{gap} and \code{gap_theta} for the previous iterations.}
-
-\item{until}{Optional predicate; see \link{predicates}.}
+\item{until}{(Optional) A predicate, tested before each step. It is given
+the current state, and when it accepts two arguments the state the step
+would make, so that a predicate can decide whether to stop early based
+on the change between the two states. See \link{predicates}.}
 }
 \value{
 The updated \link{ripr_state}.

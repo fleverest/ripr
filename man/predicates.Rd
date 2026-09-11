@@ -5,7 +5,7 @@
 \alias{kl_flat}
 \alias{gap_below}
 \alias{support_gap_below}
-\title{Predicates for the \code{until} argument of a step verb}
+\title{Predicates for early stopping}
 \usage{
 kl_flat(tol = 1e-12)
 
@@ -20,19 +20,17 @@ support_gap_below(tol = 1e-08)
 A function of a \link{ripr_state} returning \code{TRUE} or \code{FALSE}.
 }
 \description{
-Each returns a function of the state, so a verb stops early when its
-condition holds: \code{em_step(1000, until = kl_flat(1e-12))} means "at most a
-thousand sweeps".
+The \code{until} argument of each step verb accepts these predicates.
 }
 \details{
-The three are not equally trustworthy.
+Each returns a function of the state, tested before each step: a satisfied
+predicate means no step is taken. For instance,
+\code{em_step(1000, until = kl_flat(1e-12))} means "at most a thousand EM
+sweeps, or until the KL decreases by less than 1e-12".
 
-\code{\link[=gap_below]{gap_below()}} and \code{\link[=support_gap_below]{support_gap_below()}} are Frank--Wolfe gaps, over the whole
-null and over the current support respectively, so each bounds how much KL is
-still available at that scope.
-
-\code{\link[=gap_below]{gap_below()}} is a predicate on the Frank--Wolfe gap as estimated (lower
-bounded) by the oracle optimiser. It can never be fully trusted.
+\code{\link[=gap_below]{gap_below()}} and \code{\link[=support_gap_below]{support_gap_below()}} are estimates of the Frank--Wolfe
+gap, over the whole null and over the current support respectively, so each
+roughly tracks how much KL is still available at that scope.
 
 \code{\link[=kl_flat]{kl_flat()}} is a per-row difference and bounds nothing. Under linear
 convergence at rate \eqn{\rho}{rho} it is \eqn{(1-\rho)}{(1 - rho)} times the
@@ -46,14 +44,20 @@ That is why these are predicates rather than a flag on the state.
 }
 \section{Functions}{
 \itemize{
-\item \code{kl_flat()}: The change in KL over the last two trace rows.
+\item \code{kl_flat()}: Checks whether the pending step would decrease KL by
+less than \code{tol}. It is recommended for \code{\link[=em_step]{em_step()}} in particular. When
+called externally on a state, it falls back to the change in KL over the
+last two steps.
 
-\item \code{gap_below()}: The Frank--Wolfe gap over the whole null. Errors if no
-gap has been recorded at the state's current step counts, since a stale one
-would silently answer a question about an earlier iterate.
+\item \code{gap_below()}: Checks whether the Frank--Wolfe gap that the current
+mixture attains is below \code{tol}. Inside \code{\link[=fw_step]{fw_step()}} the row is filled by
+the step's own oracle before the check; elsewhere it needs a recorded gap,
+so make sure to set \code{record_gap = TRUE}.
 
-\item \code{support_gap_below()}: The Frank--Wolfe gap over the current support,
-\verb{max_c G(theta_c) - 1}. Always available, since it needs no oracle sweep.
+\item \code{support_gap_below()}: Checks whether the Frank--Wolfe gap on the current
+support, \verb{max_c G(theta_c) - 1} exceeds \code{tol}.
+It tests that the \emph{weights} are optimal for the atoms in the current
+support, rather than the current fit being optimal for the full null.
 
 }}
 \examples{
@@ -68,6 +72,6 @@ plurality <- null_model(
 )
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |>
-  fw_step(times = 25L, record_gap = TRUE, until = gap_below(1e-2))
+  fw_step(times = 25L, until = gap_below(1e-2))
 gap_below(1e-2)(state)
 }

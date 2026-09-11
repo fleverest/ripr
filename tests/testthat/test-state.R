@@ -186,7 +186,8 @@ test_that("unfilled columns come back as NA of the right type", {
   st <- record(fixture(), phase = "em", kl = 0.1)
   expect_identical(st@trace$part, NA_integer_)
   expect_identical(st@trace$direction, NA_character_)
-  expect_identical(st@trace$gap, NA_real_)
+  expect_identical(st@trace$gap_after, NA_real_)
+  expect_identical(st@trace$gap_after_elapsed, NA_real_)
   expect_identical(st@trace$elapsed, NA_real_)
 })
 

@@ -34,8 +34,9 @@ The implementation of \code{\link[=fw_step]{fw_step()}} yields a lower-bound on 
 cost, since it approximates the Frank--Wolfe oracle. It is to be treated only
 as a lower bound on the true duality gap, since finding the true supremum is
 non-convex in general. Note that what comes free is the gap of the mixture
-the step started \emph{from}, recorded as \code{oracle_value}; a gap for the mixture it
-produced needs \code{record_gap = TRUE} and a second sweep.
+the step started \emph{from}: it is recorded as \code{oracle_value}, and also fills
+the previous row's \code{gap_after} columns, since that row produced this
+mixture.
 
 The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle \code{\link[=lb_step]{lb_step()}} does
 not linearise the objective. It asks which atom minimises KL after the weight
@@ -63,17 +64,21 @@ at one mixture and ends at another.
 \emph{in}, at the mixture the row stepped from. For \code{\link[=fw_step]{fw_step()}} that is
 \eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
 maximiser, so \code{oracle_value - 1} is the pre-step gap for free; for
-\code{\link[=lb_step]{lb_step()}} it is the Li--Barron objective, which is not a gap. Either way,
+\code{\link[=lb_step]{lb_step()}} it is the Li--Barron objective, which is not a gap; for
+\code{\link[=weight_step]{weight_step()}} it is the pre-sweep support gap plus one, with no
+\code{oracle_theta}. For the oracle verbs,
 \code{oracle_theta} is the point the step proposed, which is where the atom went
 when \code{part} is not \code{NA}. This is how a row indicates that the step accepted
 the candidate rather than moving away from it.}
-\item{\code{kl}, \code{gap}, \code{gap_theta}}{The mixture the row \emph{produced}. \code{gap} and
-\code{gap_theta} need \code{record_gap = TRUE} and are \code{NA} otherwise, since the
-sweep is not free.}
-\item{\code{elapsed}}{Time the step rule took to execute, excluding any
-diagnostics (e.g. \code{record_gap} and \code{snapshot}).
-It is per step, not cumulative, so for the cumulative time spent stepping
-use \code{cumsum(trace$elapsed)}.}
+\item{\code{kl}, \code{gap_after}, \code{gap_after_theta}, \code{gap_after_part}}{The
+mixture the row \emph{produced}, and the linear oracle's verdict on it: the
+Frank--Wolfe gap, where the maximiser sits, and which part it sits in.
+Filled by \code{record_gap = TRUE}, or by the next \code{\link[=fw_step]{fw_step()}}'s oracle. A row
+nothing has measured yet is \code{NA}.}
+\item{\code{elapsed}}{Time the step rule's work took, excluding any
+diagnostics (e.g. \code{record_gap}, \code{snapshot}, or the \code{until} predicate).
+\code{elapsed} is per step, not cumulative, so for the cumulative time spent
+stepping use \code{cumsum(trace$elapsed)}.}
 }
 
 Both \code{theta} columns are list columns holding the family's parameter itself,
@@ -81,11 +86,12 @@ so \code{trace$oracle_theta[[i]]} is the point row \code{i} proposed, and \code{
 finds the rows that recorded none. They are lists rather than matrices so
 that a family whose parameter is not a numeric vector still fits.
 
-Under \code{record_gap = TRUE} throughout, a row's \code{gap} is the pre-step gap of
-the row after it, up to the random restarts the two searches happen to draw:
-both maximise the same oracle over the same mixture. So nothing is lost by
-recording post-step, and post-step also gives the \emph{last} iterate a gap --
-the one anything downstream certifies against.
+A row followed by an \code{\link[=fw_step]{fw_step()}} row has \code{gap_after} equal to that row's
+\code{oracle_value - 1}: the step reads a recorded oracle back rather than
+searching the same mixture twice, so an fw run pays one search per step. An
+fw run's final row stays \code{NA} unless \code{until} stopped the run (the check's
+oracle fills it); \code{ripr_finish(record_gap = TRUE)} measures the mixture it
+returns.
 }
 
 \section{Which to use}{

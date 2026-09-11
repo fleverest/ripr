@@ -13,6 +13,7 @@ plurality <- function(
   k = 4,
   q = c(0.42, 0.31, 0.16, 0.11),
   record_gap = FALSE,
+  atoms = NULL,
   ...
 ) {
   fam <- multinomial_family(n_trials = 12, k = k)
@@ -28,6 +29,7 @@ plurality <- function(
     Q,
     null_model(fam, parts),
     exact_engine(),
+    atoms = atoms,
     record_gap = record_gap,
     control = ripr_control(n_seeds = 30L, n_restarts = 4L, ...)
   )
@@ -144,6 +146,25 @@ test_that("every row records the wall-clock time it took", {
   expect_lte(sum(tr$elapsed[tr$phase != "init"]), outer + 1e-6)
 })
 
+test_that("elapsed excludes the until predicate", {
+  slow <- function(s) {
+    Sys.sleep(0.1)
+    FALSE
+  }
+  st <- em_step(plurality(), 2L, until = slow)
+  expect_true(all(st@trace$elapsed[st@trace$phase == "em"] < 0.1))
+})
+
+test_that("a read-back fw step still prices the oracle search", {
+  # The search ran inside the previous verb's `record_gap` sweep; reading it
+  # back must not make the fw row look cheaper than its rule.
+  st <- em_step(plurality(), 1L, record_gap = TRUE)
+  swept <- utils::tail(st@trace$gap_after_elapsed, 1L)
+  expect_gt(swept, 0)
+  stepped <- fw_step(st, 1L)
+  expect_gte(utils::tail(stepped@trace$elapsed, 1L), swept)
+})
+
 test_that("`correct` makes one fw call one fully-corrective iteration", {
   # The two-verb pipeline and the argument solve the same problem, so they
   # agree on the weights. What differs is the bookkeeping: the pipeline splits
@@ -236,15 +257,75 @@ test_that("until stops early and times remains a ceiling", {
 })
 
 test_that("gap_below stops on the recorded gap", {
-  st <- fw_step(plurality(), 30L, record_gap = TRUE, until = gap_below(0.5))
-  expect_true(utils::tail(st@trace$gap, 1L) < 0.5)
+  st <- fw_step(plurality(), 30L, until = gap_below(0.5))
+  expect_true(utils::tail(st@trace$gap_after, 1L) < 0.5)
   expect_true(st@iters[["fw"]] < 30L)
 })
 
+test_that("a verb whose `until` already holds takes no step", {
+  # Tested after the step instead, a call would step whatever it was handed:
+  # the verb would have no fixed point, so composing it with itself would keep
+  # stepping and a loop around it would never end.
+  p <- function(s) s@iters[["fw"]] >= 3L
+  a <- fw_step(plurality(), 10L, until = p)
+  expect_identical(a@iters[["fw"]], 3L)
+  b <- fw_step(a, 10L, until = p)
+  expect_identical(b@iters[["fw"]], 3L)
+  expect_identical(nrow(b@trace), nrow(a@trace))
+  # `b`'s oracle filled the last row, so a third call reads it back: the
+  # trace is unchanged and no search draws from the RNG stream.
+  seed <- .Random.seed
+  c <- fw_step(b, 10L, until = p)
+  expect_identical(c@trace, b@trace)
+  expect_identical(.Random.seed, seed)
+})
+
+test_that("a two-argument predicate sees the state the step would make", {
+  # Counters bumped and the pending row appended, so any property of the
+  # transition can be read off the pair. An EM sweep is deterministic, so the
+  # candidate matches the state an unconditional call makes.
+  st <- plurality()
+  one <- em_step(st, 1L)
+  seen <- NULL
+  none <- em_step(st, 5L, until = function(state, stepped) {
+    seen <<- stepped
+    TRUE
+  })
+  expect_identical(none@trace, st@trace)
+  expect_identical(seen@iters[["em"]], st@iters[["em"]] + 1L)
+  expect_identical(seen@trace$kl, one@trace$kl)
+})
+
+test_that("a stalled sweep does not block a verb that can still progress", {
+  # EM cannot grow the support: with atoms in one part only, its trace goes
+  # flat while a Frank--Wolfe step still adds the atom another part needs.
+  # Reseeding before the measured and the asserted runs makes their oracle
+  # searches identical, so `first` is the pending KL the predicate sees.
+  empty <- matrix(numeric(0), nrow = 4L, ncol = 0L)
+  st <- plurality(atoms = list(
+    cbind(c(0.125, 0.375, 0.25, 0.25), c(0.25, 0.75, 0, 0)),
+    empty,
+    empty
+  ))
+  set.seed(42)
+  st <- em_step(st, 60L)
+  stalled <- abs(diff(utils::tail(st@trace$kl, 2L)))
+  set.seed(7)
+  first <- abs(diff(utils::tail(fw_step(st, 1L)@trace$kl, 2L)))
+  expect_gt(first, stalled)
+
+  tol <- (stalled + first) / 2
+  expect_true(kl_flat(tol)(st))
+  set.seed(7)
+  expect_gt(
+    fw_step(st, 5L, until = kl_flat(tol))@iters[["fw"]],
+    st@iters[["fw"]]
+  )
+})
+
 test_that("gap_below refuses a stale gap", {
-  # No verb records a gap unasked, so the last recorded one belongs to an
-  # earlier iterate. Answering from it would silently describe a mixture that
-  # no longer exists.
+  # The recorded gaps belong to earlier iterates; answering from one would
+  # silently describe a mixture that no longer exists.
   st <- em_step(fw_step(plurality(), 2L), 1L)
   expect_error(gap_below(1e-8)(st), "no gap recorded")
 })
@@ -252,21 +333,21 @@ test_that("gap_below refuses a stale gap", {
 test_that("record_gap makes a gap available to the predicate", {
   st <- em_step(fw_step(plurality(), 2L), 1L, record_gap = TRUE)
   expect_silent(gap_below(1e-8)(st))
-  expect_true(!is.na(utils::tail(st@trace$gap, 1L)))
+  expect_true(!is.na(utils::tail(st@trace$gap_after, 1L)))
   # And through the weight verb too, which sweeps after its step.
   st <- weight_step(st, 1L, record_gap = TRUE)
-  expect_true(!is.na(utils::tail(st@trace$gap, 1L)))
+  expect_true(!is.na(utils::tail(st@trace$gap_after, 1L)))
 })
 
 test_that("ripr_init can record the starting mixture's gap", {
   # So `record_gap = TRUE` throughout leaves no row without one, and the
   # predicate can be asked before any step is taken.
   st <- plurality(record_gap = TRUE)
-  expect_false(is.na(st@trace$gap))
-  expect_false(anyNA(st@trace$gap_theta[[1L]]))
+  expect_false(is.na(st@trace$gap_after))
+  expect_false(anyNA(st@trace$gap_after_theta[[1L]]))
   expect_silent(gap_below(1e-8)(st))
   # Unasked, the init row is like any other: no sweep, no gap.
-  expect_true(is.na(plurality()@trace$gap))
+  expect_true(is.na(plurality()@trace$gap_after))
 })
 
 
@@ -300,22 +381,41 @@ test_that("ripr_init refuses an atoms list that mismatches the parts", {
 # --- What a trace row measures ------------------------------------------------
 #
 # A row spans a step, so it touches two mixtures. `oracle_value`/`oracle_theta`
-# describe the one it started from; `kl`/`gap`/`gap_theta` the one it produced.
+# describe the one it started from; `kl`/`gap_after`/`gap_after_theta` the one it produced.
 # Conflating the two makes `kl - log1p(gap)` -- the guaranteed log-growth rate
 # of the resulting e-variable -- a statement about no mixture at all.
 
-test_that("an oracle row's gap measures the mixture the step produced", {
-  st <- fw_step(plurality(), 4L, record_gap = TRUE)
-  tr <- st@trace[st@trace$phase == "fw", ]
+test_that("a row's gap is the next step's oracle, not a second search", {
+  # `gap_after` on a row and `oracle_value` on the row after it are one
+  # number: the oracle of the step that followed maximised `G` over exactly the
+  # mixture this row produced. Equality is the point -- it is what lets the
+  # step read the row back rather than searching again.
+  st <- fw_step(plurality(), 4L)
+  tr <- st@trace
+  expect_identical(
+    tr$gap_after[-nrow(tr)],
+    tr$oracle_value[-1L] - 1
+  )
+  # Nothing followed the last row, so nothing has measured it.
+  expect_true(is.na(utils::tail(tr$gap_after, 1L)))
+})
 
-  # The pre-step gap is `oracle_value - 1` and is a different number. Equality
-  # would mean `gap` had been copied off the oracle rather than swept after it.
-  expect_false(isTRUE(all.equal(tr$gap, tr$oracle_value - 1)))
-
-  # Swept independently at the mixture the last row produced, it agrees.
+test_that("a filled gap is the gap of the mixture the row produced", {
+  # Measured independently of the bookkeeping that wrote it. `gap_below(Inf)`
+  # holds everywhere, so the second call fills the last row and steps nowhere,
+  # leaving the mixture the row's gap describes as the current one.
+  set.seed(1)
+  st <- fw_step(plurality(), 3L)
+  st <- fw_step(st, 1L, until = gap_below(Inf))
   ld <- compile_engine(st@engine)
   fresh <- linear_gap(st, log_p_at_nodes(st, ld), ld, flat_atoms(st))
-  expect_equal(utils::tail(tr$gap, 1L), fresh$gap, tolerance = rounding_tol(1))
+  # Loose enough for two independent multi-start searches; a wrong-mixture
+  # fill would miss by orders more.
+  expect_equal(
+    utils::tail(st@trace$gap_after, 1L),
+    fresh$gap,
+    tolerance = 1e-8
+  )
 })
 
 test_that("an lb row's gap is swept, not carried over from the row before", {
@@ -323,7 +423,7 @@ test_that("an lb row's gap is swept, not carried over from the row before", {
   # row's: it paid for a full oracle sweep to recompute a number already there.
   st <- em_step(fw_step(plurality(), 2L), 1L, record_gap = TRUE)
   st <- lb_step(st, 1L, record_gap = TRUE)
-  gaps <- stats::na.omit(st@trace$gap)
+  gaps <- stats::na.omit(st@trace$gap_after)
   expect_false(isTRUE(all.equal(gaps[length(gaps)], gaps[length(gaps) - 1L])))
 })
 
@@ -352,9 +452,9 @@ test_that("an away step records where the oracle looked but adds nothing", {
 })
 
 test_that("theta columns hold the parameter itself, one per row", {
-  st <- em_step(fw_step(plurality(k = 4), 1L, record_gap = TRUE), 1L)
+  st <- em_step(fw_step(plurality(k = 4), 1L), 1L)
   tr <- st@trace
-  expect_true(is.list(tr$gap_theta))
+  expect_true(is.list(tr$gap_after_theta))
   expect_true(is.list(tr$oracle_theta))
 
   # Whole parameters, not flattened coordinates: a family free to make the
@@ -362,8 +462,9 @@ test_that("theta columns hold the parameter itself, one per row", {
   expect_identical(lengths(tr$oracle_theta[tr$phase == "fw"]), 4L)
 
   # A row that recorded no such point says so the way the rest of the trace
-  # does, so `is.na()` reads these columns like any other.
-  expect_true(all(is.na(tr$gap_theta[tr$phase == "init"])))
+  # does, so `is.na()` reads these columns like any other. Nothing stepped
+  # after the last row, so nothing has measured its gap.
+  expect_true(is.na(tr$gap_after_theta[[nrow(tr)]]))
   expect_true(all(is.na(tr$oracle_theta[tr$phase == "em"])))
   expect_true(all(!is.na(tr$oracle_theta[tr$phase == "fw"])))
 })
@@ -525,7 +626,9 @@ test_that("gap_final measures the returned mixture, gap_fit the state", {
   # `gap_fit` cannot show what finishing did -- it was recorded on the way in.
   st <- fw_step(plurality(), 5L)
   fit <- ripr_finish(st, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
-  expect_equal(fit$gap_fit, utils::tail(st@trace$gap, 1L))
+  gaps <- st@trace$gap_after[!is.na(st@trace$gap_after)]
+  expect_equal(fit$gap_fit, utils::tail(gaps, 1L))
+  expect_true(is.na(utils::tail(st@trace$gap_after, 1L)))
   expect_true(!is.na(fit$gap_final))
   expect_true(is.na(ripr_finish(st)$gap_final))
 })
@@ -570,7 +673,7 @@ test_that("a polytope null fits and certifies end to end", {
     exact_engine(),
     control = ripr_control(n_seeds = 50L, n_restarts = 5L)
   ) |>
-    fw_step(8L, record_gap = TRUE) |>
+    fw_step(8L) |>
     em_step(8L) |>
     weight_step(8L) |>
     ripr_finish(record_gap = TRUE)

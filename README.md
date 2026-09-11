@@ -68,17 +68,12 @@ Fitting is a sequence of step verbs: `fw_step()` for Frank–Wolfe,
 ``` r
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(
-  state,
-  times = 40L,
-  record_gap = TRUE,
-  until = gap_below(1e-10)
-)
+state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #>           kl          gap        atoms 
-#> 2.824749e-02 1.342737e-04 3.000000e+01
+#> 2.824749e-02 1.342763e-04 3.000000e+01
 ```
 
 <div class="figure" style="text-align: center">
@@ -105,7 +100,7 @@ outcomes <- rbind(
   c(8L, 7L, 5L)
 )
 X(outcomes)
-#> [1] 0.8470773 1.0779180
+#> [1] 0.8470769 1.0779181
 ```
 
 `certify()` proves an upper bound on expectation of `X` over the null,
@@ -120,7 +115,7 @@ c(
   width = cert$sup_ub - cert$sup_lb
 )
 #>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 9.595194e-10
+#> 1.000134e+00 1.000134e+00 9.535681e-10
 ```
 
 Rescaling by the upper bound turns `X` into a bona fide e-variable for
@@ -132,7 +127,7 @@ print(E)
 #> <random_variable> Q / P* / 1.000134 
 #>   on count_space, dimension 3
 print(E(outcomes))
-#> [1] 0.8469636 1.0777733
+#> [1] 0.8469632 1.0777734
 ```
 
 ## Learn more

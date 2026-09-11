@@ -154,12 +154,7 @@ Here we run 40 steps of Frank--Wolfe, then use `ripr_finish()` to solve the weig
 ```{r fit}
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(
-  state,
-  times = 40L,
-  record_gap = TRUE,
-  until = gap_below(1e-10)
-)
+state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
@@ -175,7 +170,7 @@ plot_null(
 
 The fit attains a KL divergence (from `Q`) of approximately `r round(fit$kl, 4)`.
 The `gap` quantity is a Frank--Wolfe duality gap: at its true value it bounds the expectation of `Q / P*` over the null by `1 + gap`.
-The `gap` recorded *during* a fit (`state@trace$gap`, or `fit$gap_fit`) is only an estimate, so it is not itself an upper bound and cannot be used directly to get an e-variable.
+The `gap` recorded *during* a fit (`state@trace$gap_after`, or `fit$gap_fit`) is only an estimate, so it is not itself an upper bound and cannot be used directly to get an e-variable.
 `fit$gap_final`, requested here via `record_gap = TRUE`, is a fresh sweep over the *returned* mixture, and is what we compare against the true certified bound below.
 
 ## From a fit to an e-variable

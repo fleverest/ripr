@@ -35,9 +35,10 @@ filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
 \value{
 A list with \code{W0} (a \link{finite_dist}), \code{P_star} (a \link{mixture}), \code{kl} of
 the returned mixture, \code{gap_fit} (the last Frank--Wolfe gap recorded during
-fitting, \code{NA} if none was), \code{gap_final} (a fresh Frank--Wolfe gap over the
-returned mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms},
-\code{weights}, \code{part}, \code{trace} and \code{snapshots}.
+fitting, which may describe an earlier iterate than the returned mixture;
+\code{NA} if none was), \code{gap_final} (the Frank--Wolfe gap over the final
+mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms}, \code{weights}
+\code{part}, \code{trace} and \code{snapshots}.
 }
 \description{
 Converts a fitted state into a mixture. By default that is all it does: the

@@ -30,9 +30,8 @@ without a special case.}
 \item{weights}{Optional list matching \code{atoms}; defaults to uniform.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the starting mixture,
-filling \code{gap} and \code{gap_theta} on the init row. Off by default, as in the
-verbs: the sweep costs about as much as a \code{\link[=fw_step]{fw_step()}}. With it,
-\code{record_gap = TRUE} throughout gives every row a gap, the init row included.}
+filling the \code{gap_after} columns on the init row. Off by default: the sweep
+costs about as much as a \code{\link[=fw_step]{fw_step()}}.}
 
 \item{control}{From \code{\link[=ripr_control]{ripr_control()}}. Its \code{snapshot} setting applies here as
 it does for other verbs.}

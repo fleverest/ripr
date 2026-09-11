@@ -266,25 +266,31 @@ kl_divergence <- function(state, log_p = NULL, ld = NULL) {
 
 #' The columns of a trace, and what each row's numbers describe
 #'
-#' Two families of column, distinguished by which mixture they measure. The
-#' `oracle_*` pair is what the oracle saw on the way *in*, at the mixture the
-#' row stepped from; `kl` and the `gap*` pair describe the mixture the row
-#' produced. A verb that takes no oracle step leaves the first pair `NA`, and
-#' every verb leaves the gap pair `NA` unless asked for it, since it costs a
-#' full sweep.
+#' Two families of column, distinguished by which mixture they measure.
+#' `oracle_value`/`oracle_theta` are what the oracle saw on the way *in*, at
+#' the mixture the row stepped from; `kl` and the `gap_after*` columns
+#' describe the mixture the row produced. An [em_step()] row leaves the first
+#' pair `NA`; a [weight_step()] row records its pre-sweep support gap plus one
+#' as `oracle_value` with no theta. The `gap_after*` columns fill via
+#' `record_gap = TRUE` or the next [fw_step()]'s oracle, and are `NA` until
+#' something measures them.
 #'
 #' The `theta` columns are list columns, one parameter per element, so
-#' `trace$gap_theta[[i]]` is whatever the family's parameter is. A matrix column
+#' `trace$gap_after_theta[[i]]` is whatever the family's parameter is. A matrix column
 #' would be tighter for the numeric vectors every family currently uses, and
 #' would export to csv, but it fixes the parameter's shape into the trace's
 #' type: a family whose parameter is a matrix -- a covariance, say -- could not
 #' be recorded at all. `NA` marks a row with no such point, matching how the
 #' rest of the trace says "not recorded", so `is.na()` reads them.
 #'
-#' `elapsed` is the wall-clock seconds the step rule itself took, and excludes
-#' the diagnostics (e.g. `record_gap`, or `snapshot`).
-#' `cumsum(trace$elapsed)` is the cumulative time spent stepping, which is less
-#' than the wall clock the call took.
+#' `elapsed` is the wall-clock seconds of the step rule's work, and excludes
+#' the diagnostics (e.g. `record_gap`, `snapshot`, or the `until` predicate).
+#' An [fw_step()] that reads a recorded oracle back instead of searching adds
+#' the stored search time (`gap_after_elapsed`) to its row, so every row
+#' prices the search its step consumed, wherever that search physically ran.
+#' `gap_after_elapsed` is the seconds the search that filled this row's
+#' `gap_after` took. `cumsum(trace$elapsed)` is the cumulative time spent
+#' stepping.
 #' @keywords internal
 #' @noRd
 empty_trace <- function() {
@@ -295,7 +301,9 @@ empty_trace <- function() {
     weight = integer(0),
     phase = character(0),
     kl = numeric(0),
-    gap = numeric(0),
+    gap_after = numeric(0),
+    gap_after_part = integer(0),
+    gap_after_elapsed = numeric(0),
     oracle_value = numeric(0),
     part = integer(0),
     step_size = numeric(0),
@@ -305,7 +313,7 @@ empty_trace <- function() {
     elapsed = numeric(0),
     stringsAsFactors = FALSE
   )
-  tr$gap_theta <- list()
+  tr$gap_after_theta <- list()
   tr$oracle_theta <- list()
   tr[trace_columns()]
 }
@@ -321,8 +329,10 @@ trace_columns <- function() {
     "weight",
     "phase",
     "kl",
-    "gap",
-    "gap_theta",
+    "gap_after",
+    "gap_after_theta",
+    "gap_after_part",
+    "gap_after_elapsed",
     "oracle_value",
     "oracle_theta",
     "part",
@@ -346,8 +356,6 @@ record <- function(
   state,
   phase,
   kl,
-  gap = NA_real_,
-  gap_theta = NULL,
   oracle_value = NA_real_,
   oracle_theta = NULL,
   part = NA_integer_,
@@ -363,7 +371,9 @@ record <- function(
     weight = state@iters[["weight"]],
     phase = phase,
     kl = kl,
-    gap = gap,
+    gap_after = NA_real_,
+    gap_after_part = NA_integer_,
+    gap_after_elapsed = NA_real_,
     oracle_value = oracle_value,
     part = as.integer(part),
     step_size = step_size,
@@ -373,7 +383,7 @@ record <- function(
     elapsed = elapsed,
     stringsAsFactors = FALSE
   )
-  row$gap_theta <- theta_cell(gap_theta)
+  row$gap_after_theta <- theta_cell(NULL)
   row$oracle_theta <- theta_cell(oracle_theta)
   state@trace <- rbind(state@trace, row[trace_columns()])
 
@@ -388,6 +398,47 @@ record <- function(
 #' @noRd
 theta_cell <- function(theta) {
   list(if (is.null(theta)) NA else theta)
+}
+
+#' Write an oracle result into the last row's `gap_after` columns
+#'
+#' The last row produced the current mixture, so an oracle over that mixture is
+#' the row's Frank--Wolfe gap. Never overwrites a recorded gap.
+#' @keywords internal
+#' @noRd
+fill_gap <- function(state, gap, theta, part, elapsed) {
+  tr <- state@trace
+  i <- nrow(tr)
+  if (!i || !is.na(tr$gap_after[i])) {
+    return(state)
+  }
+  tr$gap_after[i] <- gap
+  tr$gap_after_theta[i] <- theta_cell(theta)
+  tr$gap_after_part[i] <- as.integer(part)
+  tr$gap_after_elapsed[i] <- elapsed
+  state@trace <- tr
+  state
+}
+
+
+#' The oracle result already recorded for the current mixture, or `NULL`
+#'
+#' Inverts `fill_gap()`'s `value - 1`. The round trip can differ from a fresh
+#' sweep in the last ulp, so no test should pin identity across it.
+#' @keywords internal
+#' @noRd
+recorded_oracle <- function(state) {
+  tr <- state@trace
+  i <- nrow(tr)
+  if (!i || is.na(tr$gap_after[i]) || is.na(tr$gap_after_part[i])) {
+    return(NULL)
+  }
+  list(
+    value = tr$gap_after[i] + 1,
+    theta = tr$gap_after_theta[[i]],
+    part = tr$gap_after_part[i],
+    elapsed = tr$gap_after_elapsed[i]
+  )
 }
 
 #' Record the whole mixture alongside the trace

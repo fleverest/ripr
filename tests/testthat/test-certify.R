@@ -543,12 +543,7 @@ test_that("lower-dimensional nulls fit but do not certify", {
   # are indifferent to the cell's dimension, and the KL objective is defined.
   set.seed(1)
   state <- ripr_init(Q, null)
-  state <- fw_step(
-    state,
-    times = 20L,
-    record_gap = TRUE,
-    until = gap_below(1e-10)
-  )
+  state <- fw_step(state, times = 20L, until = gap_below(1e-10))
   fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE)
   expect_true(is.finite(fit$kl))
   # Every atom landed on the tie, which is the point: the geometry is honoured.

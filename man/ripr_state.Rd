@@ -2,6 +2,8 @@
 % Please edit documentation in R/state.R
 \name{ripr_state}
 \alias{ripr_state}
+\alias{print,ripr::ripr_state-method}
+\alias{format,ripr::ripr_state-method}
 \title{State of a RIPr fit}
 \usage{
 ripr_state(

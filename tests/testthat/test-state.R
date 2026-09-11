@@ -216,3 +216,39 @@ test_that("record does not snapshot", {
   st <- record(fixture("all"), phase = "fw", kl = 0.1)
   expect_length(st@snapshots, 0L)
 })
+
+# --- Printing -----------------------------------------------------------------
+
+test_that("a state prints a summary, not a property dump", {
+  out <- paste(
+    capture.output(print(record(fixture(), phase = "fw", kl = 0.125))),
+    collapse = "\n"
+  )
+  expect_match(out, "<ripr_state>", fixed = TRUE)
+  expect_match(out, "3 atoms, KL 0.125", fixed = TRUE)
+  expect_match(out, "2 parts", fixed = TRUE)
+  expect_match(out, "gap      none recorded", fixed = TRUE)
+  expect_match(out, "fw 0, lb 0, em 0, weight 0", fixed = TRUE)
+  expect_match(out, "1 row, 0 snapshots", fixed = TRUE)
+  expect_no_match(out, "@")
+
+  # A recorded gap at the current counters prints as current; the same gap
+  # after more steps is flagged as belonging to an earlier iterate.
+  measured <- fill_gap(
+    record(fixture(), phase = "fw", kl = 0.1),
+    0.025,
+    c(0.4, 0.3, 0.3),
+    1L,
+    0.01
+  )
+  expect_match(
+    paste(capture.output(print(measured)), collapse = "\n"),
+    "gap      0.025\n",
+    fixed = TRUE
+  )
+  expect_match(
+    paste(capture.output(print(bump(measured, "em"))), collapse = "\n"),
+    "0.025 at an earlier iterate",
+    fixed = TRUE
+  )
+})

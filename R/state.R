@@ -76,6 +76,86 @@ ripr_state <- new_class(
   }
 )
 
+#' @rdname ripr_state
+#' @usage NULL
+method(print, ripr_state) <- function(x, ...) {
+  tr <- x@trace
+  parts <- n_parts(x@null@region)
+  atoms <- length(flat_weights(x))
+  kl <- if (nrow(tr)) format(signif(utils::tail(tr$kl, 1L), 6L)) else NA
+
+  fresh <- tr$fw == x@iters[["fw"]] &
+    tr$lb == x@iters[["lb"]] &
+    tr$em == x@iters[["em"]] &
+    tr$weight == x@iters[["weight"]]
+  g_now <- tr$gap_after[fresh & !is.na(tr$gap_after)]
+  g_any <- tr$gap_after[!is.na(tr$gap_after)]
+  gap <- if (length(g_now)) {
+    format(signif(utils::tail(g_now, 1L), 3L))
+  } else if (length(g_any)) {
+    paste(
+      format(signif(utils::tail(g_any, 1L), 3L)),
+      "at an earlier iterate"
+    )
+  } else {
+    "none recorded"
+  }
+
+  cat("<ripr_state>\n")
+  cat(
+    "  null     ",
+    attr(S7_class(x@null@family), "name"),
+    " in ",
+    parts,
+    ngettext(parts, " part", " parts"),
+    "\n",
+    sep = ""
+  )
+  cat(
+    "  iterate  ",
+    atoms,
+    ngettext(atoms, " atom", " atoms"),
+    if (!is.na(kl)) paste0(", KL ", kl),
+    "\n",
+    sep = ""
+  )
+  cat("  gap      ", gap, "\n", sep = "")
+  cat(
+    "  steps    ",
+    paste(names(x@iters), x@iters, collapse = ", "),
+    sprintf(" (%.2gs)", sum(tr$elapsed, na.rm = TRUE)),
+    "\n",
+    sep = ""
+  )
+  cat(
+    "  trace    ",
+    nrow(tr),
+    ngettext(nrow(tr), " row", " rows"),
+    ", ",
+    length(x@snapshots),
+    ngettext(length(x@snapshots), " snapshot", " snapshots"),
+    "\n",
+    sep = ""
+  )
+  invisible(x)
+}
+
+
+#' @rdname ripr_state
+#' @usage NULL
+method(format, ripr_state) <- function(x, ...) {
+  sprintf(
+    "ripr_state: %d atoms, %s",
+    length(flat_weights(x)),
+    if (nrow(x@trace)) {
+      paste0("KL ", format(signif(utils::tail(x@trace$kl, 1L), 6L)))
+    } else {
+      "no trace"
+    }
+  )
+}
+
+
 # --- Flat views ---------------------------------------------------------------
 
 #' All atoms as one `(d, C)` matrix

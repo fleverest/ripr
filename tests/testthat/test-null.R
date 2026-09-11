@@ -411,3 +411,24 @@ test_that("maximise_over finds an interior optimum on a real region", {
   expect_equal(found$theta, target, tolerance = 1e-6)
   expect_equal(found$value, 0, tolerance = 1e-10)
 })
+
+# --- Printing -----------------------------------------------------------------
+
+test_that("a null_model prints a summary, not a property dump", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  null <- null_model(
+    fam,
+    list(plurality_simplex(3, 2), plurality_simplex(3, 3))
+  )
+  out <- paste(capture.output(print(null)), collapse = "\n")
+  expect_match(out, "<null_model>", fixed = TRUE)
+  expect_match(out, "multinomial_family", fixed = TRUE)
+  expect_match(out, "2 parts, 2 cells", fixed = TRUE)
+  expect_match(out, "simplex_region: 3 vertices", fixed = TRUE)
+  expect_no_match(out, "@")
+  expect_match(
+    format(null),
+    "null_model: multinomial_family over 2 parts",
+    fixed = TRUE
+  )
+})

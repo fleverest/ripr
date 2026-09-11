@@ -325,3 +325,29 @@ test_that("gauss_hermite reproduces known nodes and weights", {
 test_that("gh_engine rejects a non-positive node count", {
   expect_error(gh_engine(0L), "positive")
 })
+
+# --- Printing -----------------------------------------------------------------
+
+test_that("engines and specs print summaries, not dumps", {
+  fam <- multinomial_family(n_trials = 3L, k = 2L)
+  Q <- mixture(fam, dirac(c(0.5, 0.5)))
+  out <- paste(
+    capture.output(print(resolve_engine(exact_engine(), Q, fam))),
+    collapse = "\n"
+  )
+  expect_match(out, "<quadrature>", fixed = TRUE)
+  expect_match(out, "4 nodes, deterministic", fixed = TRUE)
+  expect_no_match(out, "@")
+
+  set.seed(1)
+  mc <- resolve_engine(mc_engine(200L), Q, fam)
+  expect_match(
+    format(mc),
+    "quadrature: 200 nodes over multinomial_family, stochastic",
+    fixed = TRUE
+  )
+
+  expect_output(print(exact_engine()), "<engine spec> exact_engine()", fixed = TRUE)
+  expect_output(print(mc_engine(200L)), "<engine spec> mc_engine(200)", fixed = TRUE)
+  expect_output(print(gh_engine(5L)), "<engine spec> gh_engine(5)", fixed = TRUE)
+})

@@ -2,6 +2,8 @@
 % Please edit documentation in R/quadrature.R
 \name{quadrature}
 \alias{quadrature}
+\alias{print,ripr::quadrature-method}
+\alias{format,ripr::quadrature-method}
 \title{Quadrature rule for expectations under the alternative}
 \usage{
 quadrature(
@@ -34,6 +36,8 @@ responsibilities, and the gap. So an engine is one thing: a set of nodes with
 weights approximating \eqn{E_Q[\cdot]}{E_Q[.]}. Exact enumeration, Monte
 Carlo, and deterministic quadrature differ only in how the nodes and weights
 are chosen.
+
+\code{format()} gives the same summary on one line.
 }
 \details{
 \code{log_q} is held separately from \code{log_w} because the two coincide only for the

@@ -115,6 +115,52 @@ null_model <- new_class(
 )
 
 
+#' @rdname null_model
+#' @usage NULL
+#' @export
+method(print, null_model) <- function(x, ...) {
+  prts <- parts(x@region)
+  n <- length(prts)
+  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("  ", format(x@family), "\n", sep = "")
+  cat(
+    "  ",
+    parts_label(n),
+    ", ",
+    length(x@cells),
+    ngettext(length(x@cells), " cell", " cells"),
+    "\n",
+    sep = ""
+  )
+  if (n <= 6L) {
+    for (p in prts) {
+      cat("    ", format(p), "\n", sep = "")
+    }
+  } else {
+    named <- vapply(prts, \(p) attr(S7_class(p), "name"), character(1))
+    tally <- table(named)
+    for (nm in names(tally)) {
+      cat("    ", tally[[nm]], " x ", nm, "\n", sep = "")
+    }
+  }
+  invisible(x)
+}
+
+
+#' @description `format()` gives the family and part count on one line.
+#' @rdname null_model
+#' @usage NULL
+#' @export
+method(format, null_model) <- function(x, ...) {
+  sprintf(
+    "%s: %s over %s",
+    attr(S7_class(x), "name"),
+    attr(S7_class(x@family), "name"),
+    parts_label(n_parts(x@region))
+  )
+}
+
+
 #' Does the null contain this parameter value?
 #'
 #' Membership of \eqn{H_0}{H_0}, which is [contains()] on the null's region:

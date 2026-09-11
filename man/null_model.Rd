@@ -2,6 +2,8 @@
 % Please edit documentation in R/null.R
 \name{null_model}
 \alias{null_model}
+\alias{print,ripr::null_model-method}
+\alias{format,ripr::null_model-method}
 \title{A null hypothesis: a family together with its parameter region}
 \usage{
 null_model(family, region, max_cells = 1000L)
@@ -24,6 +26,8 @@ A \code{null_model}.
 The null is a set of \emph{distributions}, so it needs both the model and the
 geometry; keeping them together means nothing downstream has to carry them as
 separate arguments that could disagree.
+
+\code{format()} gives the family and part count on one line.
 }
 \details{
 Each convex part of the region is itself a null hypothesis. This package

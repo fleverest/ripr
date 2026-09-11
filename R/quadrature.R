@@ -55,6 +55,40 @@ quadrature <- new_class(
 )
 
 
+#' @rdname quadrature
+#' @usage NULL
+#' @export
+method(print, quadrature) <- function(x, ...) {
+  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("  ", format(x@family), "\n", sep = "")
+  cat(
+    "  ",
+    n_nodes(x),
+    ngettext(n_nodes(x), " node", " nodes"),
+    ", ",
+    if (deterministic(x)) "deterministic" else "stochastic",
+    "\n",
+    sep = ""
+  )
+  invisible(x)
+}
+
+
+#' @description `format()` gives the same summary on one line.
+#' @rdname quadrature
+#' @usage NULL
+#' @export
+method(format, quadrature) <- function(x, ...) {
+  sprintf(
+    "%s: %d nodes over %s, %s",
+    attr(S7_class(x), "name"),
+    n_nodes(x),
+    attr(S7_class(x@family), "name"),
+    if (deterministic(x)) "deterministic" else "stochastic"
+  )
+}
+
+
 #' Number of quadrature nodes
 #'
 #' You need this only if you are writing a fit loop or an engine spec of your
@@ -194,8 +228,15 @@ expect_se <- function(engine, v) {
 # supplies at fit time; this also means re-resolving a spec draws a fresh
 # sample, which is what certification needs.
 
-new_engine_spec <- function(fn) {
-  structure(fn, class = "ripr_engine_spec")
+new_engine_spec <- function(fn, label) {
+  structure(fn, class = "ripr_engine_spec", label = label)
+}
+
+#' @export
+#' @noRd
+print.ripr_engine_spec <- function(x, ...) {
+  cat("<engine spec> ", attr(x, "label"), "\n", sep = "")
+  invisible(x)
 }
 
 
@@ -215,7 +256,7 @@ new_engine_spec <- function(fn) {
 #' resolve_engine(exact_engine(), Q, fam)
 #' @export
 exact_engine <- function() {
-  new_engine_spec(function(alternative, family) {
+  new_engine_spec(label = "exact_engine()", function(alternative, family) {
     nodes <- enumerate_space(family@sample_space)
     log_q <- log_density(alternative, nodes)
     live <- is.finite(log_q)
@@ -249,7 +290,10 @@ mc_engine <- function(n_draws) {
   if (length(n_draws) != 1L || is.na(n_draws) || n_draws <= 0L) {
     stop("`n_draws` must be a single positive integer.", call. = FALSE)
   }
-  new_engine_spec(function(alternative, family) {
+  new_engine_spec(label = sprintf("mc_engine(%d)", n_draws), function(
+    alternative,
+    family
+  ) {
     nodes <- draw(alternative, n_draws)
     quadrature(
       nodes = nodes,
@@ -440,7 +484,10 @@ gh_engine <- function(n_nodes, max_nodes = 1e6) {
     grids[[key]]
   }
 
-  new_engine_spec(function(alternative, family) {
+  new_engine_spec(label = sprintf("gh_engine(%d)", n_nodes), function(
+    alternative,
+    family
+  ) {
     mom <- gaussian_moments(alternative)
     if (is.null(mom)) {
       stop(

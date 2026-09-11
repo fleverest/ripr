@@ -14,8 +14,8 @@ NULL
 #' an invariant to check rather than one to hold structurally. Weights are
 #' normalised across the whole list, not within a part.
 #'
-#' You need the constructor only if you are writing a fit loop of your own; in
-#' normal use [ripr_init()] builds the state and the step verbs advance it.
+#' [ripr_init()] builds the state and the step verbs advance it; the
+#' constructor is not part of the public API.
 #'
 #' @param atoms List of `(d, n_i)` matrices, one per part of the null region.
 #' @param weights List of numeric vectors matching `atoms`, summing to 1 overall.
@@ -40,7 +40,7 @@ NULL
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality)
 #' state
-#' @export
+#' @keywords internal
 ripr_state <- new_class(
   "ripr_state",
   properties = list(

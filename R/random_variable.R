@@ -280,11 +280,22 @@ likelihood <- function(dist, label = NULL) {
 NULL
 
 
+#' Whether two sample spaces are the same space
+#'
+#' Checks whether they are the same class and have the same properties.
+#' `identical()` breaks when serialising / deserialising with `saveRDS()`.
+#' @keywords internal
+#' @noRd
+same_space <- function(x, y) {
+  identical(class(x), class(y)) && identical(S7::props(x), S7::props(y))
+}
+
+
 #' Both operands must live on the same sample space
 #'
 #' Compared by value, not identity: two separately built `count_space(20, 3)`
-#' objects are `identical()`, so variables from unrelated families over the same
-#' space combine freely.
+#' objects are the same space, so variables from unrelated families over the
+#' same space combine freely.
 #' @keywords internal
 #' @noRd
 shared_space <- function(e1, e2) {
@@ -294,7 +305,7 @@ shared_space <- function(e1, e2) {
   if (!S7_inherits(e2, random_variable)) {
     return(e1@sample_space)
   }
-  if (!identical(e1@sample_space, e2@sample_space)) {
+  if (!same_space(e1@sample_space, e2@sample_space)) {
     stop(
       "random variables are defined on different sample spaces, so they ",
       "cannot be combined.",

@@ -220,6 +220,20 @@ test_that("variables on different sample spaces cannot be combined", {
   expect_error(a / b, "different sample spaces")
 })
 
+test_that("a variable read back with readRDS() still combines", {
+  # A stored fit's variables live on the same space as a freshly built one,
+  # even though serialisation perturbs the S7 class bookkeeping their sample
+  # spaces carry.
+  f <- fixture()
+  path <- tempfile(fileext = ".rds")
+  on.exit(unlink(path))
+  saveRDS(likelihood(f$P), path)
+  P <- readRDS(path)
+  R <- likelihood(f$Q) / P
+  x <- rbind(c(4, 2, 2))
+  expect_equal(R(x), likelihood(f$Q)(x) / likelihood(f$P)(x))
+})
+
 test_that("only a single number may be combined with a variable", {
   f <- fixture()
   X <- likelihood(f$Q)

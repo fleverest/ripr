@@ -485,15 +485,18 @@ path_pairwise <- function(ld_all, w, new_idx, log_p, worst, value) {
 #' @noRd
 path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
   # Cap is w_v/(1 - w_v): beyond it the worst atom's weight would go negative.
+  gamma_max <- w[worst] / (1 - w[worst])
   w_of <- function(gamma) {
     out <- (1 + gamma) * w
-    out[worst] <- out[worst] - gamma
+    # At the cap the algebra can leave a positive residual; a drop step must
+    # leave exactly zero, since `drop_empty()` keys on it.
+    out[worst] <- if (gamma >= gamma_max) 0 else out[worst] - gamma
     out
   }
   weight_path(
     direction = "away",
     value = value,
-    gamma_max = w[worst] / (1 - w[worst]),
+    gamma_max = gamma_max,
     w_of = w_of,
     log_p_at = function(gamma) mixture_log_p(ld_all, w_of(gamma))
   )
@@ -564,8 +567,7 @@ step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
   paths <- Filter(Negate(is.null), paths)
   if (!length(paths)) {
     stop(
-      "`away` needs a second active atom to move mass to. ",
-      "Add `\"forward\"` to `directions`, or take another step first.",
+      "`away` needs a second active atom to move mass to.",
       call. = FALSE
     )
   }

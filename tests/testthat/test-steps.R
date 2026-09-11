@@ -164,6 +164,7 @@ test_that("away alone errors below two active atoms", {
 })
 
 test_that("pairwise and away empty the worst atom at their cap", {
+  # Exactly zero, not merely small: `drop_empty()` keys on it.
   st <- plurality()
   cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))
   worst <- worst_atom(cand$ld_all, cand$w, cand$log_p, cand$engine)
@@ -176,8 +177,18 @@ test_that("pairwise and away empty the worst atom at their cap", {
       cand$log_p,
       cand$engine
     )[[1L]]
-    expect_equal(p$w_of(p$gamma_max)[worst], 0, tolerance = rounding_tol(1))
+    expect_identical(p$w_of(p$gamma_max)[worst], 0)
   }
+})
+
+test_that("an away step at the cap leaves exactly zero for any weight", {
+  # (1 + gamma) w - gamma at gamma = w/(1 - w) leaves a positive residual for
+  # w = 1/3, which `pmax(., 0)` keeps and `drop_empty()` then misses.
+  st <- plurality()
+  cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))
+  w <- replace(rep(1 / 3, length(cand$w)), cand$new_idx, 0)
+  p <- path_away(cand$ld_all, w, cand$new_idx, cand$log_p, 1L, 0.5)
+  expect_identical(p$w_of(p$gamma_max)[1L], 0)
 })
 
 # --- Step sizes ---------------------------------------------------------------
@@ -250,12 +261,16 @@ test_that("the fixed schedule is capped at the path's own maximum", {
 
 test_that("a drop step removes its atom from the support", {
   # Only a removal can make the support fall: every other step either adds an
-  # atom or leaves the count alone.
+  # atom or leaves the count alone. Under this seed the away cap's residual
+  # would otherwise strand an atom at ~1e-18.
+  set.seed(2)
   st <- fw_step(plurality(), 18L, variant = "away-step")
   fw <- st@trace[st@trace$phase == "fw", ]
   expect_true(any(diff(fw$support_size) < 0))
-  expect_true(all(flat_weights(st) > 0))
-  expect_identical(ncol(flat_atoms(st)), length(flat_weights(st)))
+  w <- flat_weights(st)
+  expect_true(all(w > 0))
+  expect_false(any(w < 1e-9))
+  expect_identical(ncol(flat_atoms(st)), length(w))
 })
 
 test_that("uses_candidate is derived from the weight it ends with", {

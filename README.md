@@ -73,7 +73,7 @@ fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #>           kl          gap        atoms 
-#>  0.028247494  0.000134276 30.000000000
+#> 2.824749e-02 1.342761e-04 3.000000e+01
 ```
 
 <div class="figure" style="text-align: center">
@@ -100,7 +100,7 @@ outcomes <- rbind(
   c(8L, 7L, 5L)
 )
 X(outcomes)
-#> [1] 0.8470767 1.0779181
+#> [1] 0.8470769 1.0779181
 ```
 
 `certify()` proves an upper bound on expectation of `X` over the null,
@@ -115,7 +115,7 @@ c(
   width = cert$sup_ub - cert$sup_lb
 )
 #>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 9.437988e-10
+#> 1.000134e+00 1.000134e+00 9.532115e-10
 ```
 
 Rescaling by the upper bound turns `X` into a bona fide e-variable for
@@ -127,7 +127,7 @@ print(E)
 #> <random_variable> Q / P* / 1.000134 
 #>   on count_space, dimension 3
 print(E(outcomes))
-#> [1] 0.846963 1.077773
+#> [1] 0.8469632 1.0777734
 ```
 
 ## Learn more

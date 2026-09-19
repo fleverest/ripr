@@ -450,6 +450,17 @@ path_forward <- function(ld_all, w, new_idx, log_p, value) {
 }
 
 
+#' Project a stepped weight vector back onto the simplex
+#'
+#' Negatives are clamped first.
+#' @keywords internal
+#' @noRd
+normalise_weights <- function(w) {
+  w <- pmax(w, 0)
+  w / sum(w)
+}
+
+
 #' Pairwise: transfer mass to the candidate from the worst active atom
 #'
 #' Lacoste-Julien & Jaggi's pairwise step. Capped at the worst atom's weight,
@@ -468,7 +479,7 @@ path_pairwise <- function(ld_all, w, new_idx, log_p, worst, value) {
     out <- w
     out[worst] <- out[worst] - gamma
     out[new_idx] <- gamma
-    out
+    normalise_weights(out)
   }
   weight_path(
     direction = "pairwise",
@@ -497,7 +508,7 @@ path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
     # At the cap the algebra can leave a positive residual; a drop step must
     # leave exactly zero, since `drop_empty()` keys on it.
     out[worst] <- if (gamma >= gamma_max) 0 else out[worst] - gamma
-    out
+    normalise_weights(out)
   }
   weight_path(
     direction = "away",

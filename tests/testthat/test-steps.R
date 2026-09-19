@@ -273,6 +273,27 @@ test_that("a drop step removes its atom from the support", {
   expect_identical(ncol(flat_atoms(st)), length(w))
 })
 
+test_that("repeated away steps do not let the weights drift off the simplex", {
+  # Two atoms on top of each other at the tie, with the projection already
+  # reached: the away step then shuffles mass between them and nothing else.
+  # `(1 + gamma) w - gamma e_v` sums to one exactly only in exact arithmetic,
+  # so the total used to drift an ulp per step until it passed the state
+  # validator's 1e-8 and the fit died with "weights must sum to 1".
+  fam <- multinomial_family(n_trials = 20, k = 2)
+  Q <- mixture(fam, dirac(theta = c(0.6, 0.4)))
+  v <- diag(2)
+  v[, 1L] <- c(0.5, 0.5)
+  tie <- c(0.5, 0.5)
+  st <- ripr_init(
+    Q,
+    null_model(fam, list(simplex_region(vertices = v))),
+    atoms = list(cbind(tie, tie, deparse.level = 0)),
+    weights = list(c(0.5, 0.5))
+  )
+  expect_no_error(stepped <- fw_step(st, 60L, variant = "away-step"))
+  expect_equal(sum(flat_weights(stepped)), 1, tolerance = rounding_tol(1))
+})
+
 test_that("uses_candidate is derived from the weight it ends with", {
   st <- plurality()
   cand <- with_candidate(st, c(0.30, 0.40, 0.20, 0.10))

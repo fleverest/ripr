@@ -10,30 +10,30 @@ test_that("simplex vertices are affinely independent", {
   # the 2-simplex in Delta,
   expect_no_error(simplex_region(vertices = diag(3)))
   # a segment inside it,
-  expect_no_error(simplex_region(vertices = cbind(c(1, 0, 0), c(0, 1, 0))))
+  expect_no_error(simplex_region(vertices = rbind(c(1, 0, 0), c(0, 1, 0))))
   # a tetrahedron in R^3
   expect_no_error(simplex_region(
-    vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+    vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
   ))
 
   # And these are not:
   # affinely dependent,
   expect_error(
-    simplex_region(vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(2, 0, 0))),
+    simplex_region(vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(2, 0, 0))),
     "affinely dependent"
   )
   # too many points to be independent in this ambient,
   expect_error(
-    simplex_region(vertices = cbind(c(0, 0), c(1, 0), c(0, 1), c(1, 1))),
+    simplex_region(vertices = rbind(c(0, 0), c(1, 0), c(0, 1), c(1, 1))),
     "at most 3 points can be affinely independent in 2 dimensions"
   )
   # non-finite
   expect_error(
-    simplex_region(vertices = cbind(c(Inf, 0, 0), c(0, 1, 0))),
+    simplex_region(vertices = rbind(c(Inf, 0, 0), c(0, 1, 0))),
     "finite"
   )
   expect_error(
-    simplex_region(vertices = cbind(c(NaN, 0, 0), c(0, 1, 0))),
+    simplex_region(vertices = rbind(c(NaN, 0, 0), c(0, 1, 0))),
     "finite"
   )
 })
@@ -43,13 +43,13 @@ test_that("independence is decided exactly, so slivers are simplices", {
   # doubles, so a sliver any tolerance would reject is a genuine simplex here.
   # However, whether it is well-conditioned enough to for certification is a
   # different question, asserted in another test under `test-certify.R`.
-  sliver <- cbind(c(1, 0, 0), c(0, 1, 0), c(0.5, 0.5 - 1e-12, 1e-12))
+  sliver <- rbind(c(1, 0, 0), c(0, 1, 0), c(0.5, 0.5 - 1e-12, 1e-12))
   s <- simplex_region(vertices = sliver)
   expect_true(contains(s, c(0.5, 0.5, 0)))
 
   # An exact dependency is still refused, duplicated vertices included.
   expect_error(
-    simplex_region(vertices = cbind(c(1, 0), c(1, 0))),
+    simplex_region(vertices = rbind(c(1, 0), c(1, 0))),
     "affinely dependent"
   )
 })
@@ -57,11 +57,11 @@ test_that("independence is decided exactly, so slivers are simplices", {
 test_that("simplex degeneracy test works in high dimensions", {
   for (k in c(3L, 8L, 30L)) {
     vertices <- diag(k)
-    vertices[, 1L] <- replace(numeric(k), c(1L, 2L), 0.5)
+    vertices[1L, ] <- replace(numeric(k), c(1L, 2L), 0.5)
     expect_no_error(simplex_region(vertices = vertices))
   }
 
-  tiny <- 1e-6 * cbind(c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+  tiny <- 1e-6 * rbind(c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
   expect_lt(abs(det(tiny)), 1e-12)
   expect_no_error(simplex_region(vertices = tiny))
 })
@@ -71,20 +71,20 @@ test_that("polytope_region accepts simplices and non-simplices", {
     polytope_region(vertices = diag(3))
   )
 
-  square <- cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+  square <- rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   expect_no_error(polytope_region(vertices = square))
 
   # Redundant and degenerate vertex sets are polytopes too.
-  expect_no_error(polytope_region(vertices = cbind(diag(3), c(0.5, 0.5, 0))))
+  expect_no_error(polytope_region(vertices = rbind(diag(3), c(0.5, 0.5, 0))))
   expect_no_error(
-    polytope_region(vertices = cbind(c(1, 0, 0), c(0.5, 0.5, 0), c(0, 1, 0)))
+    polytope_region(vertices = rbind(c(1, 0, 0), c(0.5, 0.5, 0), c(0, 1, 0)))
   )
 })
 
 test_that("polytope_region still rejects a non-matrix or empty vertex set", {
   expect_error(polytope_region(vertices = c(0.5, 0.5)), "must be a matrix")
   expect_error(
-    polytope_region(vertices = matrix(numeric(0), nrow = 2L, ncol = 0L)),
+    polytope_region(vertices = matrix(numeric(0), nrow = 0L, ncol = 2L)),
     "must be a matrix"
   )
 })
@@ -92,11 +92,11 @@ test_that("polytope_region still rejects a non-matrix or empty vertex set", {
 test_that("a non-finite vertex is named rather than crashing the SVD", {
   # Left to `svd()` this is an unattributed LAPACK error, and it fires before
   # `simplex_region`'s validator gets a chance to say anything useful.
-  bad <- cbind(c(NA, 1, 0), c(0, 1, 0), c(0, 0, 1))
+  bad <- rbind(c(NA, 1, 0), c(0, 1, 0), c(0, 0, 1))
   expect_error(polytope_region(vertices = bad), "must all be finite")
   expect_error(simplex_region(vertices = bad), "must all be finite")
   expect_error(
-    polytope_region(vertices = cbind(c(Inf, 0), c(0, 1))),
+    polytope_region(vertices = rbind(c(Inf, 0), c(0, 1))),
     "must all be finite"
   )
 })
@@ -146,7 +146,7 @@ test_that("a convex region is its own only cell unless it can be triangulated", 
   # A bounded polytope that is not a simplex is the one case that differs:
   # the square is two triangles. `test-triangulate.R` covers the fan itself.
   square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+    vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
   expect_length(cells(square), 2L)
   expect_length(parts(square), 1L)

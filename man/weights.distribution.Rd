@@ -16,5 +16,5 @@ Numeric vector summing to 1.
 Weights of a distribution
 }
 \examples{
-weights(finite_dist(components = cbind(c(0.5, 0.5)), weights = 1))
+weights(finite_dist(atoms = rbind(c(0.5, 0.5)), weights = 1))
 }

@@ -12,41 +12,29 @@ disjoin(x, ...)
 \arguments{
 \item{x}{A \link{region}.}
 
-\item{...}{Passed to \code{setdiff()}, e.g. \code{max_cells}.}
+\item{...}{For a \link{union_region}, \code{max_cells}: the cap on the number of
+cells each difference may decompose into before giving up. Defaults to
+the \code{ripr.max_cells} option, or \code{1000L} when that is unset.}
 }
 \value{
 A \link{region} covering the same set, whose parts have disjoint
 interiors, or an \code{\link[=empty_region]{empty_region()}} if \code{x} is empty.
 }
 \description{
-Sequential differences: leave the first part as is, then subtract the first
-from the second, subtract both from the third, and so on. The result covers
-the same set and its parts meet only on shared boundaries, so a measure can
-be summed over them where the declared parts would double-count their
-overlaps.
-}
-\details{
-Internally, this is only used for evaluating measures, not during
-optimisation or certification. Both require just a supremum, and a supremum
-over a union is equivalently a maxmium of the suprema of its parts. Often the
-declared cover is a simpler one to search over anyway; its parts are the ones
-the caller stated. Disjoining produces cells that are smaller, more numerous
-and cut along facets that may not be interesting in the problem setting.
-
-Parts meeting in a lower-dimensional slice are left overlapping, since
-\code{setdiff()} computes closed differences and a slice has no measure to
-double-count.
+Subtracts from each part all the parts before it, so the result covers the
+same set with parts meeting only on boundaries, and a measure can be summed
+over them without double-counting. Parts meeting only in a lower-dimensional
+slice are left overlapping (see \link{region_algebra}).
 }
 \examples{
 # The two cells of the K = 3 plurality null overlap where candidate 1 trails
 # both others. Peeling them apart leaves that region in one of the two.
-plurality <- union(
-  simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-  simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-)
+plurality <-
+  simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))) |
+  simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 peeled <- disjoin(plurality)
-n_parts(peeled)
-setequal(peeled, plurality)
+length(parts(peeled))
+peeled == plurality
 }
 \seealso{
 \link{region_algebra}

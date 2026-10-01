@@ -12,8 +12,7 @@
 A \link{parametric_family}, or \code{NULL}.
 }
 \description{
-Returns \code{NULL} when there is none. \eqn{Q}{Q} is fixed a priori and need not
-be induced from a family at all, so a family cannot always be recovered.
+Returns \code{NULL} for a distribution not induced from a family.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

@@ -7,28 +7,18 @@
 region()
 }
 \description{
-A \code{region} is a subset of \eqn{\mathbb{R}^d}{R^d} carrying convex geometry:
-the set a null hypothesis is stated over, the space a family's parameters
-live in, or the support of a truncated prior. It is the branch of \link{space}
-that can be charted, projected onto and composed with the set algebra, and
-the \verb{_region} suffix marks that branch throughout. A \link{count_space} is a
-space with none of it to offer.
+A \code{region} is a subset of \eqn{\mathbb{R}^d}{R^d} with convex geometry: a
+null hypothesis, a family's parameter space, or a truncated prior's support.
+Unlike a \link{count_space}, it can be charted, projected onto and combined with
+the set algebra.
 }
 \details{
-\code{region} is abstract and splits in two. A \link{convex_region} is one that is
-convex, and carries the geometry: \code{\link[=space_dim]{space_dim()}}, \code{\link[=contains]{contains()}}, \code{\link[=project]{project()}},
-and a \code{\link[=chart]{chart()}} to optimise in. A \link{union_region} is a finite union of convex
-regions, and need not be convex.
-
-Every region answers \code{\link[=parts]{parts()}} and \code{\link[=cells]{cells()}}. \code{parts()} gives the convex
-regions it was \emph{declared} as; \code{cells()} gives the convex regions the
-algorithms \emph{decompose} it into. They agree on every geometry the package
-currently has, but if one is triangulated they will differ.
-
-Part and cell are roles, not types. The same \code{\link[=simplex_region]{simplex_region()}} is a part
-when a user declares it as a piece of a plurality null, and a cell when a
-triangulation produces it from a \code{\link[=polytope_region]{polytope_region()}}. That is why neither
-word appears in a class name.
+\code{region} is abstract. A \link{convex_region} carries the geometry
+(\code{\link[=space_dim]{space_dim()}}, \code{\link[=contains]{contains()}}, \code{\link[=project]{project()}}, \code{\link[=chart]{chart()}}); a \link{union_region} is a
+finite union of convex regions and need not be convex. Every region answers
+\code{\link[=parts]{parts()}} (the convex regions it was declared as) and \code{\link[=cells]{cells()}} (the convex
+regions the algorithms decompose it into); these differ once a region is
+triangulated.
 }
 \examples{
 # Every convex_region is a region:

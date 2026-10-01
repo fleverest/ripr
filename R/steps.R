@@ -3,144 +3,102 @@ NULL
 
 # Oracles and step rules
 #
-# Oracles propose where a new atom should go, while step rules decide whether to
-# add it, and how to update the weights correspondingly. EM steps are different
-# in that they may move atom locations as well as changing the weights.
+# Oracles propose where a new atom should go. Step rules decide whether or not
+# to add it and how to update the weights accordingly. EM sweeps (at the foot)
+# also move atoms but do not change the support size by adding or removing
+# atoms.
 #
-# Oracles and steps require `(ld_all, w)`; log-density for each quadrature node
-# (e.g. the full support for exact) and the weights over them. The atoms do not
-# move here, so `ld_all` is built by the caller and passed in. However, `log_p`
-# changes whenever `w` does and is rebuilt after each weight update. EM does not
-# as it operates on state directly.
-#
-# The EM sweeps at the foot of the file change both the weights and the location
-# of the atoms, but they do not change the size of the support.
-#
-# A step rule is a map from a step size to a weight vector, and finding that step
-# size means minimising KL, so the step layer evaluates KL tens of times per
-# step. However, the corrective solve does not evaluate KL at all. It follows a
-# multiplicative update that amounts to an MM step that is monotone by
-# construction, so there is nothing to line search and no need to confirm the
-# objective fell. It stops on the KKT residual, which the sweep computes anyway.
-# `correct_weights` does evaluate KL once per iteration, but only to record it
-# in the trace. It takes exactly the same path as `solve_weights` otherwise.
-#
-# Throughout, the candidate atom is carried as a column of `ld_all` at index
-# `new_idx`, entering with weight zero, whether or not the step ends up using
-# it. `new_idx` is the position the candidate will occupy in the state's flat
-# ordering, so no re-indexing is needed when the weights are written back.
+# Oracles and steps work on `(ld_all, w)`: the log density of every atom at the
+# quadrature nodes, and the weights. Atoms do not move, so the caller builds
+# builds `ld_all`; `log_p` is rebuilt after each weight update. The candidate
+# atom is always the last column of `ld_all`, entering with weight zero, which
+# is where `add_atom()` puts it.
 
 # --- Oracles ------------------------------------------------------------------
-
-# Rd topic for the Li--Barron (greedy) and Frank--Wolfe (linear) oracles.
 
 #' KL Minimisation Oracles
 #'
 #' The RIPr fit minimises \eqn{KL(Q \| P)}{KL(Q || P)} over mixtures `P` whose
-#' components lie in the null. An *oracle* proposes the single component to
-#' bring in next, and [fw_step()] and [lb_step()] differ only in how far ahead
-#' they look.
+#' components lie in the null. An *oracle* proposes the next component to
+#' bring in; [fw_step()] and [lb_step()] differ only in how far ahead they look.
 #'
-#' Write \eqn{P_i}{P_i} for the mixture at the current iterate and
-#' \eqn{G(\theta) = E_Q[P_\theta / P_i] = E_\theta[Q / P_i]}{G(theta) = E_Q[P_theta / P_i] = E_theta[Q / P_i]},
-#' the same integral written two ways.
-#'
+#' Write \eqn{P_i}{P_i} for the current mixture and
+#' \eqn{G(\theta) = E_Q[P_\theta / P_i] = E_\theta[Q / P_i]}{G(theta) = E_Q[P_theta / P_i] = E_theta[Q / P_i]}.
 #'
 #' The Frank--Wolfe \insertCite{Jaggi2013}{ripr} linear oracle [fw_step()] asks
-#' how fast KL falls if an infinitesimal amount of mass moves towards
+#' how fast KL falls as an infinitesimal amount of mass moves towards
 #' \eqn{P_\theta}{P_theta}:
 #'
 #' \deqn{\left.\frac{d}{d\epsilon} KL\!\left(Q \,\|\, (1-\epsilon) P_i + \epsilon P_\theta\right)\right|_{\epsilon=0} = 1 - G(\theta).}{d/d(eps) KL(Q || (1 - eps) P_i + eps P_theta) =  1 - G(theta) at eps=0.}
 #'
-#' In the language of safe, anytime-valid inference, this is the location in
-#' the null that the current likelihood ratio \eqn{R_i=Q/P_i}{R_i=Q/P_i} "fails
-#' to be an e-variable the most", i.e. the point that maximises the expected
-#' value of \eqn{R_i}{R_i}.
+#' Equivalently, it finds where in the null the likelihood ratio
+#' \eqn{R_i=Q/P_i}{R_i=Q/P_i} most fails to be an e-variable. The attained
+#' \eqn{\sup_{\theta \in \Theta_0} G(\theta) = 1 + \mathrm{gap}}{sup G = 1 + gap}
+#' bounds the KL suboptimality by Frank--Wolfe duality. Since the search is
+#' non-convex, the reported gap is only a lower bound on the true gap. It is
+#' the gap of the mixture the step started *from*, so it fills the previous
+#' row's `gap_after`.
 #'
-#' The attained maximum is
-#' \eqn{\sup_{\theta \in \Theta_0} G(\theta) = 1 + \mathrm{gap}}{sup G = 1 + gap},
-#' which bounds the suboptimality (in KL) via Frank--Wolfe duality, a well known
-#' result in the convex optimisation literature \insertCite{Jaggi2013}{ripr}.
-#'
-#' The implementation of [fw_step()] yields a lower-bound on the gap at no extra
-#' cost, since it approximates the Frank--Wolfe oracle. It is to be treated only
-#' as a lower bound on the true duality gap, since finding the true supremum is
-#' non-convex in general. Note that what comes free is the gap of the mixture
-#' the step started *from*: it is recorded as `oracle_value`, and also fills
-#' the previous row's `gap_after` columns, since that row produced this
-#' mixture.
-#'
-#'
-#' The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle [lb_step()] does
-#' not linearise the objective. It asks which atom minimises KL after the weight
-#' selection inner optimisation:
+#' The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle [lb_step()]
+#' does not linearise; it picks the atom minimising KL after choosing its
+#' weight:
 #'
 #' \deqn{\theta^* = \arg\min_{\theta \in \Theta_0} KL\!\left(Q \,\|\, (1 - w(\theta)) P_i + w(\theta) P_\theta\right),}{theta* = argmin_theta KL(Q || (1 - w(theta)) P_i + w(theta) P_theta),}
 #'
-#' where \eqn{w(\theta)}{w(theta)} depends on the weight update procedure.
-#'
-#' The weight selection may be an inner optimisation nested inside every
-#' objective evaluation, so evaluating each candidate may cost a line search
-#' or, with a corrective solve, a full re-optimisation of every weight.
-#' There is no duality result that bounds suboptimality with this oracle, but
-#' we can estimate the Frank--Wolfe gap via a second optimisation sweep with the
-#' Frank--Wolfe oracle by setting `record_gap = TRUE` in [lb_step()], without
-#' adding the corresponding atom.
+#' where \eqn{w(\theta)}{w(theta)} comes from the weight update. Each
+#' candidate may therefore cost a line search, or a full weight solve under
+#' correction. It has no duality bound; `record_gap = TRUE` estimates the
+#' Frank--Wolfe gap with an extra linear-oracle sweep, without adding its atom.
 #'
 #' # What a trace row records
 #'
-#' Every verb writes one row per step, and its columns split by which mixture
-#' they measure. The distinction matters because a row spans a step: it starts
-#' at one mixture and ends at another.
+#' Every verb writes one row per step to `state@trace`. A row spans a step, so
+#' its columns split by which mixture they measure.
 #'
 #' \describe{
-#'   \item{`oracle_value`, `oracle_theta`}{What the oracle found on the way
-#'   *in*, at the mixture the row stepped from. For [fw_step()] that is
-#'   \eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
-#'   maximiser, so `oracle_value - 1` is the pre-step gap for free; for
-#'   [lb_step()] it is the Li--Barron objective, which is not a gap; for
-#'   [weight_step()] it is the pre-sweep support gap plus one, with no
-#'   `oracle_theta`. For the oracle verbs,
-#'   `oracle_theta` is the point the step proposed, which is where the atom went
-#'   when `part` is not `NA`. This is how a row indicates that the step accepted
-#'   the candidate rather than moving away from it.}
-#'   \item{`kl`, `gap_after`, `gap_after_theta`, `gap_after_part`}{The
-#'   mixture the row *produced*, and the linear oracle's verdict on it: the
-#'   Frank--Wolfe gap, where the maximiser sits, and which part it sits in.
-#'   Filled by `record_gap = TRUE`, or by the next [fw_step()]'s oracle. A row
-#'   nothing has measured yet is `NA`.}
-#'   \item{`elapsed`}{Time the step rule's work took, excluding any
-#'    diagnostics (e.g. `record_gap`, `snapshot`, or the `until` predicate).
-#'    `elapsed` is per step, not cumulative, so for the cumulative time spent
-#'    stepping use `cumsum(trace$elapsed)`.}
+#'   \item{`step`, `phase`}{The row's index ([ripr_init()]'s row is 0) and the
+#'   verb that wrote it (`"init"`, `"fw"`, `"lb"`, `"em"` or `"weight"`).
+#'   Count steps of a kind with e.g. `cumsum(trace$phase == "fw")`.}
+#'   \item{`oracle_value`, `oracle_theta`}{What the step's own search found at
+#'   the mixture it stepped *from*. For [fw_step()], `oracle_theta` is the
+#'   linear oracle's maximiser and `oracle_value` is `NA` (its value is the
+#'   previous row's `gap_after + 1`). For [lb_step()] `oracle_value` is the
+#'   Li--Barron objective, not a gap; for [weight_step()] it is the pre-sweep
+#'   support gap plus one, with no `oracle_theta`. When `part` is not `NA`, the
+#'   atom went to `oracle_theta`.}
+#'   \item{`kl`, `gap_after`, `gap_after_theta`, `gap_after_part`}{The mixture
+#'   the row *produced*, and the linear oracle's gap, maximiser and part for
+#'   it. Filled by `record_gap = TRUE` or the next [fw_step()]; otherwise `NA`.}
+#'   \item{`gap_after_elapsed`}{Seconds the search that filled `gap_after`
+#'   took.}
+#'   \item{`part`, `step_size`, `direction`, `support_size`, `max_weight`}{
+#'   Where an oracle step put its atom (`NA` if none), the step length and
+#'   direction, and the size and heaviest weight of the produced mixture.}
+#'   \item{`elapsed`}{Seconds of the step rule's work, excluding diagnostics
+#'   (`record_gap`, `snapshot`, `until`). An [fw_step()] row includes the
+#'   linear-oracle search it consumed, even if cached. Per step; use
+#'   `cumsum(trace$elapsed)` for the total.}
 #' }
 #'
-#' Both `theta` columns are list columns holding the family's parameter itself,
-#' so `trace$oracle_theta[[i]]` is the point row `i` proposed, and `is.na()`
-#' finds the rows that recorded none. They are lists rather than matrices so
-#' that a family whose parameter is not a numeric vector still fits.
+#' Both `theta` columns are list columns holding the family's parameter, with
+#' `NA` for rows that recorded none.
 #'
-#' A row followed by an [fw_step()] row has `gap_after` equal to that row's
-#' `oracle_value - 1`: the step reads a recorded oracle back rather than
-#' searching the same mixture twice, so an fw run pays one search per step. An
-#' fw run's final row stays `NA` unless `record_gap = TRUE` swept it or
-#' `until` stopped the run (the check's oracle fills it);
-#' `ripr_finish(record_gap = TRUE)` measures the mixture it returns.
+#' `state@oracle` caches the linear oracle's result for the current mixture
+#' only: a step that changes the mixture clears it and `record_gap = TRUE`
+#' sets it. [fw_step()] uses the cache when present, so an fw run pays one
+#' search per step. The final row's `gap_after` stays `NA` unless
+#' `record_gap = TRUE` or `until` stopped the run; `ripr_finish(record_gap =
+#' TRUE)` measures the mixture it returns.
 #'
 #' # Which to use
 #'
-#' It is advisable to use [fw_step()] unless there is a specific reason not to.
-#' It is cheaper per iteration and has similar if not the same convergence
-#' guarantees, though no convergence guarantee applies in either case if the
-#' oracle can not be trusted---as is the case here.
+#' Prefer [fw_step()]: it is cheaper per iteration with similar guarantees
+#' (none of which strictly hold, since the oracle is heuristic).
 #'
-#' Expect the two to disagree sharply on the reported gap even when they agree
-#' on KL, and do not read that as one fitting better. The Frank--Wolfe oracle
-#' places its atom exactly at the worst-case \eqn{\theta}{theta}, so the mixture
-#' absorbs the very point defining the gap; the Li--Barron oracle places its
-#' atom wherever the post-step KL is smallest, leaving that point untouched.
-#' Two fits can sit at near-identical KL with gaps orders of magnitude apart.
-#'
+#' Expect the two to disagree sharply on the gap even if the KL is similar.
+#' Frank--Wolfe places its atom exactly at the worst-case \eqn{\theta}{theta},
+#' absorbing the point that defines the gap; Li--Barron places it wherever
+#' post-step KL is smallest, leaving that point untouched.
 #'
 #' @name oracles
 #' @references
@@ -149,15 +107,10 @@ NULL
 NULL
 
 
-#' The linear oracle: maximise `G(theta)` over the null
+#' The linear oracle: maximise `G(theta)` over the null (see [oracles])
 #'
-#' See [oracles] for the user-facing account. Implementation notes only here.
-#'
-#' `value` returns \eqn{G(\theta)}{G(theta)} and `maximise_over()` maximises it,
-#' which turns out to be descent on KL (see [oracles] for why). The gradient
-#' is \eqn{E_\theta[(Q/P_i)\, s_\theta]}{E_theta[(Q/P_i) s_theta]}, by
-#' differentiating under the integral. `value_batch` scores a whole matrix of
-#' candidates in one reduction, which is what the multi-start seeding uses.
+#' Gradient is \eqn{E_\theta[(Q/P_i)\, s_\theta]}{E_theta[(Q/P_i) s_theta]},
+#' differentiating under the integral.
 #' @keywords internal
 #' @noRd
 linear_oracle <- function(state, log_p, ld) {
@@ -167,59 +120,25 @@ linear_oracle <- function(state, log_p, ld) {
 
   objective(
     value = function(theta) {
-      exp(log_expect_q(engine, as.vector(ld(matrix(theta, ncol = 1L))) - log_p))
+      exp(log_expect_q(engine, as.vector(ld(matrix(theta, nrow = 1L))) - log_p))
     },
     grad = function(theta) {
-      ratio <- exp(as.vector(ld(matrix(theta, ncol = 1L))) - log_p)
+      ratio <- exp(as.vector(ld(matrix(theta, nrow = 1L))) - log_p)
       as.vector(crossprod(score(family, theta, engine@nodes), w * ratio))
     },
-    value_batch = function(theta_mat) {
-      exp(col_logsumexp(ld(theta_mat) - log_p + engine@log_w))
-    }
+    value_batch = function(theta_mat) atom_g(ld(theta_mat), log_p, engine)
   )
 }
 
 
-#' Estimate the Frank--Wolfe duality gap, and say where it is attained
-#'
-#' Maximises (locally) the linear oracle over the null. The maximiser is worth
-#' returning alongside the value: it is the point the current mixture fails
-#' hardest to cover, and hence where the next oracle step would put its atom.
-#'
-#' `seeds` is a parameter rather than `flat_atoms(state)` because
-#' [ripr_finish()] sweeps over a mixture whose atoms have already been dropped
-#' or re-solved, so the state no longer holds them.
-#' @return `list(gap, theta, part)`.
-#' @keywords internal
-#' @noRd
-linear_gap <- function(state, log_p, ld, seeds) {
-  found <- search_null(state, linear_oracle(state, log_p, ld), seeds = seeds)
-  list(gap = found$value - 1, theta = found$theta, part = found$part)
-}
-
 #' What a step towards `theta` would do, without doing it
 #'
-#' Returns a function of `theta` reporting the weights, mixture and KL that a
-#' step towards it would produce. Nothing is written to the state, so an oracle
-#' can score candidates with the same machinery that later takes the step.
+#' Returns a memoised function of `theta` giving `weights`, `log_p`, `kl`,
+#' `gamma`, `direction`, `uses_candidate` and `ld_new`, so an oracle can score
+#' candidates with the machinery that later takes the step.
 #'
-#' The candidate enters at `at` with weight zero. `at = NULL` puts it last,
-#' which is what an oracle wants, since it never writes back. A caller that does
-#' intend to commit passes `insert_index()`, so the weights come back in the
-#' state's own flat ordering and need no permutation.
-#'
-#' The returned closure memoises its last call. `optim()` asks for the value and
-#' the gradient at the same point through separate slots of [objective()], and
-#' each evaluation here costs a line search -- or, under `correct`, an entire
-#' weight solve.
-#'
-#' @param at Index the candidate should occupy, or `NULL` for last.
-#' @param correct Re-solve every weight after the step, as Li and Barron allow.
-#'   The solve is multiplicative, so it scales the weights the step chose
-#'   without changing which of them are zero: `uses_candidate`, read off the
-#'   pre-correction weights, still describes the corrected step.
-#' @return A function of `theta` giving `weights`, `log_p`, `kl`, `gamma`,
-#'   `direction`, `uses_candidate`, plus `ld_new` and `new_idx` for the caller.
+#' `correct` re-solves every weight after the step, which may zero the
+#' candidate or an incumbent.
 #' @keywords internal
 #' @noRd
 plan_step <- function(
@@ -229,33 +148,20 @@ plan_step <- function(
   directions = "forward",
   size = "line-search",
   gamma_fixed = NULL,
-  correct = FALSE,
-  at = NULL
+  correct = FALSE
 ) {
   engine <- state@engine
   ctl <- state@control
-  ld_atoms <- ld(flat_atoms(state))
-  w_now <- flat_weights(state)
+  ld_atoms <- ld(state@mixing@atoms)
+  w <- c(state@mixing@weights, 0)
 
-  new_idx <- if (is.null(at)) length(w_now) + 1L else at
-  w <- append(w_now, 0, after = new_idx - 1L)
-
-  last_theta <- NULL
-  last <- NULL
-
-  function(theta) {
-    # Caches previous theta so that nonlinear_oracle doesn't recompute twice
-    # for gradient + objective.
-    if (!is.null(last_theta) && identical(theta, last_theta)) {
-      return(last)
-    }
-    ld_new <- as.vector(ld(matrix(theta, ncol = 1L)))
-    ld_all <- insert_col(ld_atoms, ld_new, new_idx)
+  memoise_last(function(theta) {
+    ld_new <- as.vector(ld(matrix(theta, nrow = 1L)))
+    ld_all <- cbind(ld_atoms, ld_new, deparse.level = 0)
 
     res <- apply_step(
       ld_all,
       w,
-      new_idx,
       log_p,
       engine,
       directions = directions,
@@ -271,33 +177,25 @@ plan_step <- function(
         max_iter = ctl$fc_max_iter
       )
       res$log_p <- mixture_log_p(ld_all, res$weights)
-      res$kl <- expect_q(engine, engine@log_q - res$log_p)
+      res$kl <- kl_at(engine, res$log_p)
+      res$uses_candidate <- res$weights[length(res$weights)] > 0
     }
     res$ld_new <- ld_new
-    res$new_idx <- new_idx
-
-    last_theta <<- theta
-    last <<- res
     res
-  }
+  })
 }
 
 
 #' Gradient of the Li--Barron objective
 #'
-#' By the envelope theorem the derivative with respect to the inner variables
-#' vanishes at their optimum, so the weight can be held fixed and only the
-#' candidate's own dependence on \eqn{\theta}{theta} differentiated:
-#' \deqn{\partial_\theta E_Q[\log P] = E_Q\!\left[\frac{w(\theta) P_\theta}{P}\, s_\theta\right].}{d/dtheta E_Q[log P] = E_Q[(w(theta) P_theta / P) s_theta].}
-#' No differentiation through the line search or the weight solve is needed.
-#'
-#' Zero when the step left the candidate unweighted: it is then absent from the
-#' mixture, so moving it changes nothing.
-#' @param planned One result from a `plan_step` closure.
+#' By the envelope theorem the weight can be held fixed:
+#' \deqn{\partial_\theta E_Q[\log P] = E_Q\!\left[\frac{w(\theta) P_\theta}{P}\, s_\theta\right],}{d/dtheta E_Q[log P] = E_Q[(w(theta) P_theta / P) s_theta],}
+#' so no differentiation through the line search or weight solve is needed.
+#' Zero when the step left the candidate unweighted.
 #' @keywords internal
 #' @noRd
 lb_gradient <- function(state, theta, planned) {
-  w_new <- planned$weights[planned$new_idx]
+  w_new <- utils::tail(planned$weights, 1L)
   if (w_new <= 0) {
     return(numeric(length(theta)))
   }
@@ -309,21 +207,10 @@ lb_gradient <- function(state, theta, planned) {
   ))
 }
 
-#' The Li--Barron nonlinear oracle
+#' The Li--Barron nonlinear oracle (see [oracles]); `value` is `-kl`
 #'
-#' See [oracles] for the user-facing account. Implementation notes only here.
-#'
-#' Li and Barron score a candidate by the KL it leaves behind *after* its weight
-#' has been chosen, so the step rule is this oracle's inner optimisation and
-#' `directions`, `size` and `correct` are consumed here rather than by the
-#' caller. `value` returns `-kl`, since maximising that is minimising KL, which
-#' is the definition in [oracles].
-#'
-#' `value_batch` scores every seed with a full step rather than ranking them by
-#' a cheap proxy. That is expensive -- `n_seeds` line searches per oracle call,
-#' or `n_seeds` weight solves under `correct` -- and deliberate: this oracle
-#' exists to be compared against [fw_step()], and a baseline weakened by an
-#' approximate seeding heuristic would not be worth the comparison.
+#' `value_batch` scores every seed with a full step (`n_seeds` line searches or
+#' weight solves).
 #' @keywords internal
 #' @noRd
 nonlinear_oracle <- function(
@@ -348,8 +235,8 @@ nonlinear_oracle <- function(
     grad = function(theta) lb_gradient(state, theta, after(theta)),
     value_batch = function(theta_mat) {
       -vapply(
-        seq_len(ncol(theta_mat)),
-        \(i) after(theta_mat[, i])$kl,
+        seq_len(nrow(theta_mat)),
+        \(i) after(theta_mat[i, ])$kl,
         numeric(1)
       )
     }
@@ -359,19 +246,10 @@ nonlinear_oracle <- function(
 
 # --- Step rules ---------------------------------------------------------------
 
-#' Log density of a mixture with weights `w` over the atoms of `ld_all`
-#' @keywords internal
-#' @noRd
-mixture_log_p <- function(ld_all, w) {
-  row_logsumexp(add_by_col(ld_all, log(pmax(w, 0))))
-}
-
-
-#' `G(theta_c)` for every column of `ld_all`
+#' `G(theta_c) = E_Q[p_c / P]` for every column of `ld_all`
 #'
-#' \eqn{G(\theta) = E_Q[p_\theta / P]}{G(theta) = E_Q[p_theta / P]}. The
-#' gradient of KL in the weights is \eqn{-G}{-G}, so every first-order quantity
-#' the step layer needs is read off this one vector.
+#' The KL gradient in the weights is `-G`, so every first-order quantity the
+#' step layer needs comes from this vector.
 #' @keywords internal
 #' @noRd
 atom_g <- function(ld_all, log_p, engine) {
@@ -379,18 +257,10 @@ atom_g <- function(ld_all, log_p, engine) {
 }
 
 
-#' The active atom with the smallest `G`, or `NULL` if fewer than two are active
-#'
-#' \eqn{\arg\max_{v \in S} \langle \nabla f, e_v \rangle}{argmax_v <grad f,
-#' e_v>} over the active set, which is the argmin of `G` because the gradient is
-#' \eqn{-G}{-G}. Fewer than two leaves nothing to move away from: emptying the
-#' only active atom would empty the mixture.
+#' The active atom with the smallest `G` (the away vertex), or `NULL` if fewer
+#' than two are active, since emptying the only one would empty the mixture
 #' @keywords internal
 #' @noRd
-worst_atom <- function(ld_all, w, log_p, engine) {
-  worst_of(atom_g(ld_all, log_p, engine), w)
-}
-
 worst_of <- function(g, w) {
   active <- which(w > 0)
   if (length(active) < 2L) {
@@ -400,32 +270,18 @@ worst_of <- function(g, w) {
 }
 
 
-#' A one-parameter path through weight space
-#'
-#' `gamma -> w`, plus the largest admissible `gamma` and the log density along
-#' the way. One shape for every direction, so one line search serves all of them.
+# Paths through weight space. Each `path_*` returns
+# `list(direction, value, gamma_max, w_of, log_p_at)` (first-order value, the
+# map `gamma -> w`, and log density along it) so one line search serves all.
+# The candidate is the last entry of `w`.
+
+#' Forward: \eqn{w \leftarrow (1-\gamma) w + \gamma e_{new}}{w <- (1 - gamma) w + gamma e_new}
 #' @keywords internal
 #' @noRd
-weight_path <- function(direction, value, gamma_max, w_of, log_p_at) {
-  list(
-    direction = direction,
-    value = value,
-    gamma_max = gamma_max,
-    w_of = w_of,
-    log_p_at = log_p_at
-  )
-}
-
-
-#' Forward: transfer mass to the candidate from everything else
-#'
-#' The ordinary standard direction,
-#' \eqn{w \leftarrow (1-\gamma) w + \gamma e_{new}}{w <- (1 - gamma) w + gamma e_new}.
-#' @keywords internal
-#' @noRd
-path_forward <- function(ld_all, w, new_idx, log_p, value) {
+path_forward <- function(ld_all, w, log_p, value) {
+  new_idx <- length(w)
   ld_new <- ld_all[, new_idx]
-  weight_path(
+  list(
     direction = "forward",
     value = value,
     gamma_max = 1,
@@ -434,9 +290,6 @@ path_forward <- function(ld_all, w, new_idx, log_p, value) {
       out[new_idx] <- gamma
       out
     },
-    # Two columns rather than C + 1: this direction is a convex combination of
-    # the current mixture with one new atom, so `log_p` is reused. Worth the
-    # special case, since the line search calls this tens of times per step.
     log_p_at = function(gamma) {
       if (gamma <= 0) {
         return(log_p)
@@ -450,9 +303,7 @@ path_forward <- function(ld_all, w, new_idx, log_p, value) {
 }
 
 
-#' Project a stepped weight vector back onto the simplex
-#'
-#' Negatives are clamped first.
+#' Clamp negatives and renormalise onto the simplex
 #' @keywords internal
 #' @noRd
 normalise_weights <- function(w) {
@@ -461,27 +312,21 @@ normalise_weights <- function(w) {
 }
 
 
-#' Pairwise: transfer mass to the candidate from the worst active atom
+#' Pairwise: move mass to the candidate from the worst active atom
 #'
-#' Lacoste-Julien & Jaggi's pairwise step. Capped at the worst atom's weight,
-#' so at the cap that atom empties.
-#'
-#' With one active atom `worst` is that atom and this reduces to
-#' `path_forward` exactly.
+#' Capped at that atom's weight. With one active atom this is `path_forward`.
 #' @references
 #'   \insertRef{LacosteJulienJaggi2015}{ripr}
 #' @keywords internal
 #' @noRd
-path_pairwise <- function(ld_all, w, new_idx, log_p, worst, value) {
-  # No two-column shortcut here: mass leaves one atom and arrives at another, so
-  # the mixture is rebuilt.
+path_pairwise <- function(ld_all, w, log_p, worst, value) {
   move <- function(gamma) {
     out <- w
     out[worst] <- out[worst] - gamma
-    out[new_idx] <- gamma
+    out[length(out)] <- gamma
     normalise_weights(out)
   }
-  weight_path(
+  list(
     direction = "pairwise",
     value = value,
     gamma_max = w[worst],
@@ -491,16 +336,14 @@ path_pairwise <- function(ld_all, w, new_idx, log_p, worst, value) {
 }
 
 
-#' Away: remove mass from the worst active atom, spread evenly across all others
+#' Away: \eqn{w \leftarrow (1+\gamma) w - \gamma e_v}{w <- (1 + gamma) w - gamma e_v}
 #'
-#' \eqn{w \leftarrow (1+\gamma) w - \gamma e_v}{w <- (1 + gamma) w - gamma e_v}.
-#' The candidate goes unused, which is why this is only ever offered alongside
-#' another direction.
+#' Leaves the candidate unused, so only offered alongside another direction.
 #' @references
 #'   \insertRef{LacosteJulienJaggi2015}{ripr}
 #' @keywords internal
 #' @noRd
-path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
+path_away <- function(ld_all, w, log_p, worst, value) {
   # Cap is w_v/(1 - w_v): beyond it the worst atom's weight would go negative.
   gamma_max <- w[worst] / (1 - w[worst])
   w_of <- function(gamma) {
@@ -510,7 +353,7 @@ path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
     out[worst] <- if (gamma >= gamma_max) 0 else out[worst] - gamma
     normalise_weights(out)
   }
-  weight_path(
+  list(
     direction = "away",
     value = value,
     gamma_max = gamma_max,
@@ -521,15 +364,6 @@ path_away <- function(ld_all, w, new_idx, log_p, worst, value) {
 
 
 #' The directions a named Frank--Wolfe variant may move in
-#'
-#' The published variants differ only in which directions their step is allowed
-#' to take, so the rest of the step layer works in directions and this is the
-#' only place the names appear. `"away-step"` offers the two Algorithm 1 chooses
-#' between; `"pairwise"` offers the single direction Algorithm 2 replaces that
-#' choice with. There is deliberately no way to spell a set that names no
-#' algorithm: the pairwise direction is the sum of the other two, so its
-#' first-order value is their sum and it would win every comparison it were
-#' entered into, silently discarding them.
 #' @keywords internal
 #' @noRd
 variant_directions <- function(variant) {
@@ -542,163 +376,128 @@ variant_directions <- function(variant) {
 }
 
 
-#' The directions on offer this step
+#' The paths on offer this step, each with its first-order value
 #'
-#' One path per requested direction, unavailable ones dropped, each carrying the
-#' first-order value \eqn{\langle -\nabla f, d \rangle}{<-grad f, d>} that
-#' `apply_step` chooses on. Since \eqn{\nabla f = -G}{grad f = -G} and
-#' \eqn{\sum_c w_c G_c = 1}{sum_c w_c G_c = 1}, all three read off `atom_g()`:
-#' forward is \eqn{G_s - 1}{G_s - 1}, the Frank--Wolfe gap; away is
-#' \eqn{1 - G_v}{1 - G_v}; pairwise is \eqn{G_s - G_v}{G_s - G_v}, which is
-#' their sum and so always the largest of the three.
-#'
-#' The set names a choice rather than a single move: `"forward"` alone is
-#' vanilla Frank--Wolfe, `c("forward", "away")` is away-step Frank--Wolfe with
-#' its usual selection rule, `"pairwise"` is pairwise Frank--Wolfe.
-#'
-#' Only `"away"` can be unavailable, and only below two active atoms. Asking for
-#' it alone in that state is an error rather than a silent fallback -- a
-#' fallback is what previously made `"away"` behave as pairwise while its
-#' documentation claimed forward.
-#' @return A non-empty list of `weight_path`s.
+#' Since \eqn{\nabla f = -G}{grad f = -G} and
+#' \eqn{\sum_c w_c G_c = 1}{sum_c w_c G_c = 1}: forward is \eqn{G_s - 1}{G_s - 1}
+#' (the Frank--Wolfe gap), away \eqn{1 - G_v}{1 - G_v}, pairwise
+#' \eqn{G_s - G_v}{G_s - G_v}. Only away can be unavailable (below two active
+#' atoms), and is then dropped.
 #' @keywords internal
 #' @noRd
-step_paths <- function(directions, ld_all, w, new_idx, log_p, engine) {
+step_paths <- function(directions, ld_all, w, log_p, engine) {
   g <- atom_g(ld_all, log_p, engine)
+  g_new <- g[length(g)]
   worst <- worst_of(g, w)
   paths <- lapply(directions, function(d) {
     switch(
       d,
-      forward = path_forward(ld_all, w, new_idx, log_p, g[new_idx] - 1),
+      forward = path_forward(ld_all, w, log_p, g_new - 1),
       # `worst` is NULL below two active atoms; pairwise then uses the single
       # active atom and coincides with forward. See `path_pairwise`.
       pairwise = {
         v <- if (is.null(worst)) which(w > 0)[1L] else worst
-        path_pairwise(ld_all, w, new_idx, log_p, v, g[new_idx] - g[v])
+        path_pairwise(ld_all, w, log_p, v, g_new - g[v])
       },
       away = if (!is.null(worst)) {
-        path_away(ld_all, w, new_idx, log_p, worst, 1 - g[worst])
+        path_away(ld_all, w, log_p, worst, 1 - g[worst])
       }
     )
   })
-  paths <- Filter(Negate(is.null), paths)
-  if (!length(paths)) {
-    stop(
-      "`away` needs a second active atom to move mass to.",
-      call. = FALSE
-    )
-  }
-  paths
+  # `away` is only ever offered alongside `forward`, so dropping it when
+  # there is no second active atom still leaves a path.
+  Filter(Negate(is.null), paths)
 }
 
 
-#' The open-loop step size, for `size = "fixed"`
+#' The open-loop step size `2 / (k + 2)`, for `size = "fixed"`
 #'
-#' The alternative to `line_search()`: a step size fixed in advance rather than
-#' chosen by minimising KL along the path. Used only to be consistent with the
-#' algorithms in the classical literature. There they assign a weight of
-#' `2 / (k+2)`, where `k` counts the number of iterations.
-#'
-#' Since we allow warm-starts with a few atoms in the support at iteration 0,
-#' we start at `k` equal to the number of atoms in the initial support, and
-#' increase `k` whenever we apply an oracle step (i.e. for both `lb_step` and
-#' `fw_step`).
+#' `k` starts at the initial support size (warm starts) and counts every
+#' oracle step (`fw` and `lb` rows). Jaggi's `2/(k+2)` from 0 and Li--Barron's
+#' `2/(k+1)` from 1 are the same sequence.
 #' @references
 #'   \insertRef{Jaggi2013}{ripr}
 #'
 #'   \insertRef{LiBarron1999}{ripr}
 #' @keywords internal
 #' @noRd
-schedule_index <- function(state) {
-  state@iters[["fw"]] +
-    state@iters[["lb"]] +
-    state@trace$support_size[1L]
-}
-
-
-schedule_gamma <- function(k) {
-  # Jaggi's 2/(k+2) from k = 0 and Li--Barron's 2/(k+1) from k = 1 are the same
-  # sequence; the lineages differ in the oracle, not the schedule. `k` counts
-  # from 0 here, so it is the former.
+schedule_gamma <- function(state) {
+  rows <- state@trace_rows
+  phase <- vapply(rows, .subset2, character(1), "phase")
+  k <- sum(phase %in% c("fw", "lb")) + rows[[1L]]$support_size
   2 / (k + 2)
 }
 
 
 #' Minimise KL along a step path
 #'
-#' `gamma = 0` is always in range, so no step can increase KL.
+#' KL is convex along every path, so a path whose first-order `value` is not
+#' positive cannot descend and the step is 0. Otherwise `gamma = 0` stays in
+#' range and wins ties, so no step can increase KL or move for nothing.
 #' @keywords internal
 #' @noRd
-line_search <- function(log_p_at, gamma_max, engine) {
-  if (!is.finite(gamma_max) || gamma_max <= 0) {
+line_search <- function(path, engine) {
+  gamma_max <- path$gamma_max
+  if (path$value <= 0 || !is.finite(gamma_max) || gamma_max <= 0) {
     return(0)
   }
-  kl <- \(gamma) expect_q(engine, engine@log_q - log_p_at(gamma))
+  kl <- \(gamma) kl_at(engine, path$log_p_at(gamma))
   found <- stats::optimize(kl, interval = c(0, gamma_max), tol = 1e-12)
-  if (kl(gamma_max) <= found$objective) gamma_max else found$minimum
+  best <- if (kl(gamma_max) <= found$objective) gamma_max else found$minimum
+  if (kl(best) < kl(0)) best else 0
 }
 
 
-#' Take one step, without a state and without a trace
+#' Take one step, without a state or trace
 #'
-#' `size = "fixed"` does not search, taking `gamma_fixed` capped at the path's
-#' own maximum -- the cap matters, since pairwise and away cap below 1 and an
-#' uncapped schedule value would leave the simplex.
-#' @return `list(weights, log_p, kl, gamma, direction, uses_candidate)`, with
-#'   `weights` of length `C + 1`.
+#' `size = "fixed"` caps `gamma_fixed` at the path's own maximum, since
+#' pairwise and away cap below 1. Returns `list(weights, log_p, kl, gamma,
+#' direction, uses_candidate)`, `weights` of length `C + 1`.
 #' @keywords internal
 #' @noRd
 apply_step <- function(
   ld_all,
   w,
-  new_idx,
   log_p,
   engine,
   directions = "forward",
   size = "line-search",
   gamma_fixed = NULL
 ) {
-  paths <- step_paths(directions, ld_all, w, new_idx, log_p, engine)
+  paths <- step_paths(directions, ld_all, w, log_p, engine)
   path <- paths[[which.max(vapply(paths, \(p) p$value, numeric(1)))]]
 
   gamma <- if (size == "fixed") {
     min(gamma_fixed, path$gamma_max)
   } else {
-    line_search(path$log_p_at, path$gamma_max, engine)
+    line_search(path, engine)
   }
   stepped <- path$log_p_at(gamma)
   weights <- pmax(path$w_of(gamma), 0)
   list(
     weights = weights,
     log_p = stepped,
-    kl = expect_q(engine, engine@log_q - stepped),
+    kl = kl_at(engine, stepped),
     gamma = gamma,
     direction = path$direction,
-    # Derived, not declared: the candidate is used exactly when it ends with
-    # weight. False for away, which never touches it, and for any search that
-    # put nothing there.
-    uses_candidate = weights[new_idx] > 0
+    # False for away, and for any search that put nothing on the candidate.
+    uses_candidate = weights[length(weights)] > 0
   )
 }
 
 
 # --- Fully corrective weights -------------------------------------------------
 
-#' One multiplicative sweep on the mixture weights
+#' One multiplicative sweep \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)}
 #'
-#' \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)}: the exact M-step
-#' for the weights with the atoms fixed, and the MM algorithm for the convex
-#' problem of minimising KL over the simplex. Monotone by construction, so
-#' nothing needs checking afterwards.
-#'
-#' `residual` is \eqn{\max_c G(\theta_c) - 1}{max_c G(theta_c) - 1}, measured
-#' *before* the sweep. It is the Frank--Wolfe gap of the restricted problem over
-#' the current support, so it is a bona fide upper-bound for how much KL is
-#' still available by optimising weights.
+#' The exact M-step for the weights (an MM algorithm), monotone by construction.
+#' `residual`, \eqn{\max_c G_c - 1}{max_c G_c - 1} before the sweep, is the
+#' Frank--Wolfe gap over the current support: an upper bound on the KL still
+#' available from reweighting.
 #' @keywords internal
 #' @noRd
 weight_sweep <- function(ld_all, w, log_p, engine) {
-  g <- exp(col_logsumexp(ld_all - log_p + engine@log_w))
+  g <- atom_g(ld_all, log_p, engine)
   # `sum_c w_c G_c = 1` identically, so the result needs no renormalisation.
   list(weights = w * g, residual = max(g) - 1)
 }
@@ -706,43 +505,37 @@ weight_sweep <- function(ld_all, w, log_p, engine) {
 
 #' Re-optimise every weight over the current atoms
 #'
-#' Stops on the KKT residual, not on the change in KL. A `dKL` rule cannot tell
-#' convergence from crawling.
-#'
-#' It is likely that `max_iter` will be reached. The convergence rate depends on
-#' how close the atoms are to one another, and we often place new atoms near old
-#' ones, so it degrades as the fit proceeds. This is a budget, not a correctness
-#' condition: fully-corrective Frank--Wolfe re-corrects on the next step either
-#' way.
-#' @param tol Stop when the residual falls below this.
-#' @param max_iter Cap on sweeps.
+#' Minimises `KL(Q || P_w)` over the simplex with the atoms fixed, a smooth
+#' convex problem, by SLSQP. Each row of the likelihoods is scaled by its
+#' maximum, which shifts the objective by a constant, so nothing overflows.
+#' `tol` is SLSQP's relative tolerance on the weights and `max_iter` its cap on
+#' evaluations.
 #' @keywords internal
 #' @noRd
 solve_weights <- function(ld_all, w, engine, tol, max_iter) {
-  log_p <- mixture_log_p(ld_all, w)
-  for (k in seq_len(max_iter)) {
-    sweep <- weight_sweep(ld_all, w, log_p, engine)
-    if (sweep$residual < tol) {
-      break
-    }
-    w <- sweep$weights
-    # The atoms do not move, so only the mixture is rebuilt, not `ld_all`.
-    log_p <- mixture_log_p(ld_all, w)
-  }
-  w
+  row_max <- matrixStats::rowMaxs(ld_all)
+  a <- exp(ld_all - ifelse(is.finite(row_max), row_max, 0))
+  q <- exp(engine@log_w)
+  x <- nloptr::slsqp(
+    w,
+    fn = function(x) -sum(q * log(as.vector(a %*% x))),
+    gr = function(x) -as.vector(crossprod(a, q / as.vector(a %*% x))),
+    lower = numeric(length(w)),
+    heq = function(x) sum(x) - 1,
+    heqjac = function(x) matrix(1, nrow = 1L, ncol = length(x)),
+    control = list(xtol_rel = tol, maxeval = max_iter)
+  )$par
+  # SLSQP meets its bounds to rounding; snap those to exact zeros so they drop.
+  x[x < 1e-12 * max(x)] <- 0
+  normalise_weights(x)
 }
 
 
 # --- EM -----------------------------------------------------------------------
 
-#' One EM sweep: weights, then atoms: weights, then atoms
+#' One EM sweep: weights, then atoms
 #'
-#' Weights first, because the atom M-step conditions on the responsibilities and
-#' those are sharper once the weights have been updated.
-#'
-#' Always both halves. Moving only the weights is the corrective step, reached
-#' through `solve_weights` with its own convergence test rather than by
-#' running this a fixed number of times.
+#' Weights first, since the atom M-step conditions on responsibilities.
 #' @keywords internal
 #' @noRd
 em_sweep <- function(state, ld) {
@@ -751,76 +544,56 @@ em_sweep <- function(state, ld) {
 }
 
 
-#' Responsibility of each atom for each node
-#'
-#' `r_ic = w_c p_c(x_i) / P(x_i)`, so rows sum to 1.
+#' Responsibilities `r_ic = w_c p_c(x_i) / P(x_i)`; rows sum to 1
 #' @keywords internal
 #' @noRd
 em_responsibilities <- function(state, ld) {
-  log_comp <- add_by_col(ld(flat_atoms(state)), log(flat_weights(state)))
-  exp(log_comp - row_logsumexp(log_comp))
+  ld_all <- ld(state@mixing@atoms)
+  w <- state@mixing@weights
+  exp(add_by_col(ld_all - mixture_log_p(ld_all, w), log(w)))
 }
 
 
-#' The M-step for the weights
+#' The M-step for the weights, \eqn{w_c \leftarrow E_Q[r_c]}{w_c <- E_Q[r_c]}
 #'
-#' \eqn{w_c \leftarrow E_Q[r_c]}{w_c <- E_Q[r_c]}, which is the column sums of
-#' the weighted responsibilities. Equal to the multiplicative update
-#' `weight_sweep` performs, reached from the other direction:
-#' \eqn{E_Q[r_c] = w_c G(\theta_c)}{E_Q[r_c] = w_c G(theta_c)}.
-#'
-#' @param wt `(M, C)` responsibilities scaled by the quadrature weights.
+#' Equals `weight_sweep()`, since \eqn{E_Q[r_c] = w_c G(\theta_c)}{E_Q[r_c] = w_c G(theta_c)}.
+#' `wt` is the `(M, C)` responsibilities scaled by the quadrature weights.
 #' @keywords internal
 #' @noRd
 em_weight_step <- function(state, wt) {
   new_w <- colSums(wt)
   # Sums to 1 already, since the rows of `wt` sum to the quadrature weights.
-  set_weights(state, new_w / sum(new_w))
+  set_mixture(state, weights = new_w / sum(new_w))
 }
 
 
 #' The M-step for the atoms
 #'
-#' Each atom maximises its own responsibility-weighted log-likelihood over the
-#' part that holds it. Migrating between *parts* stays out of scope:
-#' `state@atoms` is part-indexed, and moving support across parts is the
-#' oracle's job.
-#'
-#' Local only: seeded at the current atom with no random starts. Exploration is
-#' the oracle's job, and a global search here would let atoms teleport between
-#' sweeps.
-#'
-#' @inheritParams em_weight_step
+#' Each atom maximises its responsibility-weighted log-likelihood within its
+#' own part, locally from where it is.
 #' @keywords internal
 #' @noRd
 em_atom_step <- function(state, ld, wt) {
   engine <- state@engine
   family <- engine@family
-  atoms_flat <- flat_atoms(state)
-  if (ncol(atoms_flat) == 0L) {
+  atoms <- state@mixing@atoms
+  if (nrow(atoms) == 0L) {
     return(state)
   }
-  idx <- flat_part(state)
 
-  moved <- vapply(
-    seq_len(ncol(atoms_flat)),
+  moved <- lapply(
+    seq_len(nrow(atoms)),
     function(c_i) {
-      # Only nodes this atom is responsible for. A node it gives zero
-      # probability to has both zero responsibility and `-Inf` log density, and
-      # `0 * -Inf` is `NaN` rather than the 0 the term is worth under the usual
-      # `0 log 0 = 0` convention. Dropping those nodes changes no value, since
-      # responsibilities are held fixed through the M-step, and keeps the
-      # objective finite where an atom sits on the boundary of its support --
-      # which the chart represents exactly, and where an M-step optimum
-      # genuinely lands whenever a category's responsibility-weighted counts
-      # are all zero -- as well as for any family whose support moves with the
-      # parameter.
+      # Drop nodes with zero responsibility: their log density may be `-Inf`,
+      # and `0 * -Inf` is NaN rather than 0. Responsibilities are fixed, so no
+      # value changes, and the objective stays finite for atoms on the
+      # boundary of their support (where M-step optima genuinely land).
       keep <- wt[, c_i] > 0
       w_c <- wt[keep, c_i]
       nodes_c <- engine@nodes[keep, , drop = FALSE]
       obj <- objective(
         value = function(theta) {
-          sum(w_c * as.vector(ld(matrix(theta, ncol = 1L)))[keep])
+          sum(w_c * as.vector(ld(matrix(theta, nrow = 1L)))[keep])
         },
         grad = function(theta) {
           as.vector(crossprod(score(family, theta, nodes_c), w_c))
@@ -830,34 +603,36 @@ em_atom_step <- function(state, ld, wt) {
         }
       )
       res <- maximise_over(
-        parts(state@null@region)[[idx[c_i]]],
+        parts(state@null@region)[[state@part[c_i]]],
         obj,
-        seeds = atoms_flat[, c_i, drop = FALSE],
+        seeds = atoms[c_i, , drop = FALSE],
         n_seeds = 0L,
         n_restarts = 1L
       )
       # A step that found nothing finite learned nothing: keep the atom.
-      if (is.finite(res$value)) res$theta else atoms_flat[, c_i]
-    },
-    numeric(nrow(atoms_flat))
+      if (is.finite(res$value)) res$theta else atoms[c_i, ]
+    }
   )
-  state@atoms <- unflatten_atoms(state, matrix(moved, nrow = nrow(atoms_flat)))
-  state
+  set_mixture(
+    state,
+    atoms = matrix(
+      unlist(moved, use.names = FALSE),
+      nrow = nrow(atoms),
+      byrow = TRUE
+    )
+  )
 }
 
 
 # --- Step verbs ---------------------------------------------------------------
 
-#' Search every cell and keep the best candidate
+#' Search every cell; return the best `theta`, `value` and `part`
 #'
-#' Returns the part index, its maximiser, and the attained value. `seeds`
-#' defaults to the current atoms: the identity `sum_c w_c G(theta_c) = 1` forces
-#' `max_c G(theta_c) >= 1`, so including them stops the search reporting a
-#' maximum below one. A caller sweeping over a mixture the state no longer holds
-#' passes its own.
+#' `seeds` defaults to the current atoms: `sum_c w_c G(theta_c) = 1` forces
+#' `max_c G(theta_c) >= 1`, so including them keeps the maximum at least one.
 #' @keywords internal
 #' @noRd
-search_null <- function(state, obj, seeds = flat_atoms(state)) {
+search_null <- function(state, obj, seeds = state@mixing@atoms) {
   ctl <- state@control
   found <- lapply(
     state@null@cells,
@@ -878,18 +653,16 @@ search_null <- function(state, obj, seeds = flat_atoms(state)) {
 
 #' Write a planned step back to the state
 #'
-#' The candidate becomes an atom only if the step gave it weight; `"away"` never
-#' does, and neither does a search that settled on `gamma = 0`. Incumbent atoms
-#' driven towards zero stay, since only an oracle can grow the support back.
+#' The candidate joins only if the step weighted it. Incumbents driven towards
+#' zero stay, since only an oracle can grow the support back.
 #' @keywords internal
 #' @noRd
 commit_step <- function(state, theta, part, planned) {
   stepped <- if (planned$uses_candidate) {
     add_atom(state, theta, part, planned$weights)
   } else {
-    set_weights(state, planned$weights[-planned$new_idx])
+    set_mixture(state, weights = planned$weights[-length(planned$weights)])
   }
-  # A drop step is a removal, not a zeroing. See `drop_empty()`.
   drop_empty(stepped)
 }
 
@@ -897,10 +670,6 @@ commit_step <- function(state, theta, part, planned) {
 # --- Support identification ---------------------------------------------------
 
 #' Log density with atom `c_i` removed and the rest renormalised
-#'
-#' Adjusts the existing mixture rather than rebuilding it from components, so
-#' `O(M)` instead of `O(MC)`. `identify_support()` tests every candidate, which
-#' would otherwise make a pass `O(MC^2)`.
 #' @keywords internal
 #' @noRd
 log_p_without <- function(log_p, ld_c, w_c) {
@@ -913,24 +682,16 @@ log_p_without <- function(log_p, ld_c, w_c) {
 
 #' Zero every atom whose removal does not increase KL
 #'
-#' One pass in ascending weight order, each removal applied before the next is
-#' tested. Lightest first because those are the likeliest removals, and applying
-#' as we go means the later tests see the mass already redistributed.
+#' One pass, lightest first, each applied before the next test.
 #'
-#' Exact where a weight threshold is arbitrary: an atom carrying weight far
-#' above any sensible floor can still be strictly better removed, and the KKT
-#' screen \eqn{G < 1}{G < 1} over-identifies when the iterate has not converged.
-#' The screen only shortlists; the KL comparison decides.
-#'
-#' **Only safe once the atoms have stopped moving.** Nothing can restore a
-#' zeroed atom -- the multiplicative update maps zero to zero, and an oracle
-#' will not re-propose a point whose `G` is below one. Run mid-fit it ratchets
-#' the support down and raises KL.
+#' **Only safe once the atoms have stopped moving.** Nothing restores a zeroed
+#' atom (an oracle will not re-propose a point with `G < 1`), so mid-fit it
+#' ratchets KL up.
 #' @keywords internal
 #' @noRd
 identify_support <- function(ld_all, w, engine) {
   log_p <- mixture_log_p(ld_all, w)
-  kl <- expect_q(engine, engine@log_q - log_p)
+  kl <- kl_at(engine, log_p)
 
   for (c_i in order(w)) {
     active <- which(w > 0)
@@ -938,7 +699,7 @@ identify_support <- function(ld_all, w, engine) {
       next
     }
     trial <- log_p_without(log_p, ld_all[, c_i], w[c_i])
-    kl_trial <- expect_q(engine, engine@log_q - trial)
+    kl_trial <- kl_at(engine, trial)
     if (kl_trial <= kl) {
       w[c_i] <- 0
       w <- w / sum(w)

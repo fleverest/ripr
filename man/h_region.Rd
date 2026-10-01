@@ -17,11 +17,9 @@ h_region(a, b, eq = FALSE)
 A \code{\link[=polyhedron_region]{polyhedron_region()}}.
 }
 \description{
-The dual constructor to \code{\link[=polyhedron_region]{polyhedron_region()}}: the set
-\code{{theta : a \%*\% theta <= b}}, with \code{eq} flagging rows that hold with
-equality (e.g. \code{sum(theta) == 1}). The generators are derived by one exact
-double-description step, and the rows given here are kept as the region's
-facets exactly as declared.
+The set \code{{theta : a \%*\% theta <= b}}, with \code{eq} flagging equality rows
+(e.g. \code{sum(theta) == 1}). The rows are kept as the region's facets; the
+generators are derived exactly.
 }
 \examples{
 # The unit square in R^2:

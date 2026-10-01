@@ -2,29 +2,12 @@
 #' @include polyhedra.R
 NULL
 
-# --- Shared coordinate helpers ------------------------------------------------
-
-#' Euclidean projection onto the probability simplex
-#'
-#' Duchi et al. (2008); exact up to floating point, not iterative.
-#' @keywords internal
-#' @noRd
-project_simplex <- function(y) {
-  u <- sort(y, decreasing = TRUE)
-  css <- cumsum(u)
-  rho <- max(which(u + (1 - css) / seq_along(u) > 0))
-  pmax(y + (1 - css[rho]) / rho, 0)
-}
-
-
 # --- Polyhedron region --------------------------------------------------------
 
 #' Assemble and check a generator triple
 #'
-#' Shapes constructor input into the `list(v, r, l)` the class stores: `NULL`
-#' blocks become empty, and a cone with no vertex is anchored at the origin by
-#' `with_origin_vertex()`. Content validation (finiteness, agreeing dimensions)
-#' is the validator's job; this only refuses what it cannot shape.
+#' Shapes input into `list(v, r, l)`: `NULL` blocks become empty and a cone is
+#' anchored at the origin. Content checks are the validator's job.
 #' @keywords internal
 #' @noRd
 make_generators <- function(vertices, rays, lines) {
@@ -37,11 +20,11 @@ make_generators <- function(vertices, rays, lines) {
   }
   if (!all(vapply(given, is.matrix, logical(1)))) {
     stop(
-      "generators must be matrices, one generator per column.",
+      "generators must be matrices, one generator per row.",
       call. = FALSE
     )
   }
-  d <- nrow(given[[1L]])
+  d <- ncol(given[[1L]])
   as_block <- function(x) {
     if (is.null(x)) no_generators(d) else x
   }
@@ -51,77 +34,47 @@ make_generators <- function(vertices, rays, lines) {
 }
 
 
-#' Derive the exact facet matrix at construction, within a size guard
-#'
-#' Facet count is combinatorial in the generator count in the worst case, and
-#' the construction-time measurements stop at 16 vertices in R^5. The
-#' constructor leaves `@facets` NULL and `h_rep()` derives on demand instead.
-#' Returns the rational matrix directly. The record keeps it, so the exact work
-#' is done once rather than recomputed.
-#' @keywords internal
-#' @noRd
-derive_qfacets <- function(qv, n_generators, guard = 100L) {
-  if (n_generators > guard) {
-    return(NULL)
-  }
-  q_scdd(qv)
-}
-
-
 #' A convex polyhedron given by its generators
 #'
-#' The concrete base of every convex region in the package: the Minkowski--Weul
-#' form \eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone(R) + span(L)}.
+#' The Minkowski--Weyl form
+#' \eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone(R) + span(L)}
+#' (Ziegler 1995, Theorem 1.2), base of every convex region in the package.
 #' [polytope_region()], [simplex_region()], [halfspace_region()],
-#' [point_region()] and [real_region()] are all special cases that
-#' have friendlier constructors and do extra validation; use this one when
-#' you know the generators themselves, or [h_region()] if you have the
-#' H-representation.
+#' [point_region()] and [real_region()] are friendlier special cases; use
+#' [h_region()] to start from a half-space description.
 #'
-#' The [chart()] defines the generator map:
-#' \deqn{\theta(u) = V a + L z + R c}{theta(u) = V a + L z + R c}
-#' with coordinates `u = (a, z, c)` ordered vertex weights, then lineality,
-#' then rays, and the constraints `a >= 0`, `sum(a) = 1` and `c >= 0` declared
-#' to the optimiser rather than substituted away. A lone vertex contributes no
+#' The [chart()] is \eqn{\theta(u) = a V + z L + c R}{theta(u) = a V + z L + c R}
+#' with `u = (a, z, c)` (vertex weights, lineality, rays), subject to
+#' `a >= 0`, `sum(a) = 1` and `c >= 0`. A lone vertex contributes no
 #' coordinate, so `n_par = nv + nl + nr` when `nv > 1` and `nl + nr`
-#' otherwise. That every polyhedron admits such a generator form, dually to
-#' its H-representation, is the Minkowski--Weyl theorem (Ziegler 1995,
-#' Theorem 1.2).
+#' otherwise.
 #'
-#' @param vertices `(d, nv)` numeric matrix, one vertex per column, or `NULL`
+#' @param vertices `(nv, d)` numeric matrix, one vertex per row, or `NULL`
 #'   for a cone anchored at the origin.
-#' @param rays `(d, nr)` numeric matrix of recession directions, or `NULL`.
-#' @param lines `(d, nl)` numeric matrix spanning the lineality space, or
-#'   `NULL`.
+#' @param rays `(nr, d)` numeric matrix of recession directions, one per row,
+#'   or `NULL`.
+#' @param lines `(nl, d)` numeric matrix whose rows span the lineality space,
+#'   or `NULL`.
 #' @param .hv Internal use only.
 #' @return A `polyhedron_region`.
 #' @section Properties:
 #' \describe{
 #'   \item{`generators`}{`list(v, r, l)` of numeric matrices, one generator
-#'   per column. Read-only: derived from the static underlying record.}
+#'   per row. Read-only: derived from the static underlying record.}
 #'   \item{`facets`}{The half-space description `(A, B, eq)`, read as
 #'   `a %*% theta <= b` for each row, with `eq` flagging when equality
-#'   should hold rather than inequality for each row. `facets` may be `NULL`
-#'   if it has not yet been derived. Read-only.}
-#'   \item{`hv`}{The internal dual-representation record the views above
-#'   read from, holding both descriptions in both double and rational forms.
-#'   This is computed once at construction so that downstream computations
-#'   don't start from a rounding.}
+#'   should hold rather than inequality for each row. Read-only.}
+#'   \item{`hv`}{Internal record of both descriptions in double and exact
+#'   rational form, computed once at construction.}
 #' }
 #' @references
 #'   \insertRef{Ziegler1995}{ripr}
-#'
-#'   \insertRef{BeckTeboulle2009}{ripr}
-#'
-#'   \insertRef{DuchiShalevShwartz2008}{ripr}
-#'
-#'   \insertRef{ODonoghueCandes2015}{ripr}
 #' @examples
 #' # The halfspace `{theta_1 <= 0}` in R^2, by hand:
 #' polyhedron_region(
-#'   vertices = matrix(c(0, 0), ncol = 1),
-#'   rays = matrix(c(-1, 0), ncol = 1),
-#'   lines = matrix(c(0, 1), ncol = 1)
+#'   vertices = matrix(c(0, 0), nrow = 1),
+#'   rays = matrix(c(-1, 0), nrow = 1),
+#'   lines = matrix(c(0, 1), nrow = 1)
 #' )
 #' @export
 polyhedron_region <- new_class(
@@ -134,7 +87,7 @@ polyhedron_region <- new_class(
       getter = function(self) self@hv@v
     ),
     facets = new_property(
-      class_any,
+      class_list,
       getter = function(self) self@hv@h
     )
   ),
@@ -154,10 +107,8 @@ polyhedron_region <- new_class(
       }
       return(new_object(S7_object(), hv = .hv))
     }
-    # Every region carries its exact rational representations, generated at
-    # construction. This way set operations stay exact.
     g <- make_generators(vertices, rays, lines)
-    new_object(S7_object(), hv = hv_from_v(g))
+    new_object(S7_object(), hv = hv_fill(v = g))
   },
   validator = function(self) {
     g <- self@generators
@@ -167,7 +118,7 @@ polyhedron_region <- new_class(
     if (!all(vapply(g, \(x) is.matrix(x) && is.numeric(x), logical(1)))) {
       return("every generator block must be a numeric matrix")
     }
-    dims <- vapply(g, nrow, integer(1))
+    dims <- vapply(g, ncol, integer(1))
     if (length(unique(dims)) > 1L) {
       return(paste0(
         "generator blocks disagree on the ambient dimension: ",
@@ -177,20 +128,21 @@ polyhedron_region <- new_class(
     if (!all(vapply(g, \(x) all(is.finite(x)), logical(1)))) {
       return("every generator coordinate must be finite")
     }
-    if (ncol(g$v) == 0L) {
+    if (nrow(g$v) == 0L) {
       return("`generators$v` must hold at least one point")
     }
+    if (any(rowSums(rbind(g$r, g$l) != 0) == 0L)) {
+      return("every ray and line must be nonzero")
+    }
     f <- self@facets
-    if (!is.null(f)) {
-      if (!is.list(f) || !all(c("a", "b", "eq") %in% names(f))) {
-        return("`facets` must be NULL or a list with `a`, `b` and `eq`")
-      }
-      if (!is.matrix(f$a) || ncol(f$a) != nrow(g$v)) {
-        return("`facets$a` must have one column per ambient dimension")
-      }
-      if (length(f$b) != nrow(f$a) || length(f$eq) != nrow(f$a)) {
-        return("`facets` must have one `b` and one `eq` entry per row of `a`")
-      }
+    if (!all(c("a", "b", "eq") %in% names(f))) {
+      return("`facets` must be a list with `a`, `b` and `eq`")
+    }
+    if (!is.matrix(f$a) || ncol(f$a) != ncol(g$v)) {
+      return("`facets$a` must have one column per ambient dimension")
+    }
+    if (length(f$b) != nrow(f$a) || length(f$eq) != nrow(f$a)) {
+      return("`facets` must have one `b` and one `eq` entry per row of `a`")
     }
     NULL
   }
@@ -199,11 +151,9 @@ polyhedron_region <- new_class(
 
 #' A convex polyhedron given by its half-space description
 #'
-#' The dual constructor to [polyhedron_region()]: the set
-#' `{theta : a %*% theta <= b}`, with `eq` flagging rows that hold with
-#' equality (e.g. `sum(theta) == 1`). The generators are derived by one exact
-#' double-description step, and the rows given here are kept as the region's
-#' facets exactly as declared.
+#' The set `{theta : a %*% theta <= b}`, with `eq` flagging equality rows
+#' (e.g. `sum(theta) == 1`). The rows are kept as the region's facets; the
+#' generators are derived exactly.
 #'
 #' @param a `(m, d)` numeric matrix of facet normals, one constraint per row.
 #' @param b Numeric right-hand side, length `m`.
@@ -238,59 +188,79 @@ h_region <- function(a, b, eq = FALSE) {
       call. = FALSE
     )
   }
-  polyhedron_region(.hv = hv_from_h(h))
+  polyhedron_region(.hv = hv_fill(h = h))
 }
 
 
 method(space_dim, polyhedron_region) <- function(space) {
-  nrow(space@generators$v)
+  ncol(space@generators$v)
 }
 
 
-method(v_rep, polyhedron_region) <- function(space) {
-  # The generators as declared, not as cddlib would return them: a redundant
-  # vertex stays.
-  space@generators
-}
+# --- Representations ----------------------------------------------------------
 
-
-method(q_vrep, polyhedron_region) <- function(space) {
-  space@hv@qv
-}
-
-
-method(h_rep, polyhedron_region) <- function(space) {
-  f <- space@facets
-  if (!is.null(f)) {
-    return(f)
+#' Refuse anything but a `polyhedron_region` a representation
+#' @keywords internal
+#' @noRd
+check_polyhedron <- function(space, what) {
+  if (S7_inherits(space, polyhedron_region)) {
+    return(invisible(space))
   }
-  v_to_h(space@generators)
+  got <- if (S7_inherits(space)) class_name(space) else class(space)
+  stop(
+    "`",
+    what,
+    "()` is defined only for a `polyhedron_region`, not a `",
+    got[[1L]],
+    "`. Take the representation of each of `parts()` or `cells()` instead.",
+    call. = FALSE
+  )
 }
 
 
-# The record already holds the exact H whenever one was derived; only above
-# the facet guard is it absent, and a facet *derived* from a vertex rep in
-# general position is an exact rational a double cannot hold, so the on-demand
-# path re-runs the exact conversion rather than re-rationalising `@facets`.
-method(q_hrep, polyhedron_region) <- function(space) {
-  if (!is.null(space@hv@qh)) {
-    return(space@hv@qh)
-  }
-  # Only above the facet guard: the exact H was never derived, so derive on
-  # demand without keeping it (S7 value semantics leave nowhere to put it).
-  q_scdd(q_vrep(space))
+#' The half-space description of a region
+#'
+#' `list(a, b, eq)` read as `a %*% theta <= b`, `eq` marking equality rows.
+#' @keywords internal
+#' @noRd
+h_rep <- function(space) check_polyhedron(space, "h_rep")@facets
+
+
+#' The generator description of a region
+#'
+#' `list(v, r, l)`, one generator per row, as declared (redundant vertices
+#' stay). Rays are determined only modulo the lineality space.
+#' @keywords internal
+#' @noRd
+v_rep <- function(space) check_polyhedron(space, "v_rep")@generators
+
+
+#' The rational H- and V-representations of a region
+#'
+#' Exact rcdd matrices under `h_rep()`/`v_rep()`. For [real_region] `q_hrep()`
+#' is the row `0 . x <= 1` while `h_rep()` has no rows.
+#' @keywords internal
+#' @noRd
+q_hrep <- function(space) check_polyhedron(space, "q_hrep")@hv@qh
+
+
+#' @keywords internal
+#' @noRd
+q_vrep <- function(space) check_polyhedron(space, "q_vrep")@hv@qv
+
+
+method(is_empty, polyhedron_region) <- function(space) {
+  q_is_empty(q_hrep(space))
 }
 
 
 method(is_bounded, polyhedron_region) <- function(space) {
-  ncol(space@generators$r) == 0L && ncol(space@generators$l) == 0L
+  nrow(space@generators$r) == 0L && nrow(space@generators$l) == 0L
 }
 
 
 method(contains, polyhedron_region) <- function(space, theta, tol = 1e-8) {
-  # Facet violation, normalised by row norm so the tolerance means the same
-  # thing on every facet. Equality rows describe the affine hull and are
-  # tested two-sided.
+  # Normalised by row norm so `tol` is a distance on every facet.
   h <- h_rep(space)
   slack <- as.numeric(h$a %*% theta) - h$b
   scale <- sqrt(rowSums(h$a^2))
@@ -300,122 +270,94 @@ method(contains, polyhedron_region) <- function(space, theta, tol = 1e-8) {
 
 #' Solve for a point's least-squares weights over a generator triple
 #'
-#' Minimises `|| V a + L z + R c - theta ||^2` over `a` in the simplex,
-#' `c >= 0`, `z` free. The minimiser's image `V a + L z + R c` is the
-#' Euclidean projection of `theta` onto the polyhedron, so one solve serves
-#' both [project()] and the chart's `from_theta()`.
-#'
-#' Two paths. The direct path substitutes the simplex's affine constraint out,
-#' `a = (1 - sum(b), b)`, and solves the remaining least squares by a min-norm
-#' SVD solve; the solution is kept whenever it lands in the constraint set,
-#' which it does for every point of a region whose vertices are affinely
-#' independent -- every simplex cell, in particular -- making the common case
-#' exact and non-iterative. Otherwise (a redundant vertex set, or `theta`
-#' outside the region) fall through to accelerated projected gradient with
-#' per-block proximal steps: simplex projection on `a` (Duchi et al. 2008), a
-#' non-negative clamp on `c`, nothing on `z`. FISTA acceleration (Beck and
-#' Teboulle 2009) with the momentum reset whenever it points uphill
-#' (O'Donoghue and Candes 2015), exactly the scheme of the polytope projection
-#' this generalises.
-#'
-#' @param g `list(v, r, l)`, one generator per column.
-#' @param theta Parameter vector.
-#' @param tol The tolerance for whether or not we accept the unconstrained sol.
-#' @param max_it Maximum number of iterations for proj. grad. descent
-#' @return `list(a, z, c, theta_hat)`: the three weight blocks and their image.
+#' Minimises `|| a V + z L + c R - theta ||^2` over `a` in the simplex,
+#' `c >= 0`; the image `theta_hat` is the Euclidean projection, serving both
+#' [project()] and `from_theta()`. Tries the unconstrained least-squares
+#' solution first (exact for any point in a simplex cell), else solves the
+#' quadratic programme with `quadprog` and polishes its answer by re-solving
+#' exactly on the generators it kept.
+#' @return `list(a, z, c, theta_hat)`.
 #' @keywords internal
 #' @noRd
-generator_weights <- function(g, theta, tol = 1e-9, max_it = 20000L) {
-  # Setup vertex, lineality and ray matrices
-  v <- g$v
-  l <- g$l
-  r <- g$r
-  n_v <- ncol(v)
-  n_l <- ncol(l)
-  n_r <- ncol(r)
-
-  # Maps (a, z, c) |-> V a + L z + R c = theta^*, the projection of theta
-  image <- function(a, z, cc) as.numeric(v %*% a + l %*% z + r %*% cc)
-
-  # Now we minimise || theta^* - theta ||^2 subject to the constraints:
-  # 1. sum(a) = 1
-  # 2. a >= 0     : Because a are barycentric coordinates in V
-  # 3. c >= 0    : Because c is a coordinate along a ray, and rays are one-sided
-
-  # First we ignore inequalities and just check if they hold anyway.
-  # The constrained problem is harder, so this is easy to check.
-
-  # We force the constraint on a by setting a = (1-sum(a_2,...) a_2 ...)
-  # writing b = (a_2 ...), a = (1-sum(b), b). Then V a = v_1 + V^- b, with
-  # V^- being all but the first vertex subtracting v_1. Then we solve regular
-  # least-squares and check the constraint.
-  m <- cbind(v[, -1L, drop = FALSE] - v[, 1L], l, r)
-  x <- min_norm_solve(m, theta - v[, 1L])
-  b <- x[seq_len(n_v - 1L)]
-  a <- c(1 - sum(b), b)
-  z <- x[(n_v - 1L) + seq_len(n_l)]
-  cc <- x[(n_v - 1L) + n_l + seq_len(n_r)]
-  # If the constraints hold (or close enough)
-  if (all(a >= -tol) && all(cc >= -tol)) {
-    a <- pmax(a, 0)
-    a <- a / sum(a)
-    cc <- pmax(cc, 0)
-    return(list(a = a, z = z, c = cc, theta_hat = image(a, z, cc)))
+generator_weights <- function(g, theta, tol = 1e-9) {
+  n_v <- nrow(g$v)
+  n_r <- nrow(g$r)
+  exact <- exact_weights(g, theta, seq_len(n_v), seq_len(n_r), tol)
+  if (!is.null(exact)) {
+    return(exact)
   }
 
-  # If any weight in a or c is genuinely negative, then we do a
-  # constrained solve by projected gradient descent.
-
-  # Setup:
-  m <- cbind(v, l, r)
+  # The constrained problem: `sum(a) == 1`, then `a >= 0`, `c >= 0`. A
+  # redundant generator set makes the quadratic term singular, which
+  # `quadprog` refuses, so it gets a ridge far below `tol`.
+  m <- t(rbind(g$v, g$l, g$r))
+  n <- ncol(m)
   i_v <- seq_len(n_v)
-  i_l <- n_v + seq_len(n_l)
-  i_r <- n_v + n_l + seq_len(n_r)
-
-  # Goal: solve argmix_x || M x - theta ||^2 = argmin_x 1/2 || M x - theta ||^2.
-  # Gradient is M'(M x - theta), so solve for x:
-  # M'M x = M' theta
+  i_r <- n - n_r + seq_len(n_r)
   mtm <- crossprod(m)
-  mtt <- as.numeric(crossprod(m, theta))
-  # Lipschitz constant of the gradient of 1/2 || Mx - theta ||^2
-  lip <- max(svd(m)$d)^2
-  # Project a onto simplex, c onto R+ to satisfy constraints
-  prox <- function(x) {
-    x[i_v] <- project_simplex(x[i_v])
-    x[i_r] <- pmax(x[i_r], 0)
-    x
-  }
+  x <- quadprog::solve.QP(
+    Dmat = mtm + diag(1e-12 * max(1, diag(mtm)), n),
+    dvec = as.numeric(crossprod(m, theta)),
+    Amat = cbind(as.numeric(seq_len(n) %in% i_v), diag(n)[, c(i_v, i_r)]),
+    bvec = c(1, rep(0, n_v + n_r)),
+    meq = 1L
+  )$solution
 
-  # Now solve for x starting from default at center of simplex and 0 for c, z.
-  x <- c(rep(1 / n_v, n_v), rep(0, n_l), rep(0, n_r))
-  y <- x # FISTA extrapolated point
-  t_k <- 1 # Momentum counter
-  for (i in seq_len(max_it)) {
-    new_x <- prox(y - (as.numeric(mtm %*% y) - mtt) / lip)
-    if (sum((y - new_x) * (new_x - x)) > 0) {
-      y <- new_x
-      t_k <- 1
-    } else {
-      t_new <- (1 + sqrt(1 + 4 * t_k^2)) / 2
-      y <- new_x + ((t_k - 1) / t_new) * (new_x - x)
-      t_k <- t_new
-    }
-    converged <- max(abs(new_x - x)) < 1e-14
-    x <- new_x
-    if (converged) break
+  # The solver leaves weights of order its tolerance on generators that should
+  # be exactly zero; dropping them and re-solving on the rest is exact.
+  keep_v <- which(x[i_v] > 1e-7)
+  keep_r <- which(x[i_r] > 1e-7)
+  polished <- exact_weights(g, theta, keep_v, keep_r, tol)
+  if (!is.null(polished)) {
+    return(polished)
   }
-  list(
-    a = x[i_v],
-    z = x[i_l],
-    c = x[i_r],
-    theta_hat = image(x[i_v], x[i_l], x[i_r])
-  )
+  a <- pmax(x[i_v], 0)
+  a <- a / sum(a)
+  z <- x[n_v + seq_len(nrow(g$l))]
+  cc <- pmax(x[i_r], 0)
+  list(a = a, z = z, c = cc, theta_hat = generator_image(g, a, z, cc))
+}
+
+
+#' Least squares over a subset of the vertices and rays, or `NULL` if infeasible
+#'
+#' Substitutes `a = (1 - sum(b), b)` so `sum(a) = 1` holds, solves for `b`, and
+#' accepts the result only if `a, c >= 0` anyway. Weights come back full length,
+#' zero off the subset.
+#' @keywords internal
+#' @noRd
+exact_weights <- function(g, theta, keep_v, keep_r, tol) {
+  v <- g$v[keep_v, , drop = FALSE]
+  r <- g$r[keep_r, , drop = FALSE]
+  n_v <- nrow(v)
+  n_l <- nrow(g$l)
+  m <- t(rbind(add_by_col(v[-1L, , drop = FALSE], -v[1L, ]), g$l, r))
+  x <- min_norm_solve(m, theta - v[1L, ])
+  b <- x[seq_len(n_v - 1L)]
+  a_kept <- c(1 - sum(b), b)
+  c_kept <- x[(n_v - 1L) + n_l + seq_along(keep_r)]
+  if (any(a_kept < -tol) || any(c_kept < -tol)) {
+    return(NULL)
+  }
+  a <- numeric(nrow(g$v))
+  a[keep_v] <- pmax(a_kept, 0) / sum(pmax(a_kept, 0))
+  cc <- numeric(nrow(g$r))
+  cc[keep_r] <- pmax(c_kept, 0)
+  z <- x[(n_v - 1L) + seq_len(n_l)]
+  list(a = a, z = z, c = cc, theta_hat = generator_image(g, a, z, cc))
+}
+
+
+#' `a V + z L + c R`, the point a set of generator weights describes
+#' @keywords internal
+#' @noRd
+generator_image <- function(g, a, z, cc) {
+  as.numeric(a %*% g$v + z %*% g$l + cc %*% g$r)
 }
 
 
 #' Minimum-norm least-squares solution of `m x = rhs`
 #'
-#' A SVD solve with small singular values dropped.
 #' @keywords internal
 #' @noRd
 min_norm_solve <- function(m, rhs) {
@@ -441,31 +383,27 @@ method(chart, polyhedron_region) <- function(space) {
   v <- g$v
   l <- g$l
   r <- g$r
-  n_v <- ncol(v)
-  n_l <- ncol(l)
-  n_r <- ncol(r)
-  # Direct generator coordinates `u = (a, z, c)`: barycentric weights over the
-  # vertices (constrained to the simplex), free lineality coordinates, and
-  # non-negative ray coefficients. A lone vertex v_1 contributes no free
-  # coordinate: `theta = v_1 + L z + R c`.
+  n_v <- nrow(v)
+  n_l <- nrow(l)
+  n_r <- nrow(r)
+  # A lone vertex contributes no coordinate: `theta = v_1 + z L + c R`.
   free_v <- if (n_v > 1L) n_v else 0L
   i_v <- seq_len(free_v)
-  base <- if (free_v == 0L) as.numeric(v[, 1L]) else numeric(nrow(v))
-  jac <- cbind(v[, i_v, drop = FALSE], l, r)
+  base <- if (free_v == 0L) as.numeric(v[1L, ]) else numeric(ncol(v))
+  # `theta = base + u gens`.
+  gens <- rbind(v[i_v, , drop = FALSE], l, r)
+  jac <- t(gens)
   n_par <- free_v + n_l + n_r
 
   list(
     n_par = n_par,
-    to_theta = function(u) base + as.numeric(jac %*% u),
-    to_theta_batch = function(u_mat) jac %*% u_mat + base,
+    to_theta = function(u) base + as.numeric(u %*% gens),
+    to_theta_batch = function(u_mat) add_by_col(u_mat %*% gens, base),
     from_theta = function(theta) {
       w <- generator_weights(g, theta)
       c(if (free_v > 0L) w$a, w$z, w$c)
     },
     jacobian = function(u) jac,
-    # Bounds and constraints for a constrained optimiser (SLSQP): the
-    # barycentric block sums to one and is non-negative, the ray block is
-    # non-negative, the lineality block is free.
     lower = c(rep(0, free_v), rep(-Inf, n_l), rep(0, n_r)),
     heq = if (free_v > 0L) {
       function(u) sum(u[i_v]) - 1
@@ -473,21 +411,22 @@ method(chart, polyhedron_region) <- function(space) {
     heqjac = if (free_v > 0L) {
       function(u) matrix(c(rep(1, free_v), rep(0, n_l + n_r)), nrow = 1L)
     },
-    # Seeding draws random coefficients for each of a, z and c:
-    # a: a uniform Dirichlet over vertices V
-    # z: standard normals along the lineality space
-    # c: Exp(1) on the rays, boundary-biased with mean 1
+    # a ~ uniform Dirichlet, z ~ N(0, 1), c ~ Exp(1).
     seed = function(n) {
       u_v <- if (free_v > 0L) {
-        gm <- matrix(stats::rgamma(n * n_v, shape = 1), nrow = n_v)
-        div_by_col(gm, colSums(gm))
+        dirichlet_draws(rep(1, n_v), n)
       } else {
-        matrix(numeric(0), nrow = 0L, ncol = n)
+        matrix(numeric(0), nrow = n, ncol = 0L)
       }
-      rbind(
+      cbind(
         u_v,
-        matrix(stats::rnorm(n * n_l), nrow = n_l, ncol = n),
-        matrix(stats::rgamma(n * n_r, shape = 1), nrow = n_r, ncol = n)
+        matrix(stats::rnorm(n * n_l), nrow = n, ncol = n_l, byrow = TRUE),
+        matrix(
+          stats::rgamma(n * n_r, shape = 1),
+          nrow = n,
+          ncol = n_r,
+          byrow = TRUE
+        )
       )
     }
   )
@@ -506,9 +445,7 @@ count_label <- function(n, singular, plural = paste0(singular, "s")) {
 
 #' One-line summary of a convex region
 #'
-#' `format()` appends this to the class name and `print()` puts under the
-#' banner. The base counts the generator blocks; classes with a closed form
-#' say it directly.
+#' Used by `format()` and `print()`.
 #' @keywords internal
 #' @noRd
 region_phrase <- new_generic("region_phrase", "space", function(space) {
@@ -519,9 +456,9 @@ region_phrase <- new_generic("region_phrase", "space", function(space) {
 method(region_phrase, polyhedron_region) <- function(space) {
   g <- space@generators
   counts <- c(
-    count_label(ncol(g$v), "vertex", "vertices"),
-    if (ncol(g$r) > 0L) count_label(ncol(g$r), "ray"),
-    if (ncol(g$l) > 0L) count_label(ncol(g$l), "line")
+    count_label(nrow(g$v), "vertex", "vertices"),
+    if (nrow(g$r) > 0L) count_label(nrow(g$r), "ray"),
+    if (nrow(g$l) > 0L) count_label(nrow(g$l), "line")
   )
   sprintf("%s in R^%d", paste(counts, collapse = ", "), space_dim(space))
 }
@@ -531,18 +468,17 @@ method(region_phrase, polyhedron_region) <- function(space) {
 #' @usage NULL
 #' @export
 method(format, polyhedron_region) <- function(x, ...) {
-  sprintf("%s: %s", attr(S7_class(x), "name"), region_phrase(x))
+  sprintf("%s: %s", class_name(x), region_phrase(x))
 }
 
 
-#' @description `print()` summarises the geometry -- the generator blocks, the
-#'   facet counts, and for a small polytope the vertices themselves -- rather
-#'   than dumping the properties.
+#' @description `print()` summarises generator and facet counts, and lists the
+#'   vertices of a small polytope.
 #' @rdname polyhedron_region
 #' @usage NULL
 #' @export
 method(print, polyhedron_region) <- function(x, ...) {
-  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("<", class_name(x), ">\n", sep = "")
   cat(
     "  ",
     region_phrase(x),
@@ -551,9 +487,7 @@ method(print, polyhedron_region) <- function(x, ...) {
     sep = ""
   )
   f <- x@facets
-  if (is.null(f)) {
-    cat("  facets not derived: generator count is above the size guard\n")
-  } else if (length(f$eq) == 0L) {
+  if (length(f$eq) == 0L) {
     cat("  facets: none\n")
   } else {
     n_eq <- sum(f$eq)
@@ -570,7 +504,7 @@ method(print, polyhedron_region) <- function(x, ...) {
   if (
     S7_inherits(x, polytope_region) &&
       !S7_inherits(x, point_region) &&
-      ncol(x@vertices) <= 8L
+      nrow(x@vertices) <= 8L
   ) {
     cat("  vertices:\n")
     print(x@vertices)

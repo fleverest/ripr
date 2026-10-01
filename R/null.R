@@ -6,26 +6,16 @@ NULL
 #' A null hypothesis: a family together with its parameter region
 #'
 #' \eqn{H_0 = \{P_\theta : \theta \in \bigcup_i \Theta_{0i}\}}{H_0 = {P_theta : theta in union_i Theta_0i}}.
-#' The null is a set of *distributions*, so it needs both the model and the
-#' geometry; keeping them together means nothing downstream has to carry them as
-#' separate arguments that could disagree.
-#'
-#' Each convex part of the region is itself a null hypothesis. This package
-#' calls them parts, because [parts()] is what any [region] answers whether
-#' or not it happens to be a null, but the two words mean the same thing here.
-#'
-#' The decomposition into [cells()] is taken once, at construction, and kept.
-#' Every sweep of a fit searches it and every certification encloses it, so
-#' triangulating a part on each call would repeat an exact-arithmetic
-#' computation that cannot change: a `null_model` is immutable, and its region
-#' with it.
+#' Each convex part of the region (see [parts()]) is itself a null.
+#' The decomposition into [cells()] is computed once, at construction. Test
+#' membership with `contains(null@region, theta)`.
 #'
 #' @param family A [parametric_family].
-#' @param region The null's geometry: any [region]. A single [convex_region]
-#'   is stored as it comes, since one convex set is already a region; a list of
-#'   them becomes the [union_region] of its elements.
+#' @param region The null's geometry: any [region], or a list of
+#'   [convex_region]s, which becomes their [union_region].
 #' @param max_cells The number of simplices the decomposition may produce
-#'   before giving up (default `1000L`).
+#'   before giving up. Defaults to the `ripr.max_cells` option, or `1000L`
+#'   when that is unset.
 #' @return A `null_model`.
 #' @section Properties:
 #' \describe{
@@ -35,9 +25,7 @@ NULL
 #'   in part order: `cells(parts(region)[[1]])`, then those of part 2, and so
 #'   on.}
 #'   \item{`cell_part`}{Which part each cell came from, as an index into
-#'   `parts(region)`. This is what lets an algorithm run on cells and still
-#'   report a part: `state@atoms` is indexed by part, and so is the `part`
-#'   element [ripr_finish()] returns.}
+#'   `parts(region)`; used to report the `part` of each atom in a fit.}
 #' }
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -45,10 +33,13 @@ NULL
 #' null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
+#' null <- null_model(fam, list(halfspace_region(c(1, -1, 0))))
+#' contains(null@region, c(0.2, 0.5, 0.3))
+#' contains(null@region, c(0.6, 0.2, 0.2))
 #' @export
 null_model <- new_class(
   "null_model",
@@ -58,7 +49,11 @@ null_model <- new_class(
     cells = class_list,
     cell_part = class_integer
   ),
-  constructor = function(family, region, max_cells = 1000L) {
+  constructor = function(
+    family,
+    region,
+    max_cells = getOption("ripr.max_cells", 1000L)
+  ) {
     region <- as_region(region)
     if (S7_inherits(region, empty_region)) {
       stop(
@@ -91,9 +86,6 @@ null_model <- new_class(
     )
   },
   validator = function(self) {
-    # `union_region` already validates that its cells are convex regions of one
-    # shared dimension; all that is left is whether it is compatible with
-    # `family`.
     d <- space_dim(self@family@parameter_space)
     d_region <- space_dim(self@region)
     if (d_region != d) {
@@ -104,9 +96,8 @@ null_model <- new_class(
         d_region
       ))
     }
-    # The constructor derives both, so this only catches a caller that has
-    # replaced a property behind its back and left the two disagreeing --
-    # which would silently file a cell under the wrong part.
+    # Catches a property replaced after construction, which would file a cell
+    # under the wrong part.
     if (length(self@cells) != length(self@cell_part)) {
       return("`cell_part` must have one entry per element of `cells`")
     }
@@ -121,7 +112,7 @@ null_model <- new_class(
 method(print, null_model) <- function(x, ...) {
   prts <- parts(x@region)
   n <- length(prts)
-  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("<", class_name(x), ">\n", sep = "")
   cat("  ", format(x@family), "\n", sep = "")
   cat(
     "  ",
@@ -132,17 +123,7 @@ method(print, null_model) <- function(x, ...) {
     "\n",
     sep = ""
   )
-  if (n <= 6L) {
-    for (p in prts) {
-      cat("    ", format(p), "\n", sep = "")
-    }
-  } else {
-    named <- vapply(prts, \(p) attr(S7_class(p), "name"), character(1))
-    tally <- table(named)
-    for (nm in names(tally)) {
-      cat("    ", tally[[nm]], " x ", nm, "\n", sep = "")
-    }
-  }
+  cat_parts(prts)
   invisible(x)
 }
 
@@ -154,27 +135,8 @@ method(print, null_model) <- function(x, ...) {
 method(format, null_model) <- function(x, ...) {
   sprintf(
     "%s: %s over %s",
-    attr(S7_class(x), "name"),
-    attr(S7_class(x@family), "name"),
+    class_name(x),
+    class_name(x@family),
     parts_label(n_parts(x@region))
   )
-}
-
-
-#' Does the null contain this parameter value?
-#'
-#' Membership of \eqn{H_0}{H_0}, which is [contains()] on the null's region:
-#' true when any one part holds `theta`.
-#' @param null A [null_model].
-#' @param theta Parameter vector.
-#' @param tol Tolerance.
-#' @return `TRUE` or `FALSE`.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' null <- null_model(fam, list(halfspace_region(c(1, -1, 0))))
-#' in_null(null, c(0.2, 0.5, 0.3))
-#' in_null(null, c(0.6, 0.2, 0.2))
-#' @export
-in_null <- function(null, theta, tol = 1e-8) {
-  contains(null@region, theta, tol)
 }

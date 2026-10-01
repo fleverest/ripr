@@ -2,34 +2,6 @@
 % Please edit documentation in R/random_variable.R
 \name{random_variable_arithmetic}
 \alias{random_variable_arithmetic}
-\alias{+,ripr::random_variable,ripr::random_variable-method}
-\alias{+,ripr::random_variable,integer/double-method}
-\alias{+,ripr::random_variable,integer-method}
-\alias{+,ripr::random_variable,double-method}
-\alias{+,integer/double,ripr::random_variable-method}
-\alias{+,integer,ripr::random_variable-method}
-\alias{+,double,ripr::random_variable-method}
-\alias{-,ripr::random_variable,ripr::random_variable-method}
-\alias{-,ripr::random_variable,integer/double-method}
-\alias{-,ripr::random_variable,integer-method}
-\alias{-,ripr::random_variable,double-method}
-\alias{-,integer/double,ripr::random_variable-method}
-\alias{-,integer,ripr::random_variable-method}
-\alias{-,double,ripr::random_variable-method}
-\alias{*,ripr::random_variable,ripr::random_variable-method}
-\alias{*,ripr::random_variable,integer/double-method}
-\alias{*,ripr::random_variable,integer-method}
-\alias{*,ripr::random_variable,double-method}
-\alias{*,integer/double,ripr::random_variable-method}
-\alias{*,integer,ripr::random_variable-method}
-\alias{*,double,ripr::random_variable-method}
-\alias{/,ripr::random_variable,ripr::random_variable-method}
-\alias{/,ripr::random_variable,integer/double-method}
-\alias{/,ripr::random_variable,integer-method}
-\alias{/,ripr::random_variable,double-method}
-\alias{/,integer/double,ripr::random_variable-method}
-\alias{/,integer,ripr::random_variable-method}
-\alias{/,double,ripr::random_variable-method}
 \title{Arithmetic on random variables and scalars}
 \arguments{
 \item{e1, e2}{A \link{random_variable} or a single number, at least one of them a
@@ -39,23 +11,16 @@ random variable.}
 A \link{random_variable}.
 }
 \description{
-In the following document \code{X}, \code{Y} and \code{Z} are random variables; \code{a} and \code{b}
-are length-1 numerics.
+Random variables combine with each other and with single numbers under \code{+},
+\code{-}, \code{*} and \code{/}, pointwise: \code{Z <- X + Y} is \code{Z(x) = X(x) + Y(x)}, and
+\code{2 * X + 3} rescales \code{X}. Other operators are not supported.
 }
 \details{
-Random variables may be scaled, transformed and combined by the arithmetic
-operations \code{+}, \code{-}, \code{*} and \code{/}. For instance, we may define a random
-variable \code{Y} from \code{X} by the linear transformation \code{Y <- 2 * X + 3}.
-Similarly \code{Z <- X + Y} is the variable defined by \code{Z(x) = X(x) + Y(x)}, and
-likewise for \code{-}, \code{*} and \code{/}. Comparison and other operators are not
-currently supported.
-
-If both operands are random variables, they must be defined on the same sample
-space, checked here rather than at evaluation, so a mismatch is reported where
-it was written.
+Two random variables must share a sample space; a mismatch is an error when
+the expression is built, not when it is evaluated.
 }
 \examples{
-fam <- gaussian_family(dim = 1)
+fam <- gaussian_family(d = 1)
 X <- random_variable(\(x) dnorm(x, 1), sample_space = fam@sample_space)
 Y <- 2 * X + 3
 Y(as.matrix(0:2))

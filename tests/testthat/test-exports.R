@@ -52,7 +52,3 @@ test_that("every export appears somewhere in the pkgdown index", {
   covered <- names(aliases)[aliases %in% index_contents(root)]
   expect_setequal(setdiff(getNamespaceExports("ripr"), covered), character())
 })
-
-test_that("flat_part is internal", {
-  expect_false("flat_part" %in% getNamespaceExports("ripr"))
-})

@@ -19,7 +19,6 @@ supported_in(dist, space)
 \description{
 The declared space must lie inside the target, decided exactly.
 
-Check that a \link{discrete_dist} is supported in a space. Returns
-\code{TRUE} is all of \code{dist}s atoms are contained in \code{space}.
+A \link{discrete_dist} is supported in \code{space} when all its atoms are.
 }
 \keyword{internal}

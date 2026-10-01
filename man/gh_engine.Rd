@@ -12,30 +12,22 @@ gh_engine(n_nodes, max_nodes = 1e+06)
 \item{max_nodes}{Refuse grids larger than this.}
 }
 \value{
-An engine spec for \code{\link[=resolve_engine]{resolve_engine()}}.
+An engine spec, to pass as the \code{engine} argument of \code{\link[=ripr_init]{ripr_init()}}.
 }
 \description{
-A deterministic rule for continuous families. Substituting
-\eqn{x = m + \sqrt{2} L t}{x = m + sqrt(2) L t} turns
-\eqn{E_{N(m, V)}[f]}{E_N(m,V)[f]} into a Gauss-Hermite integral, so the nodes
-are an affine image of the tensor-product grid and the weights are the
-products of the univariate weights, normalised to sum to one.
+A deterministic rule for continuous families, applicable only when the
+alternative is Gaussian (as decided by \code{\link[=mixture_gaussian_moments]{mixture_gaussian_moments()}}). Nodes
+are an affine image of a tensor-product Gauss-Hermite grid, exact for
+polynomials of degree up to \code{2 * n_nodes - 1}.
 }
 \details{
-Applies only when the alternative is Gaussian, which \code{\link[=gaussian_moments]{gaussian_moments()}}
-decides. The grid is a tensor product, so it holds \code{n_nodes^d} points and is
-unusable beyond a handful of dimensions; \code{max_nodes} makes that a clear error
-rather than an exhausted session. An \code{n}-point rule integrates polynomials of
-degree at most \verb{2n - 1} exactly, so a smooth integrand needs far fewer nodes
-than Monte Carlo needs draws.
-
-Unlike \code{\link[=mc_engine]{mc_engine()}} the error here is bias, not variance, so \code{\link[=expect_se]{expect_se()}}
-reports \code{0} and says nothing about accuracy. Raise \code{n_nodes} and compare.
+The grid has \code{n_nodes^d} points, so it suits only a few dimensions. Its error
+is bias, not variance: raise \code{n_nodes} and compare.
 }
 \examples{
-fam <- gaussian_family(dim = 2L)
-Q <- mixture(fam, dirac(c(0, 0)))
-resolve_engine(gh_engine(n_nodes = 10L), Q, fam)
+fam <- gaussian_family(d = 2L)
+null <- null_model(fam, halfspace_region(normal = c(1, -1)))
+ripr_init(fam(c(1, 0)), null, engine = gh_engine(n_nodes = 10L))
 }
 \references{
 \insertRef{GolubWelsch1969}{ripr}

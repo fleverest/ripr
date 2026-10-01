@@ -22,8 +22,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r helpers, include = FALSE}
+# One point per row of `theta` in, one (x, y) per row out.
 tri_xy <- function(theta) {
-  rbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0)) %*% as.matrix(theta)
+  as.matrix(theta) %*% cbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0))
 }
 
 plot_null <- function(
@@ -43,17 +44,17 @@ plot_null <- function(
   for (s in parts(null@region)) {
     xy <- tri_xy(s@vertices)
     polygon(
-      xy[1, ],
-      xy[2, ],
+      xy[, 1],
+      xy[, 2],
       col = adjustcolor(fill, 0.45),
       border = fill,
       lwd = 1.5
     )
   }
-  polygon(corners[1, ], corners[2, ], border = "grey50")
+  polygon(corners[, 1], corners[, 2], border = "grey50")
   text(
-    corners[1, ],
-    corners[2, ],
+    corners[, 1],
+    corners[, 2],
     c(1, 2, 3),
     pos = c(3, 1, 1),
     cex = 0.8,
@@ -68,8 +69,8 @@ plot_null <- function(
       w <- sizes[[min(g, length(sizes))]]
       cex <- if (is.null(w)) 1.2 else pmax(0.35, 1.7 * sqrt(w / max(all_w)))
       points(
-        xy[1, ],
-        xy[2, ],
+        xy[, 1],
+        xy[, 2],
         pch = 21,
         bg = adjustcolor(bg[[(g - 1L) %% length(bg) + 1L]], alpha),
         col = "grey15",
@@ -115,14 +116,14 @@ family <- multinomial_family(n_trials = n, k = K)
 # Defines {theta : theta_1 <= theta_j}
 plurality_part <- function(j) {
   vertices <- diag(K)
-  vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+  vertices[1L, ] <- replace(numeric(K), c(1L, j), 0.5)
   simplex_region(vertices = vertices)
 }
 
 
 plurality <- null_model(
   family,
-  union(plurality_part(2), plurality_part(3))
+  plurality_part(2) | plurality_part(3)
 )
 ```
 
@@ -157,21 +158,21 @@ state <- ripr_init(Q, plurality)
 state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
-c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
+c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 ```
 
 ```{r plot-plurality-fit, echo = FALSE, fig.cap = "Plurality null, with the support of W1 (alternative) and W0 (null, fitted)."}
 plot_null(
   plurality,
-  points = list(atoms(fit$W0), atoms(W1)),
-  weights = list(weights(fit$W0), weights(W1) / 4)
+  points = list(atoms(fit@W0), atoms(W1)),
+  weights = list(weights(fit@W0), weights(W1) / 4)
 )
 ```
 
-The fit attains a KL divergence (from `Q`) of approximately `r round(fit$kl, 4)`.
+The fit attains a KL divergence (from `Q`) of approximately `r round(fit@kl, 4)`.
 The `gap` quantity is a Frank--Wolfe duality gap: at its true value it bounds the expectation of `Q / P*` over the null by `1 + gap`.
-The `gap` recorded *during* a fit (`state@trace$gap_after`, or `fit$gap_fit`) is only an estimate, so it is not itself an upper bound and cannot be used directly to get an e-variable.
-`fit$gap_final`, requested here via `record_gap = TRUE`, is a fresh sweep over the *returned* mixture, and is what we compare against the true certified bound below.
+The `gap` recorded *during* a fit (`state@trace$gap_after`, or `fit@gap_fit`) is only an estimate, so it is not itself an upper bound and cannot be used directly to get an e-variable.
+`fit@gap_final`, requested here via `record_gap = TRUE`, is a fresh sweep over the *returned* mixture, and is what we compare against the true certified bound below.
 
 ## From a fit to an e-variable
 
@@ -180,7 +181,7 @@ This is our candidate e-variable:
 
 ```{r ratio}
 X <- likelihood(Q, label = "Q") /
-  likelihood(fit$P_star, label = "P*")
+  likelihood(fit@P_star, label = "P*")
 X
 ```
 
@@ -200,22 +201,23 @@ It returns the upper bound alongside the largest value its internal search actua
 ```{r certify}
 cert <- certify(X, plurality, tol = 1e-9)
 c(
-  upper = cert$sup_ub,
-  attained = cert$sup_lb,
-  width = cert$sup_ub - cert$sup_lb
+  upper = cert@sup_ub,
+  attained = cert@sup_lb,
+  width = cert@sup_ub - cert@sup_lb
 )
 ```
 
 The bound lands just above one: it is exactly `1 + gap`, where `gap` is the *true* Frank--Wolfe duality gap that the fit stopped on.
 
 ```{r identity}
-c(bound_minus_one = cert$sup_ub - 1, fitted_gap = fit$gap_final)
+c(bound_minus_one = cert@sup_ub - 1, fitted_gap = fit@gap_final)
 ```
 
-The rescaled random variable `E = X / cert$sup_ub` is then a genuine e-variable for `plurality`:
+The rescaled random variable `E = X / cert@sup_ub` is then a genuine e-variable for `plurality`.
+`e_variable()` builds it from the certificate, dividing by the bound only when the bound is above one (a bound of one or less says `X` is an e-variable already):
 
 ```{r evariable}
-E <- X / cert$sup_ub
+E <- e_variable(cert)
 print(E)
 print(E(outcomes))
 ```
@@ -231,7 +233,7 @@ X_bad <- likelihood(Q, label = "Q") /
   likelihood(bad, label = "P0")
 cert_bad <- certify(X_bad, plurality, tol = 1e-9)
 
-c(good = cert$sup_ub, bad = cert_bad$sup_ub)
+c(good = cert@sup_ub, bad = cert_bad@sup_ub)
 ```
 
 Both rescale to valid e-variables.
@@ -249,7 +251,7 @@ growth <- function(E, Q) {
 
 E_gr <- growth(E, Q)
 
-c(good = E_gr, bad = growth(X_bad / cert_bad$sup_ub, Q))
+c(good = E_gr, bad = growth(e_variable(cert_bad), Q))
 ```
 
 A negative growth rate means evidence is lost on average even when the alternative is true.
@@ -257,14 +259,14 @@ This means our e-variable is useless, but not invalid.
 **Validity is free from the certification and correction procedure; fitting a good approximation is what buys e-power.**
 
 When `P*` is the true RIPr of `Q` onto the null, the attained KL divergence `KL(Q || P*)` is precisely the growth rate of the resulting e-variable.
-For any fitted `P` the KL divergence sits above that optimum, so `fit$kl` upper bounds the optimal growth rate.
-The true optimum therefore lies somewhere between the growth this fit achieved and `fit$kl`:
+For any fitted `P` the KL divergence sits above that optimum, so `fit@kl` upper bounds the optimal growth rate.
+The true optimum therefore lies somewhere between the growth this fit achieved and `fit@kl`:
 
 ```{r growth-kl-gap}
 c(
   lower = E_gr,
-  upper = fit$kl,
-  width = fit$kl - E_gr
+  upper = fit@kl,
+  width = fit@kl - E_gr
 )
 ```
 
@@ -277,12 +279,12 @@ Here we demonstrate a null where candidate 1, 2 and 3 all fail to reach a majori
 medial <- null_model(
   family,
   simplex_region(
-    vertices = cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
+    vertices = rbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
   )
 )
 
 W_maj <- finite_dist(
-  components = cbind(
+  atoms = rbind(
     c(0.6, 0.2, 0.2),
     c(0.2, 0.6, 0.2),
     c(0.2, 0.2, 0.6)
@@ -314,16 +316,16 @@ fit_medial <- ripr_init(Q_maj, medial) |>
   hybrid_step(times = 40L) |>
   ripr_finish(reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 X_medial <- likelihood(Q_maj, label = "Q") /
-  likelihood(fit_medial$P_star, label = "P*")
+  likelihood(fit_medial@P_star, label = "P*")
 
-c(kl = fit_medial$kl, upper = certify(X_medial, medial, tol = 1e-9)$sup_ub)
+c(kl = fit_medial@kl, upper = certify(X_medial, medial, tol = 1e-9)@sup_ub)
 ```
 
 ```{r plot-medial-fit, echo = FALSE, fig.cap = "Medial-triangle null, with the support of W_maj and W0 (fitted)."}
 plot_null(
   medial,
-  points = list(atoms(fit_medial$W0), atoms(W_maj)),
-  weights = list(weights(fit_medial$W0), weights(W_maj) / 4)
+  points = list(atoms(fit_medial@W0), atoms(W_maj)),
+  weights = list(weights(fit_medial@W0), weights(W_maj) / 4)
 )
 ```
 
@@ -334,13 +336,13 @@ It is much cheaper than proving a bound, and it works on families and geometries
 It reports a *lower* bound on the supremum: something larger may sit somewhere gradient ascent could not reach.
 
 ```{r sup-lb}
-c(searched = sup_lb(X, plurality)$sup_lb, certified = cert$sup_ub)
+c(searched = sup_lb(X, plurality)@sup_lb, certified = cert@sup_ub)
 ```
 
 Where no bounding method has been implemented for a given combination of family and region geometry, `certify()` refuses outright:
 
 ```{r refuse, error = TRUE}
-gaussian <- gaussian_family(dim = 2L)
+gaussian <- gaussian_family(d = 2L)
 null <- null_model(
   gaussian,
   halfspace_region(normal = c(1, -1), offset = 0)
@@ -360,7 +362,7 @@ found <- sup_lb(
   n_seeds = 50L,
   n_restarts = 5L
 )
-c(searched = found$sup_lb, theta_star = found$theta)
+found
 ```
 
 ## Where to go next
@@ -374,7 +376,7 @@ than just using the package:
   and `?convex_region` describe the two sets it maps between, and
   `?distribution` the laws `fam(theta)` returns.
 - `vignette("regions")` tours the region interface and the set algebra
-  (`union()`, `intersect()`, `setdiff()`, `disjoin()`, ...) used to build a
+  (`|`, `&`, `-`, `==` and `disjoin()`) used to build a
   null out of convex pieces. `?convex_region` and its generics (`chart()`,
   `contains()`, `project()`) describe the interface a new convex geometry must
   implement; `?simplex_region` and `?halfspace_region` are the two built-in

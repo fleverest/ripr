@@ -18,8 +18,7 @@ score(family, theta, x)
 }
 \description{
 Per-outcome contributions in the family's own parameter coordinates, with no
-constraint projection applied. Applying the Jacobian of a parametrisation
-belongs to whatever owns that parametrisation.
+constraint projection applied.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

@@ -1,12 +1,10 @@
 # Tests for the polyhedron base class in R/region.R.
 #
-# Every implemented convex region is a polyhedron (at the time of writing), and
-# the base chart is written once against the generator triple. Coordinates are
-# the generator weights themselves (barycentric on the vertices, non-negative
-# ray coefficients and free lineality coords) so the map is linear and the
-# constraints are handed to the optimiser explicitly through `lower` and `heq`
-# rather than being reparametrised away (like we did in an earlier version via
-# softmax / softplus for stats::optim).
+# Every implemented convex region is a polyhedron, and the base chart is
+# written once against the generator triple. Coordinates are the generator
+# weights themselves (barycentric on the vertices, non-negative ray
+# coefficients and free lineality coords) so the map is linear and the
+# constraints are handed to the optimiser explicitly through `lower` and `heq`.
 
 # Check a coordinate matrix against the chart's own constraint declaration.
 expect_feasible <- function(ch, u_mat) {
@@ -15,12 +13,13 @@ expect_feasible <- function(ch, u_mat) {
       matrix(
         ch$lower,
         nrow(u_mat),
-        ncol(u_mat)
+        ncol(u_mat),
+        byrow = TRUE
       )
   ))
   if (!is.null(ch$heq)) {
-    for (i in seq_len(ncol(u_mat))) {
-      expect_equal(ch$heq(u_mat[, i]), 0, tolerance = rounding_tol(1))
+    for (i in seq_len(nrow(u_mat))) {
+      expect_equal(ch$heq(u_mat[i, ]), 0, tolerance = rounding_tol(1))
     }
   }
 }
@@ -29,7 +28,7 @@ expect_feasible <- function(ch, u_mat) {
 
 test_that("the chart is the linear generator map on a polytope", {
   square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+    vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
   vertices <- square@vertices
 
@@ -41,16 +40,17 @@ test_that("the chart is the linear generator map on a polytope", {
   set.seed(1)
   u_mat <- ch$seed(50L)
   expect_feasible(ch, u_mat)
-  for (i in seq_len(ncol(u_mat))) {
-    u <- u_mat[, i]
-    expect_equal(ch$to_theta(u), as.vector(vertices %*% u))
-    # The map is linear, so the jacobian is the generator matrix itself.
-    expect_equal(ch$jacobian(u), vertices)
+  for (i in seq_len(nrow(u_mat))) {
+    u <- u_mat[i, ]
+    expect_equal(ch$to_theta(u), as.vector(u %*% vertices))
+    # The map is linear, so the jacobian is the generator matrix itself,
+    # one generator per column as a Jacobian has it.
+    expect_equal(ch$jacobian(u), t(vertices))
   }
-  expect_equal(ch$to_theta_batch(u_mat), vertices %*% u_mat)
+  expect_equal(ch$to_theta_batch(u_mat), u_mat %*% vertices)
   # Barycentric coordinates hit the vertices exactly.
   for (j in 1:4) {
-    expect_identical(ch$to_theta(diag(4)[, j]), vertices[, j])
+    expect_identical(ch$to_theta(diag(4)[j, ]), vertices[j, ])
   }
 })
 
@@ -69,7 +69,7 @@ test_that("the chart anchors a halfspace and frees its hyperplane", {
     # distance inward along the one ray. A lone vertex contributes no
     # coordinate of its own.
     to_theta <- function(u) {
-      anchor + as.vector(basis %*% u[-d]) - u[d] * unit
+      anchor + as.vector(u[-d] %*% basis) - u[d] * unit
     }
 
     ch <- chart(space)
@@ -79,9 +79,9 @@ test_that("the chart anchors a halfspace and frees its hyperplane", {
     set.seed(3)
     u_mat <- ch$seed(50L)
     expect_feasible(ch, u_mat)
-    for (i in seq_len(ncol(u_mat))) {
-      expect_equal(ch$to_theta(u_mat[, i]), to_theta(u_mat[, i]))
-      expect_equal(ch$jacobian(u_mat[, i]), cbind(basis, -unit))
+    for (i in seq_len(nrow(u_mat))) {
+      expect_equal(ch$to_theta(u_mat[i, ]), to_theta(u_mat[i, ]))
+      expect_equal(ch$jacobian(u_mat[i, ]), cbind(t(basis), -unit))
     }
   }
 })
@@ -96,7 +96,7 @@ test_that("the chart of a point region is empty", {
   expect_identical(ch$to_theta(numeric(0)), theta)
   expect_identical(ch$jacobian(numeric(0)), matrix(0, 3L, 0L))
   expect_identical(ch$from_theta(theta), numeric(0))
-  expect_identical(dim(ch$seed(5L)), c(0L, 5L))
+  expect_identical(dim(ch$seed(5L)), c(5L, 0L))
 })
 
 
@@ -109,9 +109,9 @@ test_that("the chart of an unconstrained region is the identity", {
   expect_null(ch$heq)
   set.seed(4)
   u_mat <- ch$seed(50L)
-  for (i in seq_len(ncol(u_mat))) {
-    expect_equal(ch$to_theta(u_mat[, i]), u_mat[, i])
-    expect_equal(ch$jacobian(u_mat[, i]), diag(3L))
+  for (i in seq_len(nrow(u_mat))) {
+    expect_equal(ch$to_theta(u_mat[i, ]), u_mat[i, ])
+    expect_equal(ch$jacobian(u_mat[i, ]), diag(3L))
   }
   expect_equal(ch$to_theta_batch(u_mat), u_mat)
 })
@@ -121,21 +121,19 @@ test_that("from_theta returns feasible coordinates, exactly at a vertex", {
   # The optimiser is seeded from `from_theta` of the current atoms, so the
   # coordinates must satisfy the declared constraints; SLSQP starts from them.
   s <- simplex_region(
-    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+    vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
   )
   ch <- chart(s)
-  interior <- as.vector(s@vertices %*% c(0.2, 0.5, 0.3))
-  expect_feasible(ch, matrix(ch$from_theta(interior), ncol = 1L))
+  interior <- as.vector(c(0.2, 0.5, 0.3) %*% s@vertices)
+  expect_feasible(ch, matrix(ch$from_theta(interior), nrow = 1L))
 
-  # A vertex is a boundary point the old softmax chart could only approach:
-  # its recovery clamped an exact zero to an eps. The direct chart represents
-  # it, so the recovery is exact up to the floating point of the
-  # least-squares solve rather than short of the boundary by design.
-  vertex <- s@vertices[, 2L]
+  # A vertex is recovered exactly, up to the floating point of the
+  # least-squares solve.
+  vertex <- s@vertices[2L, ]
   u <- ch$from_theta(vertex)
   expect_equal(u, c(0, 1, 0), tolerance = rounding_tol(1))
   expect_equal(ch$to_theta(u), vertex, tolerance = rounding_tol(1))
-  expect_feasible(ch, matrix(u, ncol = 1L))
+  expect_feasible(ch, matrix(u, nrow = 1L))
 })
 
 
@@ -157,7 +155,7 @@ test_that("declared facets are stored exactly; derived facets describe the hull"
   # A polytope derives its facets once at construction: the unit square has
   # four, and they cut out exactly the square.
   square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+    vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
   expect_identical(nrow(square@facets$a), 4L)
   expect_true(contains(square, c(0.5, 0.5)))
@@ -172,9 +170,9 @@ test_that("declared facets are stored exactly; derived facets describe the hull"
 test_that("polyhedron_region() builds from generators", {
   # The halfspace `{theta_1 <= 0}` in R^2, by hand.
   space <- polyhedron_region(
-    vertices = matrix(c(0, 0), ncol = 1L),
-    rays = matrix(c(-1, 0), ncol = 1L),
-    lines = matrix(c(0, 1), ncol = 1L)
+    vertices = matrix(c(0, 0), nrow = 1L),
+    rays = matrix(c(-1, 0), nrow = 1L),
+    lines = matrix(c(0, 1), nrow = 1L)
   )
   expect_true(S7_inherits(space, polyhedron_region))
   expect_identical(space_dim(space), 2L)
@@ -183,14 +181,14 @@ test_that("polyhedron_region() builds from generators", {
   expect_false(contains(space, c(1, 0)))
 
   # A cone with no vertices is anchored at the origin.
-  cone <- polyhedron_region(rays = cbind(c(1, 0), c(0, 1)))
-  expect_identical(cone@generators$v, matrix(0, 2L, 1L))
+  cone <- polyhedron_region(rays = rbind(c(1, 0), c(0, 1)))
+  expect_identical(cone@generators$v, matrix(0, 1L, 2L))
   expect_true(contains(cone, c(2, 3)))
   expect_false(contains(cone, c(-1, 1)))
 
   expect_error(polyhedron_region(), "cannot all be NULL")
   expect_error(
-    polyhedron_region(vertices = cbind(c(0, Inf))),
+    polyhedron_region(vertices = rbind(c(0, Inf))),
     "finite"
   )
 })
@@ -200,12 +198,12 @@ test_that("h_region() builds from the half-space form and keeps the rows", {
   square <- h_region(a = rbind(diag(2), -diag(2)), b = c(1, 1, 0, 0))
   expect_true(S7_inherits(square, polyhedron_region))
   expect_true(is_bounded(square))
-  v <- v_rep(square)$v
-  expect_identical(ncol(v), 4L)
+  v <- square@generators$v
+  expect_identical(nrow(v), 4L)
   expect_true(contains(square, c(0.5, 0.5)))
   expect_false(contains(square, c(1.5, 0.5)))
   # The declared rows are the facets, untouched.
-  expect_identical(h_rep(square)$b, c(1, 1, 0, 0))
+  expect_identical(square@facets$b, c(1, 1, 0, 0))
 
   half <- h_region(a = matrix(c(1, -1), nrow = 1L), b = 0)
   expect_false(is_bounded(half))
@@ -224,16 +222,16 @@ test_that("the parent validator runs through every subclass constructor", {
   # concrete, assuming the parent's constructor already validated its part.
   # That holds only because every subclass constructor delegates to
   # `polyhedron_region()`; built directly on `new_object(S7_object(), ...)`,
-  # a logical vertex matrix used to slip through unvalidated.
+  # a logical vertex matrix would slip through unvalidated.
   expect_error(polytope_region(vertices = diag(2) > 0), "numeric matrix")
   expect_error(simplex_region(vertices = diag(2) > 0), "numeric matrix")
   expect_error(polyhedron_region(vertices = diag(2) > 0), "numeric matrix")
 
   # Integer matrices are numeric already and flow through as they are.
   square <- polytope_region(
-    vertices = matrix(c(0L, 0L, 1L, 0L, 1L, 1L, 0L, 1L), nrow = 2L)
+    vertices = matrix(c(0L, 0L, 1L, 0L, 1L, 1L, 0L, 1L), nrow = 4L, byrow = TRUE)
   )
-  expect_identical(nrow(h_rep(square)$a), 4L)
+  expect_identical(nrow(square@facets$a), 4L)
 })
 
 
@@ -247,17 +245,17 @@ test_that("the chart round-trips both ways on a full polyhedron", {
   # from_theta, and points survive from_theta then to_theta.
   set.seed(5)
   space <- polyhedron_region(
-    vertices = matrix(round(stats::rnorm(7 * 4), 1), nrow = 7),
-    rays = matrix(round(stats::rnorm(7 * 2), 1), nrow = 7),
-    lines = matrix(round(stats::rnorm(7 * 2), 1), nrow = 7)
+    vertices = matrix(round(stats::rnorm(7 * 4), 1), ncol = 7, byrow = TRUE),
+    rays = matrix(round(stats::rnorm(7 * 2), 1), ncol = 7, byrow = TRUE),
+    lines = matrix(round(stats::rnorm(7 * 2), 1), ncol = 7, byrow = TRUE)
   )
   ch <- chart(space)
   expect_identical(ch$n_par, 8L)
 
   u_mat <- ch$seed(20L)
   expect_feasible(ch, u_mat)
-  for (i in seq_len(ncol(u_mat))) {
-    u <- u_mat[, i]
+  for (i in seq_len(nrow(u_mat))) {
+    u <- u_mat[i, ]
     theta <- ch$to_theta(u)
     u_rt <- ch$from_theta(theta)
     expect_equal(u_rt, u, tolerance = 1e-9)
@@ -267,11 +265,10 @@ test_that("the chart round-trips both ways on a full polyhedron", {
 
 
 test_that("from_theta of an outside point recovers the projection", {
-  # `generator_weights()` minimises the distance to the region, so the
-  # recovered coordinates map to the Euclidean projection: from_theta is now
-  # safe to call without composing with project() first.
+  # The recovery minimises the distance to the region, so the
+  # recovered coordinates map to the Euclidean projection.
   square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+    vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
   ch <- chart(square)
   outside <- c(2, 0.5)
@@ -288,7 +285,7 @@ test_that("from_theta of an outside point recovers the projection", {
 
 test_that("regions print a geometric summary, not a property dump", {
   square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+    vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
   expect_output(print(square), "4 vertices in R\\^2")
   expect_output(print(square), "facets: 4 inequalities")
@@ -313,7 +310,7 @@ test_that("regions print a geometric summary, not a property dump", {
 
 
 test_that("facets cannot be declared, only derived", {
-  tri_v <- cbind(c(0, 0), c(1, 0), c(0, 1))
+  tri_v <- rbind(c(0, 0), c(1, 0), c(0, 1))
   expect_error(
     polytope_region(vertices = tri_v, facets = list(a = 1)),
     "unused argument"
@@ -336,26 +333,21 @@ test_that("facets cannot be declared, only derived", {
 })
 
 
-test_that("a generator count past the facet guard derives its H-side on demand", {
-  # 101 vertices on a circle: past `derive_qfacets()`'s guard, so the record
-  # keeps no H-side, and `h_rep()`/`q_hrep()` run the exact conversion when
-  # asked instead.
+test_that("a large generator count still derives its facets at construction", {
+  # 101 vertices on a circle: the record holds the exact H-side however many
+  # generators there are.
   angle <- 2 * pi * seq_len(101L) / 101
-  many <- polytope_region(vertices = rbind(cos(angle), sin(angle)))
-  expect_null(many@facets)
+  many <- polytope_region(vertices = cbind(cos(angle), sin(angle)))
 
-  h <- h_rep(many)
+  h <- many@facets
   expect_identical(nrow(h$a), 101L)
   # Every declared vertex satisfies every derived facet.
-  expect_true(all(h$a %*% many@vertices <= h$b + rounding_tol(1)))
-  expect_identical(q_kind(q_hrep(many)), "H")
-  # And printing says why the facets are absent rather than erroring on them.
-  expect_output(print(many), "above the size guard")
+  expect_true(all(tcrossprod(h$a, many@vertices) <= h$b + rounding_tol(1)))
+  expect_output(print(many), "facets: 101 inequalities")
 
-  # A simplex past the guard still validates: affine independence is read from
-  # the derived equality rows when there is no facet record to count.
+  # A large simplex validates from its derived equality rows.
   s101 <- simplex_region(vertices = diag(101))
-  expect_null(s101@facets)
+  expect_identical(sum(s101@facets$eq), 1L)
 })
 
 
@@ -381,4 +373,20 @@ test_that("a one-dimensional halfspace works without a basis", {
   expect_identical(space_dim(h), 1L)
   expect_true(contains(h, 0))
   expect_false(contains(h, 1))
+})
+
+test_that("an equality written as two inequalities is canonicalised", {
+  seg <- h_region(
+    a = rbind(c(1, 1), c(-1, -1), c(-1, 0), c(1, 0)),
+    b = c(1, -1, 0, 1)
+  )
+  expect_equal(sum(q_hrep(seg)[, 1L] == "1"), 1L)
+})
+
+test_that("zero rays and lines are refused", {
+  expect_error(polyhedron_region(rays = rbind(c(0, 0))), "nonzero")
+  expect_error(
+    polyhedron_region(vertices = rbind(c(0, 0)), lines = rbind(c(0, 0))),
+    "nonzero"
+  )
 })

@@ -17,31 +17,27 @@ sup_lb(x, null, engine = exact_engine(), n_seeds = 200L, n_restarts = 25L)
 \item{n_seeds, n_restarts}{Resolution of the search.}
 }
 \value{
-A list with \code{sup_lb}, its logarithm \code{log_sup_lb}, the \code{theta}
-attaining it and the \code{part} that \code{theta} lies in.
+A \link{ripr_search}, with properties \code{sup_lb}, its logarithm
+\code{log_sup_lb}, the \code{theta} attaining it and the \code{part} that \code{theta} lies
+in, alongside the \code{random_variable} and \code{null} searched.
 }
 \description{
-Multi-start local ascent, a \strong{lower} bound on the supremum: it reports the
-largest value it managed to find through optimisation, though a larger one
-value may exist somewhere it did not look. Use it as a diagnoses rather than
-treating it like a certificate on the bound. See \code{\link[=certify]{certify()}} for global
-upper bounds where supported.
+Multi-start local ascent, giving a \strong{lower} bound on the supremum: a larger
+value may exist where it did not look. Use it for diagnosis; see \code{\link[=certify]{certify()}}
+for a global upper bound. Works on unbounded parts and continuous spaces,
+though the bound may then sit far below the supremum.
 }
 \details{
-Cheap by comparison, and defined wherever the search is. An unbounded part
-or a continuous parameter space can still be searched, though the lower bound
-may sit far below the supremum.
-
-A variable that knows its own logarithm, e.g. one created via \code{\link[=likelihood]{likelihood()}}
-or combinations of likelihoods (\code{*}, \code{/} and \code{+}), is integrated in log space.
+A variable with a log form (e.g. from \code{\link[=likelihood]{likelihood()}}, \code{*}, \code{/}, \code{+}) is
+integrated in log space.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 X <- likelihood(fam(c(0.4, 0.35, 0.25)))
@@ -50,7 +46,7 @@ sup_lb(X, plurality)
 # A continuous sample space is searched the same way, under a rule that
 # integrates over it. Every evaluation is a quadrature rule here, so the
 # search is run at a lower resolution than the enumerable one above.
-gaussian <- gaussian_family(dim = 2L)
+gaussian <- gaussian_family(d = 2L)
 halfspace <- null_model(
   gaussian,
   halfspace_region(normal = c(1, -1), offset = 0)
@@ -65,5 +61,5 @@ sup_lb(
 )
 }
 \seealso{
-\code{\link[=certify]{certify()}}
+\code{\link[=certify]{certify()}}, \link{ripr_search}
 }

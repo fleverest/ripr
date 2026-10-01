@@ -14,9 +14,8 @@ NULL
 #' Coordinates are `(z, c)`: `z` positions a point on the bounding hyperplane
 #' in an orthonormal basis, and `c >= 0` is the distance inward.
 #'
-#' Having no vertices, a halfspace admits no certified gap bound. That is a
-#' property of the representation rather than a missing feature -- see
-#' [polytope_region()] for the bounded alternative.
+#' A halfspace cannot yet be certified; see [polytope_region()] for the bounded
+#' alternative.
 #'
 #' @param normal Normal vector `a`; must be non-zero.
 #' @param offset Offset `b`.
@@ -45,23 +44,21 @@ halfspace_region <- new_class(
     nrm <- sqrt(sum(normal^2))
     unit <- normal / nrm
     anchor <- offset * normal / nrm^2
+    # An orthonormal basis of the bounding hyperplane, one direction per row.
     basis <- if (d >= 2L) {
-      qr.Q(qr(cbind(unit, diag(d))))[, 2:d, drop = FALSE]
+      t(qr.Q(qr(cbind(unit, diag(d))))[, 2:d, drop = FALSE])
     } else {
       NULL
     }
     new_object(
       polyhedron_region(
-        .hv = hv_from_h(
-          # Computed from the callers input interpreted as a H-rep.
-          # Not interpreting as V-rep because of potential lossy conversions.
+        .hv = hv_fill(
           h = list(a = matrix(normal, nrow = 1L), b = offset, eq = FALSE),
-          # We override the V-rep double representation because mathematically
-          # the H- and V-reps share equivalent numbers, but floating-point
-          # magic can perturb.
+          # Given directly: a cddlib-derived V-rep in doubles can drift from
+          # the H-rep by rounding.
           v = make_generators(
-            vertices = matrix(anchor, ncol = 1L),
-            rays = matrix(-unit, ncol = 1L),
+            vertices = matrix(anchor, nrow = 1L),
+            rays = matrix(-unit, nrow = 1L),
             lines = if (d >= 2L) basis else NULL
           )
         )

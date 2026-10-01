@@ -3,72 +3,24 @@ NULL
 
 # Bernstein enclosure over a simplex, and branch and bound on top of it.
 #
-# `E_theta[X]` is a polynomial in `theta` of degree `n_trials`, and over a
-# simplex the multinomial basis *is* the degree-`n` Bernstein basis. So the
-# coefficients are the realised values of `X` at the lattice, the convex hull
-# property bounds the polynomial by their range for free, and de Casteljau
-# subdivision tightens it quadratically in the sub-simplex diameter. That is
-# what makes a *global* upper bound available at all, as against the oracle's
-# multi-start search, which only ever gives a lower one. See Leroy (2012),
-# Reliable Computing 17(1), 11-21.
-#
-# `dc_step()` runs one step of the de Casteljau algorithm
-# (Prautzsch-Boehm-Paluszny 10.4, from the Bernstein recursion in 10.1);
-# `dc_pyramid()` iterates it; `dc_child()` reads a subsimplex expansion off the
-# pyramid (Leroy Algorithm 2.13, step 4). Subdivision and reparametrisation are
-# both callers -- see PBP 11.3, which treats them together.
+# `E_theta[X]` is a degree-`n_trials` polynomial in `theta`, and over a simplex
+# the multinomial basis *is* the Bernstein basis: the coefficients are the
+# values of `X` on the lattice, their range bounds the polynomial over the
+# simplex, and de Casteljau subdivision tightens that quadratically in terms of
+# the diameter of the sub-simplices.
+# Leroy (2012), Reliable Computing 17(1), 11-21.
+# "PBP" is shorthand for Prautzsch, Boehm and Paluszny (2002).
 
 # --- Size guard for Bernstein -------------------------------------------------
 
-#' For a multinomial random variable `X`, `E_theta[X]` takes the form of a
-#' polynomial in `theta` of degree `n_trials`. Its Bernstein form has one
-#' coefficient per point of the multinomial sample space.
-#' @keywords internal
-#' @noRd
+# Number of Bernstein coefficients: one per point of the multinomial sample
+# space.
 bernstein_size <- function(n_trials, k) choose(n_trials + k - 1, k - 1)
 
 
-#' The largest batch (`n_trials`) that would fit within a budget
-#'
-#' Reported in the refusal, since the batch size is one thing a caller can
-#' actually change.
-#' @keywords internal
-#' @noRd
-largest_batch <- function(k, max_coefficients) {
-  # Binary search over n_trials over the support size
-  if (bernstein_size(1L, k) > max_coefficients) {
-    return(0L)
-  }
-  hi <- 1L
-  while (bernstein_size(2L * hi, k) <= max_coefficients) {
-    hi <- 2L * hi
-  }
-  lo <- hi
-  hi <- 2L * hi
-  while (lo < hi) {
-    mid <- (lo + hi + 1L) %/% 2L
-    if (bernstein_size(mid, k) <= max_coefficients) {
-      lo <- mid
-    } else {
-      hi <- mid - 1L
-    }
-  }
-  lo
-}
-
-
-#' Refuse a certification too large to attempt
-#'
-#' Checked before anything is built, since the lattice is where the memory and
-#' most of the setup time go. Exact arithmetic on `choose()`, so the guard itself
-#' costs nothing.
-#'
-#' This is a resource limit rather than a correctness one: raising it costs time
-#' and memory and nothing else. The other guards, e.g. checking that the family
-#' permits a bound on the expectation at all, are a correctness concern and can
-#' not be overridden.
-#' @keywords internal
-#' @noRd
+# Reject a certification too large to attempt, before the lattice is built. A
+# resource limit only: raising `max_coefficients` costs a lot of time and
+# memory.
 check_bernstein_size <- function(n_trials, k, max_coefficients) {
   size <- bernstein_size(n_trials, k)
   if (size <= max_coefficients) {
@@ -85,10 +37,8 @@ check_bernstein_size <- function(n_trials, k, max_coefficients) {
     format(max_coefficients, big.mark = ",", scientific = FALSE),
     ").\n",
     "The count is choose(n_trials + k - 1, k - 1), so it is the batch size ",
-    "that drives it: ",
-    largest_batch(k, max_coefficients),
-    " would fit.\n",
-    "Raise `max_coefficients` to attempt it anyway.",
+    "that drives it: reduce `n_trials`, or raise `max_coefficients` to ",
+    "attempt it anyway.",
     call. = FALSE
   )
 }
@@ -96,29 +46,19 @@ check_bernstein_size <- function(n_trials, k, max_coefficients) {
 
 # ---- lattice ---------------------------------------------------------------
 
-#' Enumerate the degree-`n` tally lattice on `K` categories
-#'
-#' Precomputes every index the de Casteljau routines need: the multi-index
-#' matrix, the `K` vertex positions (PBP 10.2: `b(a_j) = b_{n e_j}`), the edge
-#' list, the degree ladder used by `dc_step()`, and the read-off map used by
-#' `dc_child()`.
-#'
-#' The row order of `tally` is the coefficient order from `compositions()`, so
-#' be careful of the order of the coefficients upstream when implementing with
-#' a new family.
-#' @param n Degree (multinomial batch size). At least 1.
-#' @param K Number of categories. At least 2.
-#' @return List with `n`, `K`, `tally`, `n_coef`, `pw` (base-`(n+1)` place
-#'   values), `vertex` (positions of the `K` vertex coefficients), `edges` (the
-#'   `2 x choose(K, 2)` edge list) `up` and `readoff`.
-#' @keywords internal
-#' @noRd
+# Enumerate the degree-`n` tally lattice on `K` categories, with every index
+# the de Casteljau routines need: `vertex` (PBP 10.2), `edges` (2 x E), `up`
+# for `dc_step()`, `readoff` for `dc_child()`, and `pw` (base-`(n+1)` place
+# values keying multi-indices). `tally` rows follow `enumerate_counts()`, the
+# same order `enumerate_space()` lists a `count_space` in, so `x` on the
+# multinomial sample space is already a coefficient vector. A new family must
+# supply coefficients in this order.
 bernstein_lattice <- function(n, K) {
   n <- as.integer(n)
   K <- as.integer(K)
   stopifnot(length(n) == 1L, length(K) == 1L, n >= 1L, K >= 2L)
 
-  tally <- compositions(n, K)
+  tally <- enumerate_counts(n, K)
   pw <- (n + 1)^(seq_len(K) - 1L)
   # Tally n * e_j has base-(n+1) key n * (n+1)^(j-1).
   vertex <- match(n * pw, as.vector(tally %*% pw))
@@ -126,7 +66,7 @@ bernstein_lattice <- function(n, K) {
   edges <- utils::combn(K, 2L)
   # `up[[m + 1]][beta, i]` is the position of `beta + e_i` among the degree-`m`
   # multi-indices, so one de Casteljau step is a gather and a matrix product.
-  key <- lapply(0:n, function(m) as.vector(compositions(m, K) %*% pw))
+  key <- lapply(0:n, function(m) as.vector(enumerate_counts(m, K) %*% pw))
   up <- vector("list", n + 1L)
   for (m in seq_len(n)) {
     idx <- matrix(0L, nrow = length(key[[m]]), ncol = K)
@@ -136,10 +76,8 @@ bernstein_lattice <- function(n, K) {
     up[[m + 1L]] <- idx
   }
 
-  # Leroy Algorithm 2.13 step 4: `b_alpha(V^[i]) = b^(alpha_i)_{alpha-hat-i}`.
-  # Level `l` of the pyramid holds degree `n - l`, and zeroing slot `i` leaves
-  # degree `n - alpha_i`, so the level to read is `alpha_i`. Grouped by level so
-  # the read-off is a handful of vectorised gathers.
+  # Leroy Algorithm 2.13 step 4: `b_alpha(V^[i]) = b^(alpha_i)_{alpha-hat-i}`,
+  # read from pyramid level `alpha_i`. Grouped by level for vectorised gathers.
   readoff <- lapply(seq_len(K), function(i) {
     lev <- tally[, i]
     hat <- tally
@@ -168,56 +106,18 @@ bernstein_lattice <- function(n, K) {
   )
 }
 
-#' Every composition of `n` into `k` non-negative parts, lexicographically
-#'
-#' Prefixes `i = 0:n` and recurses, which emits the multi-indices in ascending
-#' lexicographic order. Agrees row-for-row with the stars-and-bars enumeration
-#' in `build_counts_matrix()`; `test-bernstein.R` pins that so a change to
-#' either fails loudly rather than silently mis-indexing coefficients.
-#'
-#' @param n Total to be split.
-#' @param k Number of parts.
-#' @return `(choose(n + k - 1, k - 1), k)` integer matrix, no dimnames.
-#' @keywords internal
-#' @noRd
-compositions <- function(n, k) {
-  if (k == 1L) {
-    return(matrix(as.integer(n), nrow = 1L, ncol = 1L))
-  }
-  out <- do.call(
-    rbind,
-    lapply(0:n, function(i) cbind(i, compositions(n - i, k - 1L)))
-  )
-  dimnames(out) <- NULL
-  storage.mode(out) <- "integer"
-  out
-}
-
-
 # ---- primitives ------------------------------------------------------------
 
-#' One de Casteljau step at barycentric weights `lambda`: degree `m` -> `m - 1`
-#'
-#' PBP 10.4: `b_i <- [b_{i+e_0} + ... + b_{i+e_d}] u`, which follows from the
-#' Bernstein recursion `B^n_i = u_0 B^{n-1}_{i-e_0} + ... + u_d B^{n-1}_{i-e_d}`
-#' in 10.1. Every entry is an affine combination of its parents, and a convex
-#' one when `lambda >= 0`.
-#' @keywords internal
-#' @noRd
+# One de Casteljau step (PBP 10.4) at barycentric weights `lambda`, degree `m`
+# to `m - 1`. Convex combinations when `lambda >= 0`.
 dc_step <- function(cur, m, lambda, lat) {
   idx <- lat$up[[m + 1L]]
   as.vector(matrix(cur[idx], nrow = nrow(idx)) %*% lambda)
 }
 
 
-#' The full de Casteljau pyramid
-#'
-#' PBP 10.4: `n` steps reduce the degree-`n` array to the single value at
-#' `lambda`. Level `l` holds the degree-`n - l` intermediates `b^(l)`; the book
-#' calls the collection a tetrahedral array. All the levels are kept, because
-#' the subsimplex expansions are read off them.
-#' @keywords internal
-#' @noRd
+# All `n` de Casteljau levels; level `l` holds degree `n - l`. Every level is
+# kept because the subsimplex expansions are read off them.
 dc_pyramid <- function(coef, lat, lambda) {
   levels <- vector("list", lat$n + 1L)
   levels[[1L]] <- coef
@@ -228,14 +128,8 @@ dc_pyramid <- function(coef, lat, lambda) {
 }
 
 
-#' Read the expansion over `V^[i]` off a pyramid
-#'
-#' Leroy Algorithm 2.13, step 4. `V^[i]` is the simplex with vertex `i` replaced
-#' by the point `lambda` was taken at, and its coefficients are
-#' `b_alpha(V^[i]) = b^(alpha_i)_{alpha-hat_i}` -- one entry of one pyramid
-#' level per output coefficient, no arithmetic.
-#' @keywords internal
-#' @noRd
+# The expansion over `V^[i]` (vertex `i` replaced by the split point), read
+# off the pyramid without arithmetic (Leroy Algorithm 2.13, step 4).
 dc_child <- function(pyr, lat, i) {
   out <- numeric(lat$n_coef)
   for (g in lat$readoff[[i]]) {
@@ -245,83 +139,53 @@ dc_child <- function(pyr, lat, i) {
 }
 
 
-#' Split a box at the point with barycentric weights `lambda`
-#'
-#' PBP 11.3. Returns one child per non-degenerate `V^[i]`: `lambda_i = 0` puts
-#' the new point in the face opposite vertex `i`, so `V^[i]` would be flat.
-#' *All* the children come from one pyramid -- the value `b^(n)_0` sits in every
-#' one of them, and its dependency cone is the whole pyramid, so computing one
-#' child costs exactly what computing them all costs.
-#'
-#' A box is `list(V, coef)`: `V` is `K x K` with columns giving the
-#' sub-simplex's vertices in barycentric coordinates of the original simplex
-#' (which, for the probability simplex, are the parameter vectors themselves),
-#' and `coef` are its Bernstein coefficients in `lat`'s row order.
-#' @keywords internal
-#' @noRd
+# Split a box at barycentric weights `lambda` (PBP 11.3), one child per
+# `lambda_i != 0` (the others would be flat).
+#
+# A box is `list(V, coef)`: `V` is `K x K`, rows the sub-simplex's vertices in
+# barycentric coordinates of the original (for the probability simplex, the
+# parameter vectors themselves); `coef` in `lat`'s row order.
 subdivide <- function(box, lat, lambda) {
   pyr <- dc_pyramid(box$coef, lat, lambda)
-  point <- box$V %*% lambda
+  point <- drop(lambda %*% box$V)
   lapply(which(lambda != 0), function(i) {
     V <- box$V
-    V[, i] <- point
+    V[i, ] <- point
     list(V = V, coef = dc_child(pyr, lat, i))
   })
 }
 
 
-#' Bisect a box's edge `(p, q)`, returning both children exactly
-#'
-#' Leroy Example 2.15: binary splitting at the midpoint of an edge. Only
-#' `lambda_p` and `lambda_q` are non-zero, so exactly two children are
-#' non-degenerate. Midpoints rather than arbitrary edge points because that is
-#' what bounds the shrinking factor, and hence the subdivision count (Leroy
-#' Lemma 2.16, Theorem 3.6).
-#'
-#' @param box A box.
-#' @param p,q Edge endpoints.
-#' @param lat A `bernstein_lattice()`.
-#' @return The two child boxes, `V^[p]` then `V^[q]` -- that is, the one with
-#'   vertex `p` *replaced* first. Note this is the opposite labelling to
-#'   "keeps vertex `p`".
-#' @keywords internal
-#' @noRd
+# Bisect edge `(p, q)` at its midpoint (Leroy Example 2.15); midpoints bound
+# the shrinking factor and hence the subdivision count (Lemma 2.16, Thm 3.6).
+# Returns `V^[p]` then `V^[q]`: the child with vertex `p` *replaced* first.
 bisect <- function(box, p, q, lat) {
   lambda <- numeric(lat$K)
   lambda[c(p, q)] <- 0.5
   subdivide(box, lat, lambda)
 }
 
-#' The edge of a box with the greatest Euclidean length
-#' @param V `K x K` vertex matrix.
-#' @param edges `2 x E` edge list.
-#' @return Length-2 integer vector of endpoints.
-#' @keywords internal
-#' @noRd
+# Endpoints of the longest edge of vertex matrix `V`.
 longest_edge <- function(V, edges) {
-  d2 <- colSums(
-    (V[, edges[1L, ], drop = FALSE] -
-      V[, edges[2L, ], drop = FALSE])^2
+  d2 <- rowSums(
+    (V[edges[1L, ], , drop = FALSE] -
+      V[edges[2L, ], , drop = FALSE])^2
   )
   edges[, which.max(d2)]
 }
 
-# PBP 10.2 (convex hull property) with 10.3 Remark 2 (functional surface, so
-# coefficients are Bezier *ordinates*): i.e. G <= max coefficient over the box.
+# Convex hull property (PBP 10.2, 10.3 Remark 2): G <= max coefficient.
 box_bound <- function(box) max(box$coef)
 
-# PBP 10.2: `b(a_0) = b_{n0...0}, ..., b(a_d) = b_{0...0n}`. The vertex
-# coefficients are exact values of G, hence a valid *lower* bound.
+# Vertex coefficients are exact values of G (PBP 10.2), hence a lower bound.
 vertex_values <- function(box, lat) box$coef[lat$vertex]
 
-# The best vertex of a box: its value and the parameter vector attaining it.
 box_best <- function(box, lat) {
   v <- vertex_values(box, lat)
   j <- which.max(v)
-  list(value = v[[j]], theta = box$V[, j])
+  list(value = v[[j]], theta = box$V[j, ])
 }
 
-# The best vertex over a list of boxes.
 boxes_best <- function(boxes, lat) {
   best <- list(value = -Inf, theta = NULL)
   for (b in boxes) {
@@ -335,59 +199,58 @@ boxes_best <- function(boxes, lat) {
 
 # ---- general reparametrisation ---------------------------------------------
 
-#' Reparametrise a Bernstein form onto an arbitrary sub-simplex
-#'
-#' PBP 11.2: the polar form `b[x_1 ... x_n]` is the unique symmetric multiaffine
-#' map with `b[x ... x] = b(x)`, and its values at the vertex arguments
-#'
-#'   `b_alpha = b[v_1 ... v_1 v_2 ... v_2 ... v_K ... v_K]`, `v_j` taken
-#'   `alpha_j` times,
-#'
-#' *are* the Bezier coefficients over `conv(v_1, ..., v_K)`. The recursion
-#' consuming one argument per step is PBP 11.2 (1), which is `dc_step()`; when
-#' every argument is the same point it collapses to de Casteljau's algorithm,
-#' so a single moved vertex agrees exactly with plain subdivision.
-#'
-#' Cost is `choose(n + K, K)` `dc_step()` calls. This is called once per sunull
-#' at the start before `certify_sup()`, never inside the branch-and-bound loop,
-#' which subdivides with `bisect()` instead of full reparametrisation.
-#'
-#' @param coef Length-`n_coef` coefficient vector in `lat$tally` row order.
-#' @param lat A `bernstein_lattice()`.
-#' @param vertices `(K, K)` matrix whose columns are the new vertices in
-#'   barycentric coordinates of the original simplex.
-#' @return Coefficient vector over the new simplex, in `lat$tally` row order.
-#' @keywords internal
-#' @noRd
+# How the rows of `v` leave the standard simplex, as a clause for an error
+# message, or `NULL` if they don't. The one membership test for vertex
+# matrices; negativity is reported before the sum.
+simplex_departure <- function(v, neg_tol = 1e-12, sum_tol = 1e-9) {
+  if (any(v < -neg_tol)) {
+    return(paste0("the smallest coordinate is ", format(min(v))))
+  }
+  sums <- rowSums(v)
+  off <- abs(sums - 1)
+  if (max(off) >= sum_tol) {
+    return(paste0(
+      "the coordinates of one sum to ",
+      format(sums[which.max(off)]),
+      " rather than 1"
+    ))
+  }
+  NULL
+}
+
+# A lower-dimensional simplex as `K` vertex rows, by repeating its last vertex.
+pad_vertices <- function(V, K) {
+  V[c(seq_len(nrow(V)), rep(nrow(V), K - nrow(V))), , drop = FALSE]
+}
+
+# Bernstein coefficients over the sub-simplex with (barycentric) vertex rows
+# `vertices`, via the polar form (PBP 11.2): `b_alpha` is the blossom with
+# `v_j` taken `alpha_j` times, each argument consumed by one `dc_step()`.
 reparametrise_to <- function(coef, lat, vertices) {
   V <- as.matrix(vertices)
-  # `bernstein_compatible()` asserts these assumptions for anything arriving
-  # `certify()`; `simplex_region`'s validator asserts non-singularity.
-  # Worth keeping anyway I guess. It isn't called too often.
   stopifnot(
     nrow(V) == lat$K,
     ncol(V) == lat$K,
     all(is.finite(V)),
     length(coef) == lat$n_coef,
-    "vertices must lie in the standard simplex" = all(V >= -1e-12) &&
-      max(abs(colSums(V) - 1)) < 1e-9,
-    "vertices must span a non-degenerate simplex" = abs(det(V)) > 1e-12
+    "vertices must lie in the standard simplex" = is.null(
+      simplex_departure(V)
+    )
   )
 
-  # `compositions()` loops the first coordinate ascending and recurses on the
-  # rest, which is this recursion, so the sub-results concatenate directly into
-  # coefficient order.
+  # This recursion visits multi-indices in `enumerate_counts()` order, so the
+  # parts concatenate straight into coefficient order.
   fill <- function(cur, j, remaining) {
     if (j == lat$K) {
       for (deg in rev(seq_len(remaining))) {
-        cur <- dc_step(cur, deg, V[, j], lat)
+        cur <- dc_step(cur, deg, V[j, ], lat)
       }
       return(cur)
     }
     parts <- vector("list", remaining + 1L)
     for (a in 0:remaining) {
       if (a > 0L) {
-        cur <- dc_step(cur, remaining - a + 1L, V[, j], lat)
+        cur <- dc_step(cur, remaining - a + 1L, V[j, ], lat)
       }
       parts[[a + 1L]] <- fill(cur, j + 1L, remaining - a)
     }
@@ -399,35 +262,18 @@ reparametrise_to <- function(coef, lat, vertices) {
 
 # ---- branch and bound ------------------------------------------------------
 
-#' A node of the branch-and-bound tree
-#'
-#' A box plus its cached upper bound. The bound is `max(coef)`, so caching costs
-#' nothing and is exact; the loop otherwise re-derives it for every active node
-#' on every iteration, which is 2.6 evaluations per node at `K = 4, n = 12` and
-#' 4.4 at `K = 5, n = 20`. In the future, when generalising beyond just
-#' Bernstein bounds (e.g. Lipschitz for gaussian?), caching will probably be
-#' necessary.
-#' @keywords internal
-#' @noRd
+# A branch-and-bound node: a box plus its cached upper bound and lineage.
 node <- function(box, id, parent = NA_integer_, depth = 0L, born = 0L) {
   box$ub <- box_bound(box)
   box$id <- id
   box$parent <- parent
   box$depth <- depth
-  # Iteration the node was created at, and the one it was pruned at. Together
-  # with `parent` these make the run replayable.
+  # With `parent` and the record's `retired`, makes the run replayable.
   box$born <- born
-  box$died <- NA_integer_
   box
 }
 
-#' Strip a node to what a record needs
-#'
-#' Geometry and scalars, no coefficients: `V` is `K^2` numbers against 10,626
-#' for `coef` at `K = 5, n = 20`, so a whole run's history costs less than one
-#' live node.
-#' @keywords internal
-#' @noRd
+# A node without its coefficients, for the history.
 node_stub <- function(box, retired, fate) {
   list(
     id = box$id,
@@ -444,27 +290,8 @@ node_stub <- function(box, retired, fate) {
 node_ubs <- function(nodes) vapply(nodes, function(b) b$ub, numeric(1L))
 
 
-#' The bound the run is currently entitled to claim
-#'
-#' Not simply the maximum over active nodes. A pruned node may still hold the
-#' supremum, so the largest upper bound pruning ever discarded is recorded
-#' along with the active maximum, and `attained` covers the run's own vertex
-#' evaluations.
-#' @keywords internal
-#' @noRd
-certified_bound <- function(attained, active_ub, pruned_ub) {
-  max(attained, active_ub, pruned_ub)
-}
-
-
-#' Why the search should stop, or `NULL` to continue
-#'
-#' Three ways out, kept apart because they mean different things to the caller:
-#' the active set empties (everything pruned, and further refinement cannot
-#' change the bound), the gap closes to `tol`, or the iteration cap bites. Only
-#' the last qualifies the result.
-#' @keywords internal
-#' @noRd
+# Why the search should stop, or `NULL`. Only "budget_hit" qualifies the
+# result.
 stop_reason <- function(n_active, gap, tol, it, max_iter) {
   if (n_active == 0L) {
     return("converged")
@@ -479,84 +306,26 @@ stop_reason <- function(n_active, gap, tol, it, max_iter) {
 }
 
 
-#' Discard nodes that cannot beat the incumbent
-#'
-#' Leroy's Lemma 3.2 cut-off test, and what makes the method tractable: without
-#' it the queue grows without limit.
-#'
-#' `keep_argmax` retains ties generously, because dropping a node that attains
-#' the maximum would break the enclosure claim, whereas keeping a spare one only
-#' costs work. It is incompatible with a positive `slack`, which deliberately
-#' discards such nodes.
-#' @keywords internal
-#' @noRd
-prune_active <- function(active, incumbent, slack, keep_argmax) {
-  ubs <- node_ubs(active)
-  keep <- if (keep_argmax) {
-    ubs >= incumbent - 8 * .Machine$double.eps * max(1, abs(incumbent))
-  } else {
-    ubs > incumbent + slack
-  }
-  list(
-    keep = active[keep],
-    drop = active[!keep],
-    kept_ub = if (any(keep)) max(ubs[keep]) else -Inf
-  )
-}
-
-
-#' Global upper bound on `sup G` over the union of the seed sub-simplices
-#'
-#' Validity does not depend on convergence: `bound` is a valid upper bound at
-#' every iteration (up to floating-point precision), so `G / bound <= 1`
-#' whenever you stop. Refinement buys a tighter bound, not validity.
-#'
-#' @param seeds List of boxes (see `bisect()`).
-#' @param lat A `bernstein_lattice()`.
-#' @param tol Stop once `bound - incumbent <= tol`.
-#' @param max_iter Cap on bisections.
-#' @param slack Prune with `U(S) <= incumbent + slack`. Cheaper, but the active
-#'   set then encloses the slack-superlevel set rather than the argmax.
-#' @param keep_argmax Prune with `U(S) < incumbent` instead, retaining ties, so
-#'   that `active` is a certified enclosure of every maximiser. Forces
-#'   `slack = 0`; the two modes are mutually exclusive. `shared_incumbent` must
-#'   be left at its default (`-Inf`).
-#' @param shared_incumbent A value already attained (hence a valid lower bound)
-#'   somewhere the caller will take a maximum over, e.g. another cell of the
-#'   same null. Allows us to prune nodes earlier, which is what makes a null
-#'   with many cells cost far less than it would otherwise. Many small cells
-#'   will be pruned immediately. It controls pruning and early stopping only.
-#'   Do not specify if `keep_argmax = TRUE`.
-#' @return `list(bound, incumbent, theta, active, rejected, iterations,
-#'   converged, budget_hit, trace)`. `converged` and `budget_hit` are mutually
-#'   exclusive and exactly one is `TRUE`: the search either pruned or closed the
-#'   gap, or it ran out of `max_iter`. Only the second qualifies the bound.
-#' @keywords internal
-#' @noRd
+# Global upper bound on `sup G` over one sub-simplex.
+#
+# `bound` is valid (up to rounding) at every iteration. It includes the largest
+# bound ever pruned, since a pruned node may still hold the supremum.
+# `shared_incumbent` is a value attained elsewhere (e.g. another cell of the
+# same null), used only for pruning and stopping. Exactly one of `converged` and
+# `budget_hit` is `TRUE`.
 certify_sup <- function(
-  seeds,
+  box,
   lat,
   tol = 1e-3,
   max_iter = 500L,
-  slack = 0,
-  keep_argmax = FALSE,
   shared_incumbent = -Inf
 ) {
-  if (keep_argmax && slack > 0) {
-    stop("`slack` must be 0 when keep_argmax = TRUE")
-  }
-  if (keep_argmax && is.finite(shared_incumbent)) {
-    # `keep_argmax` promises `active` encloses every maximiser of these seeds,
-    # and a value attained elsewhere would prune away the ones that merely tie
-    # with it.
-    stop("`shared_incumbent` must be -Inf when keep_argmax = TRUE")
-  }
   max_iter <- as.integer(max_iter)
 
-  active <- lapply(seq_along(seeds), function(i) node(seeds[[i]], id = i))
-  next_id <- length(seeds) + 1L
-  best <- boxes_best(active, lat)
-  rejected <- list()
+  active <- list(node(box, id = 1L))
+  ubs <- node_ubs(active)
+  next_id <- 2L
+  best <- box_best(box, lat)
   incumbent_trace <- numeric(max_iter)
   retired_nodes <- list()
   trace <- numeric(max_iter)
@@ -566,11 +335,8 @@ certify_sup <- function(
   pruned_ub <- -Inf
 
   repeat {
-    # What the run may prune against: its own best vertex, or a better one
-    # already found elsewhere. The gap is measured against the same value.
     incumbent <- max(best$value, shared_incumbent)
-    active_ub <- if (length(active)) max(node_ubs(active)) else -Inf
-    bound <- certified_bound(best$value, active_ub, pruned_ub)
+    bound <- max(best$value, ubs, pruned_ub)
 
     reason <- stop_reason(
       length(active),
@@ -585,8 +351,7 @@ certify_sup <- function(
 
     it <- it + 1L
 
-    # Split the most promising node, then let its children compete.
-    j <- which.max(node_ubs(active))
+    j <- which.max(ubs)
     parent <- active[[j]]
     e <- longest_edge(parent$V, lat$edges)
     kids <- bisect(parent, e[1L], e[2L], lat)
@@ -600,31 +365,29 @@ certify_sup <- function(
       )
     })
     next_id <- next_id + length(kids)
-    retired_nodes <- c(retired_nodes, list(node_stub(parent, it, "split")))
+    retired_nodes[[length(retired_nodes) + 1L]] <-
+      node_stub(parent, it, "split")
     active <- c(active[-j], kids)
+    ubs <- c(ubs[-j], node_ubs(kids))
     kid_best <- boxes_best(kids, lat)
     if (kid_best$value > best$value) {
       best <- kid_best
     }
 
+    # Leroy Lemma 3.2 cut-off: drop nodes whose bound can't beat the incumbent
+    # (ties too).
     incumbent <- max(best$value, shared_incumbent)
-    pruned <- prune_active(active, incumbent, slack, keep_argmax)
-    if (length(pruned$drop)) {
-      pruned_ub <- max(pruned_ub, node_ubs(pruned$drop))
+    keep <- ubs > incumbent
+    if (!all(keep)) {
+      pruned_ub <- max(pruned_ub, ubs[!keep])
+      for (b in active[!keep]) {
+        retired_nodes[[length(retired_nodes) + 1L]] <-
+          node_stub(b, it, "pruned")
+      }
+      active <- active[keep]
+      ubs <- ubs[keep]
     }
-    rejected <- c(
-      rejected,
-      lapply(pruned$drop, function(b) {
-        b$died <- it # Record the iteration a node was pruned.
-        b
-      })
-    )
-    retired_nodes <- c(
-      retired_nodes,
-      lapply(pruned$drop, node_stub, retired = it, fate = "pruned")
-    )
-    active <- pruned$keep
-    trace[it] <- certified_bound(best$value, pruned$kept_ub, pruned_ub)
+    trace[it] <- max(best$value, ubs, pruned_ub)
     incumbent_trace[it] <- best$value
   }
 
@@ -632,8 +395,6 @@ certify_sup <- function(
     bound = bound,
     incumbent = best$value,
     theta = best$theta,
-    active = active,
-    rejected = rejected,
     iterations = it,
     history = c(
       retired_nodes,

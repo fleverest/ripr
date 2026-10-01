@@ -3,18 +3,10 @@
 simplex3 <- function() simplex_region(vertices = diag(3))
 
 
-test_that("an empty region acts as a list of length zero", {
+test_that("an empty region has no parts and no cells", {
   e <- empty_region()
   expect_identical(parts(e), list())
   expect_identical(cells(e), list())
-  expect_identical(n_parts(e), 0L)
-  expect_identical(n_cells(e), 0L)
-  expect_identical(length(e), 0L)
-  expect_identical(as.list(e), list())
-  expect_error(e[[1L]], "subscript out of bounds")
-  # Any subset of nothing is nothing.
-  expect_identical(e[integer(0)], e)
-  expect_identical(e[1L], e)
 })
 
 
@@ -26,51 +18,53 @@ test_that("the empty region answers the predicates an empty set should", {
 })
 
 
-test_that("an empty set has no representation to take", {
+test_that("an empty set has no representation or dimension to take", {
+  # No facets, no generators and no chart: there is nothing to describe. Nor
+  # an ambient dimension, since the empty set is the same set in all of them.
   e <- empty_region()
-  expect_error(h_rep(e), "not defined for an `empty_region`")
-  expect_error(v_rep(e), "not defined for an `empty_region`")
-  expect_error(q_hrep(e), "not defined for an `empty_region`")
-  expect_error(q_vrep(e), "not defined for an `empty_region`")
+  expect_error(e@facets, "Can't find property")
+  expect_error(e@generators, "Can't find property")
+  expect_error(chart(e), "Can't find method")
+  expect_error(space_dim(e), "same set in every ambient dimension")
 })
 
 
-test_that("union treats empty as its identity, in any dimension", {
+test_that("`|` treats empty as its identity, in any dimension", {
   s <- simplex3()
   e <- empty_region()
-  expect_identical(union(e, s), s)
-  expect_identical(union(s, e), s)
+  expect_identical(e | s, s)
+  expect_identical(s | e, s)
   expect_identical(union_region(e, e), e)
   expect_identical(union_region(e), e)
 
   # The same empty region is compatible with a region of any dimension.
   square <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
+    vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1))
   )
-  expect_identical(union(e, square), square)
+  expect_identical(e | square, square)
 })
 
 
-test_that("intersection absorbs to empty and setdiff subtracts nothing", {
+test_that("`&` absorbs to empty and `-` subtracts nothing", {
   s <- simplex3()
   e <- empty_region()
 
-  expect_true(S7_inherits(intersect(s, e), empty_region))
-  expect_true(S7_inherits(intersect(e, s), empty_region))
-  expect_true(S7_inherits(setdiff(e, s), empty_region))
+  expect_true(S7_inherits(s & e, empty_region))
+  expect_true(S7_inherits(e & s, empty_region))
+  expect_true(S7_inherits(e - s, empty_region))
   # Subtracting nothing gives the set back, untouched.
-  expect_identical(setdiff(s, e), s)
+  expect_identical(s - e, s)
   # A convex region minus itself is empty: every facet is ambient-implied,
   # so the whole ambient is covered and nothing remains.
-  expect_true(S7_inherits(setdiff(s, s), empty_region))
+  expect_true(S7_inherits(s - s, empty_region))
 })
 
 
-test_that("setequal knows the empty set from an occupied one", {
+test_that("`==` knows the empty set from an occupied one", {
   e <- empty_region()
-  expect_true(setequal(e, empty_region()))
-  expect_false(setequal(e, simplex3()))
-  expect_false(setequal(simplex3(), e))
+  expect_true(e == empty_region())
+  expect_false(e == simplex3())
+  expect_false(simplex3() == e)
 })
 
 
@@ -82,15 +76,13 @@ test_that("disjoin passes an empty region through", {
 
 test_that("the algebra is closed through an empty intermediate", {
   s <- simplex3()
-  nothing <- intersect(
-    point_region(theta = c(1, 0, 0)),
+  nothing <- point_region(theta = c(1, 0, 0)) &
     point_region(theta = c(0, 1, 0))
-  )
   expect_true(S7_inherits(nothing, empty_region))
-  # An empty result chains straight back into every verb.
-  expect_identical(union(nothing, s), s)
-  expect_true(S7_inherits(intersect(nothing, s), empty_region))
-  expect_true(setequal(setdiff(s, nothing), s))
+  # An empty result chains straight back into every operator.
+  expect_identical(nothing | s, s)
+  expect_true(S7_inherits(nothing & s, empty_region))
+  expect_true((s - nothing) == s)
 })
 
 

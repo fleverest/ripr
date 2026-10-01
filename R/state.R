@@ -1,76 +1,91 @@
-#' @include null.R quadrature.R distribution.R
+#' @include null.R quadrature.R distribution.R mixing.R
 NULL
 
-# The state representation of the ripr optimiser: the class, the conversions between
-# the per-part atom lists and the flat vectors the arithmetic works on, and the
-# trace. `steps.R` and `scheduler.R` both depend on this.
+# The optimiser's state and trace
 
 #' State of a RIPr fit
 #'
-#' Atoms and weights are lists indexed by part: element `i` holds the atoms
-#' belonging to \eqn{\Theta_{0i}}{Theta_0i}. The part tag matters because the
-#' parts overlap, so an atom in an intersection would otherwise be ambiguous
-#' about which chart to search in, and a parallel index vector would make that
-#' an invariant to check rather than one to hold structurally. Weights are
-#' normalised across the whole list, not within a part.
+#' The mixing measure is a [finite_dist], whose atoms are in the order they
+#' joined it (a new atom is appended last). `part` records which part of the
+#' null each atom belongs to, since parts may overlap.
 #'
-#' [ripr_init()] builds the state and the step verbs advance it; the
-#' constructor is not part of the public API.
+#' [ripr_init()] builds the state and the step verbs advance it. The constructor
+#' is not public.
 #'
-#' @param atoms List of `(d, n_i)` matrices, one per part of the null region.
-#' @param weights List of numeric vectors matching `atoms`, summing to 1 overall.
+#' @param mixing The current mixture, a [finite_dist] over the null.
+#' @param part Integer vector with one entry per atom of `mixing`: the part of
+#'   the null region holding each atom.
 #' @param alternative The alternative \eqn{Q}{Q}.
 #' @param null A [null_model].
-#' @param engine A resolved [quadrature].
+#' @param engine A resolved `quadrature`.
 #' @param control From [ripr_control()].
-#' @param trace Data frame, one row per recorded event. See [oracles] for what
-#'   the columns mean and which mixture each of them measures.
-#' @param snapshots List of recorded mixtures.
-#' @param iters Named integer counts of steps taken, one name per verb.
+#' @param trace_rows List of trace rows, one per step, each a named list;
+#'   read them through `trace`.
+#' @param snapshots List of recorded mixtures, each `list(step, phase, mixing,
+#'   part)`: the trace row and verb it was taken at, and the mixture then.
+#' @param oracle The linear oracle's verdict on the *current* mixture, or
+#'   `NULL` when nothing has measured it: `list(value, theta, part, elapsed)`,
+#'   with \eqn{\sup G = 1 + \mathrm{gap}}{sup G = 1 + gap}, its argmax, part,
+#'   and search seconds. A cache: any step that changes the mixture clears it,
+#'   a `record_gap = TRUE` sweep sets it, and the next [fw_step()] consumes it.
+#'   [gap_below()] reads it.
+#' @section Trace:
+#'   `state@trace` is a read-only data frame with one row per step, the first
+#'   being [ripr_init()]'s; see [oracles] for the columns.
 #' @return A `ripr_state`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality)
 #' state
+#' state@mixing
+#' state@part
+#'
+#' # Nothing has measured the starting mixture yet.
+#' is.null(state@oracle)
+#' # We may pass `record_gap = TRUE` to `ripr_init()` to sweep the oracle over
+#' # the initial state.
+#' state <- ripr_init(Q, plurality, record_gap = TRUE)
+#' state@oracle$value - 1
+#' state@trace$gap_after
 #' @keywords internal
 ripr_state <- new_class(
   "ripr_state",
   properties = list(
-    atoms = class_list,
-    weights = class_list,
+    mixing = finite_dist,
+    part = class_integer,
     alternative = distribution,
     null = null_model,
     engine = quadrature,
     control = class_list,
-    trace = class_any,
+    trace_rows = class_list,
+    trace = new_property(
+      S7::class_data.frame,
+      getter = function(self) trace_frame(self@trace_rows)
+    ),
     snapshots = class_list,
-    iters = class_integer
+    oracle = class_any
   ),
   validator = function(self) {
-    if (length(self@atoms) != length(self@weights)) {
-      return("`weights` must have one element per element of `atoms`")
+    if (length(self@part) != n_atoms(self@mixing)) {
+      return("`part` must have one element per atom of `mixing`")
     }
-    if (length(self@atoms) != n_parts(self@null@region)) {
-      return("`atoms` must have one element per part of the null's region")
+    if (!all(self@part %in% seq_len(n_parts(self@null@region)))) {
+      return("`part` must index the parts of the null's region")
     }
-    sizes <- vapply(self@atoms, ncol, integer(1))
-    if (!identical(sizes, vapply(self@weights, length, integer(1)))) {
-      return("each weight vector must match the column count of its atoms")
-    }
-    total <- sum(unlist(self@weights))
-    if (sum(sizes) > 0L && abs(total - 1) > 1e-8) {
-      return("weights must sum to 1 across all parts")
-    }
-    if (is.null(names(self@iters))) {
-      return("`iters` must be a named integer vector, one name per verb")
+    oracle_fields <- c("value", "theta", "part", "elapsed")
+    if (
+      !is.null(self@oracle) &&
+        !(is.list(self@oracle) && all(oracle_fields %in% names(self@oracle)))
+    ) {
+      return("`oracle` must be `NULL` or a list(value, theta, part, elapsed)")
     }
     NULL
   }
@@ -80,18 +95,13 @@ ripr_state <- new_class(
 #' @usage NULL
 method(print, ripr_state) <- function(x, ...) {
   tr <- x@trace
-  parts <- n_parts(x@null@region)
-  atoms <- length(flat_weights(x))
   kl <- if (nrow(tr)) format(signif(utils::tail(tr$kl, 1L), 6L)) else NA
 
-  fresh <- tr$fw == x@iters[["fw"]] &
-    tr$lb == x@iters[["lb"]] &
-    tr$em == x@iters[["em"]] &
-    tr$weight == x@iters[["weight"]]
-  g_now <- tr$gap_after[fresh & !is.na(tr$gap_after)]
+  # The cached oracle is the only gap known to describe the current mixture;
+  # a recorded one without it belongs to an iterate that has since moved on.
   g_any <- tr$gap_after[!is.na(tr$gap_after)]
-  gap <- if (length(g_now)) {
-    format(signif(utils::tail(g_now, 1L), 3L))
+  gap <- if (!is.null(x@oracle)) {
+    format(signif(x@oracle$value - 1, 3L))
   } else if (length(g_any)) {
     paste(
       format(signif(utils::tail(g_any, 1L), 3L)),
@@ -100,21 +110,20 @@ method(print, ripr_state) <- function(x, ...) {
   } else {
     "none recorded"
   }
+  counts <- phase_counts(tr)
 
   cat("<ripr_state>\n")
   cat(
     "  null     ",
-    attr(S7_class(x@null@family), "name"),
+    class_name(x@null@family),
     " in ",
-    parts,
-    ngettext(parts, " part", " parts"),
+    count_label(n_parts(x@null@region), "part"),
     "\n",
     sep = ""
   )
   cat(
     "  iterate  ",
-    atoms,
-    ngettext(atoms, " atom", " atoms"),
+    count_label(n_atoms(x@mixing), "atom"),
     if (!is.na(kl)) paste0(", KL ", kl),
     "\n",
     sep = ""
@@ -122,18 +131,16 @@ method(print, ripr_state) <- function(x, ...) {
   cat("  gap      ", gap, "\n", sep = "")
   cat(
     "  steps    ",
-    paste(names(x@iters), x@iters, collapse = ", "),
+    paste(names(counts), counts, collapse = ", "),
     sprintf(" (%.2gs)", sum(tr$elapsed, na.rm = TRUE)),
     "\n",
     sep = ""
   )
   cat(
     "  trace    ",
-    nrow(tr),
-    ngettext(nrow(tr), " row", " rows"),
+    count_label(nrow(tr), "row"),
     ", ",
-    length(x@snapshots),
-    ngettext(length(x@snapshots), " snapshot", " snapshots"),
+    count_label(length(x@snapshots), "snapshot"),
     "\n",
     sep = ""
   )
@@ -144,296 +151,107 @@ method(print, ripr_state) <- function(x, ...) {
 #' @rdname ripr_state
 #' @usage NULL
 method(format, ripr_state) <- function(x, ...) {
+  kl <- last_row(x)$kl
   sprintf(
-    "ripr_state: %d atoms, %s",
-    length(flat_weights(x)),
-    if (nrow(x@trace)) {
-      paste0("KL ", format(signif(utils::tail(x@trace$kl, 1L), 6L)))
-    } else {
-      "no trace"
-    }
+    "ripr_state: %s, %s",
+    count_label(n_atoms(x@mixing), "atom"),
+    if (is.null(kl)) "no trace" else paste0("KL ", format(signif(kl, 6L)))
   )
 }
 
 
-# --- Flat views ---------------------------------------------------------------
+# --- The mixture --------------------------------------------------------------
 
-#' All atoms as one `(d, C)` matrix
+#' Replace the mixture and parts in one call
 #'
-#' Columns are grouped by part, in part order, and a new atom is appended
-#' within its own part's block. So the flat ordering is not chronological: an
-#' atom added at iteration 5 may sit before one added at iteration 2. The
-#' blocks themselves are `state@atoms`, and [ripr_finish()] reports the part
-#' of each surviving atom in its `part` element.
-#' @param state A [ripr_state].
-#' @return `(d, C)` numeric matrix.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' plurality <- null_model(
-#'   fam,
-#'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-#'   )
-#' )
-#' Q <- fam(c(0.4, 0.35, 0.25))
-#' state <- ripr_init(Q, plurality)
-#' flat_atoms(state)
-#' @export
-flat_atoms <- function(state) {
-  keep <- block_sizes(state) > 0L
-  if (!any(keep)) {
-    return(matrix(numeric(0), nrow = 0L, ncol = 0L))
-  }
-  do.call(cbind, state@atoms[keep])
-}
-
-#' All weights as one vector, aligned with [flat_atoms()]
-#' @param state A [ripr_state].
-#' @return Numeric vector summing to 1.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' plurality <- null_model(
-#'   fam,
-#'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-#'   )
-#' )
-#' Q <- fam(c(0.4, 0.35, 0.25))
-#' state <- ripr_init(Q, plurality)
-#' flat_weights(state)
-#' @export
-flat_weights <- function(state) unlist(state@weights, use.names = FALSE)
-
-#' Which part each column of `flat_atoms()` belongs to
-#'
-#' Per-atom bookkeeping the fit uses to index back into the null's cells when
-#' it moves an atom. Users reach the same information through
-#' `ripr_finish()$part`.
-#' @param state A [ripr_state].
-#' @return Integer vector.
+#' Atoms, weights and parts must agree in length, so they change together.
 #' @keywords internal
 #' @noRd
-flat_part <- function(state) {
-  rep(seq_along(state@atoms), block_sizes(state))
-}
-
-#' Number of atoms in each part
-#' @keywords internal
-#' @noRd
-block_sizes <- function(state) vapply(state@atoms, ncol, integer(1))
-
-#' Cut a flat vector into blocks of the given sizes
-#'
-#' Zero-length blocks are kept, so the result always has one element per
-#' part.
-#' @keywords internal
-#' @noRd
-split_by_sizes <- function(x, sizes) {
-  ends <- cumsum(sizes)
-  starts <- ends - sizes + 1L
-  lapply(
-    seq_along(sizes),
-    \(i) if (sizes[i] == 0L) numeric(0) else unname(x[starts[i]:ends[i]])
+set_mixture <- function(
+  state,
+  atoms = state@mixing@atoms,
+  weights = state@mixing@weights,
+  part = state@part
+) {
+  S7::set_props(
+    state,
+    mixing = finite_dist(atoms = atoms, weights = weights),
+    part = part
   )
 }
 
-#' Redistribute a flat weight vector back into the per-part list
-#' @keywords internal
-#' @noRd
-unflatten_weights <- function(state, w) split_by_sizes(w, block_sizes(state))
-
-#' Where an atom appended to `part_index` lands in the flat ordering
-#'
-#' `add_atom` appends within a part's own block, so the new column sits at
-#' the end of that block rather than at the end of the flat vector. The step
-#' layer inserts the candidate at this index from the outset, which is what
-#' keeps it from having to re-index anything afterwards.
-#' @keywords internal
-#' @noRd
-insert_index <- function(state, part_index) {
-  sum(block_sizes(state)[seq_len(part_index)]) + 1L
-}
-
-#' Replace the weights from a flat vector
-#' @keywords internal
-#' @noRd
-set_weights <- function(state, w) {
-  state@weights <- unflatten_weights(state, w)
-  state
-}
-
-#' Append an atom to a part and set every weight at once
-#'
-#' `weights` is the full post-step flat vector of length `C + 1`, with the new
-#' atom's entry at `insert_index`. Atoms and weights are jointly constrained
-#' -- the lengths must match -- and S7 validates after every `@<-`, so the
-#' assignment has to be a single call.
+#' Append an atom; `weights` is the full length-`C + 1` vector, new atom last
 #' @keywords internal
 #' @noRd
 add_atom <- function(state, theta, part_index, weights) {
-  atoms <- state@atoms
-  atoms[[part_index]] <- cbind(
-    atoms[[part_index]],
-    theta,
-    deparse.level = 0
-  )
-  S7::set_props(
+  set_mixture(
     state,
-    atoms = atoms,
-    weights = split_by_sizes(weights, vapply(atoms, ncol, integer(1)))
+    atoms = rbind(state@mixing@atoms, theta, deparse.level = 0),
+    weights = weights,
+    part = c(state@part, as.integer(part_index))
   )
 }
 
 #' Remove every atom the step left with no weight
 #'
-#' The active set is \eqn{\{v : \alpha_v > 0\}}{{v : alpha_v > 0}} and a drop
-#' step is specified to take its atom out of it.
+#' Not [prune()]: that would renormalise, and knows nothing of `part`.
 #' @keywords internal
 #' @noRd
 drop_empty <- function(state) {
-  keep <- lapply(state@weights, \(x) x > 0)
-  if (all(unlist(keep, use.names = FALSE))) {
+  w <- state@mixing@weights
+  keep <- w > 0
+  if (all(keep)) {
     return(state)
   }
-  S7::set_props(
+  set_mixture(
     state,
-    atoms = Map(\(a, k) a[, k, drop = FALSE], state@atoms, keep),
-    weights = Map(\(x, k) x[k], state@weights, keep)
+    atoms = state@mixing@atoms[keep, , drop = FALSE],
+    weights = w[keep],
+    part = state@part[keep]
   )
-}
-
-#' Redistribute a flat `(d, C)` atom matrix back into the per-part list
-#' @keywords internal
-#' @noRd
-unflatten_atoms <- function(state, mat) {
-  sizes <- block_sizes(state)
-  ends <- cumsum(sizes)
-  starts <- ends - sizes + 1L
-  lapply(seq_along(sizes), function(i) {
-    if (sizes[i] == 0L) {
-      matrix(numeric(0), nrow = nrow(mat), ncol = 0L)
-    } else {
-      mat[, starts[i]:ends[i], drop = FALSE]
-    }
-  })
 }
 
 # --- Core quantities ----------------------------------------------------------
 
+#' Log density of a mixture with weights `w` over the atoms of `ld_all`
+#' @keywords internal
+#' @noRd
+mixture_log_p <- function(ld_all, w) {
+  row_logsumexp(add_by_col(ld_all, log(pmax(w, 0))))
+}
+
 #' Log mixture density at the engine's nodes
 #' @keywords internal
 #' @noRd
-log_p_at_nodes <- function(state, ld = NULL) {
-  if (is.null(ld)) {
-    ld <- compile_engine(state@engine)
-  }
-  row_logsumexp(add_by_col(ld(flat_atoms(state)), log(flat_weights(state))))
+log_p_at_nodes <- function(state, ld) {
+  mixture_log_p(ld(state@mixing@atoms), state@mixing@weights)
 }
 
-#' `KL(Q || P_W)` under the engine's quadrature rule
+#' `KL(Q || P)` via the engine's quadrature, `P` given by log density at nodes
 #' @keywords internal
 #' @noRd
-kl_divergence <- function(state, log_p = NULL, ld = NULL) {
-  if (is.null(log_p)) {
-    log_p <- log_p_at_nodes(state, ld)
-  }
-  expect_q(state@engine, state@engine@log_q - log_p)
+kl_at <- function(engine, log_p) expect_q(engine, engine@log_q - log_p)
+
+
+#' Returns a function giving wall-clock seconds since the call
+#' @keywords internal
+#' @noRd
+stopwatch <- function() {
+  started <- proc.time()[["elapsed"]]
+  function() proc.time()[["elapsed"]] - started
 }
 
 # --- Trace ---------------------------------------------------------------------
 
-#' The columns of a trace, and what each row's numbers describe
+#' One trace row: the single place the columns are listed, in print order
 #'
-#' Two families of column, distinguished by which mixture they measure.
-#' `oracle_value`/`oracle_theta` are what the oracle saw on the way *in*, at
-#' the mixture the row stepped from; `kl` and the `gap_after*` columns
-#' describe the mixture the row produced. An [em_step()] row leaves the first
-#' pair `NA`; a [weight_step()] row records its pre-sweep support gap plus one
-#' as `oracle_value` with no theta. The `gap_after*` columns fill via
-#' `record_gap = TRUE` or the next [fw_step()]'s oracle, and are `NA` until
-#' something measures them.
-#'
-#' The `theta` columns are list columns, one parameter per element, so
-#' `trace$gap_after_theta[[i]]` is whatever the family's parameter is. A matrix column
-#' would be tighter for the numeric vectors every family currently uses, and
-#' would export to csv, but it fixes the parameter's shape into the trace's
-#' type: a family whose parameter is a matrix -- a covariance, say -- could not
-#' be recorded at all. `NA` marks a row with no such point, matching how the
-#' rest of the trace says "not recorded", so `is.na()` reads them.
-#'
-#' `elapsed` is the wall-clock seconds of the step rule's work, and excludes
-#' the diagnostics (e.g. `record_gap`, `snapshot`, or the `until` predicate).
-#' An [fw_step()] that reads a recorded oracle back instead of searching adds
-#' the stored search time (`gap_after_elapsed`) to its row, so every row
-#' prices the search its step consumed, wherever that search physically ran.
-#' `gap_after_elapsed` is the seconds the search that filled this row's
-#' `gap_after` took. `cumsum(trace$elapsed)` is the cumulative time spent
-#' stepping.
+#' The columns are documented under "What a trace row records" in `?oracles`.
+#' `w` is the produced mixture's weights.
 #' @keywords internal
 #' @noRd
-empty_trace <- function() {
-  tr <- data.frame(
-    fw = integer(0),
-    lb = integer(0),
-    em = integer(0),
-    weight = integer(0),
-    phase = character(0),
-    kl = numeric(0),
-    gap_after = numeric(0),
-    gap_after_part = integer(0),
-    gap_after_elapsed = numeric(0),
-    oracle_value = numeric(0),
-    part = integer(0),
-    step_size = numeric(0),
-    direction = character(0),
-    support_size = integer(0),
-    max_weight = numeric(0),
-    elapsed = numeric(0),
-    stringsAsFactors = FALSE
-  )
-  tr$gap_after_theta <- list()
-  tr$oracle_theta <- list()
-  tr[trace_columns()]
-}
-
-#' Trace columns in print order, each `theta` beside the value it locates
-#' @keywords internal
-#' @noRd
-trace_columns <- function() {
-  c(
-    "fw",
-    "lb",
-    "em",
-    "weight",
-    "phase",
-    "kl",
-    "gap_after",
-    "gap_after_theta",
-    "gap_after_part",
-    "gap_after_elapsed",
-    "oracle_value",
-    "oracle_theta",
-    "part",
-    "step_size",
-    "direction",
-    "support_size",
-    "max_weight",
-    "elapsed"
-  )
-}
-
-bump <- function(state, which, by = 1L) {
-  state@iters[[which]] <- state@iters[[which]] + as.integer(by)
-  state
-}
-
-#' Append one row to the trace, and a snapshot if the control asks for it
-#' @keywords internal
-#' @noRd
-record <- function(
-  state,
+trace_row <- function(
+  step,
+  w,
   phase,
   kl,
   oracle_value = NA_real_,
@@ -443,112 +261,140 @@ record <- function(
   direction = NA_character_,
   elapsed = NA_real_
 ) {
-  w <- flat_weights(state)
-  row <- data.frame(
-    fw = state@iters[["fw"]],
-    lb = state@iters[["lb"]],
-    em = state@iters[["em"]],
-    weight = state@iters[["weight"]],
+  list(
+    step = as.integer(step),
     phase = phase,
     kl = kl,
     gap_after = NA_real_,
+    gap_after_theta = theta_cell(NULL),
     gap_after_part = NA_integer_,
     gap_after_elapsed = NA_real_,
     oracle_value = oracle_value,
+    oracle_theta = theta_cell(oracle_theta),
     part = as.integer(part),
     step_size = step_size,
     direction = direction,
     support_size = length(w),
     max_weight = if (length(w)) max(w) else NA_real_,
-    elapsed = elapsed,
-    stringsAsFactors = FALSE
+    elapsed = elapsed
   )
-  row$gap_after_theta <- theta_cell(NULL)
-  row$oracle_theta <- theta_cell(oracle_theta)
-  state@trace <- rbind(state@trace, row[trace_columns()])
+}
 
-  state
+#' A trace row of missing values: each column's name and type
+#' @keywords internal
+#' @noRd
+trace_prototype <- function() {
+  trace_row(0L, numeric(0), phase = NA_character_, kl = NA_real_)
+}
+
+#' Bind trace rows into a data frame, one pass per column
+#' @keywords internal
+#' @noRd
+trace_frame <- function(rows) {
+  proto <- trace_prototype()
+  cols <- lapply(names(proto), function(nm) {
+    if (nm %in% theta_columns) {
+      lapply(rows, .subset2, nm)
+    } else {
+      vapply(rows, .subset2, proto[[nm]], nm)
+    }
+  })
+  names(cols) <- names(proto)
+  structure(
+    cols,
+    class = "data.frame",
+    row.names = .set_row_names(length(rows))
+  )
+}
+
+#' The list columns of a trace
+#' @keywords internal
+#' @noRd
+theta_columns <- c("gap_after_theta", "oracle_theta")
+
+#' The last trace row, or `NULL`, without building the data frame
+#' @keywords internal
+#' @noRd
+last_row <- function(state) {
+  rows <- state@trace_rows
+  if (length(rows)) rows[[length(rows)]] else NULL
+}
+
+#' Steps taken so far by verb (`fw`, `lb`, `em`, `weight`), from `phase`;
+#' the `init` row is not counted
+#' @keywords internal
+#' @noRd
+phase_counts <- function(trace) {
+  vapply(
+    c(fw = "fw", lb = "lb", em = "em", weight = "weight"),
+    \(p) sum(trace$phase == p),
+    integer(1)
+  )
+}
+
+#' Append one row to the trace, describing the current mixture
+#'
+#' Arguments are those of `trace_row()` after `step` and `w`. A new row means a
+#' new mixture, so this clears the cached oracle.
+#' @keywords internal
+#' @noRd
+record <- function(state, ...) {
+  rows <- state@trace_rows
+  n <- length(rows)
+  rows[[n + 1L]] <- trace_row(n, state@mixing@weights, ...)
+  # Neither property can invalidate the state; skip the validator.
+  S7::set_props(state, trace_rows = rows, oracle = NULL, .check = FALSE)
 }
 
 #' One cell of a `theta` list column, `NA` when there is nothing to say
-#'
-#' The parameter goes in whole and unclassed, so a family free to make it
-#' something other than a numeric vector needs nothing here.
 #' @keywords internal
 #' @noRd
 theta_cell <- function(theta) {
-  list(if (is.null(theta)) NA else theta)
+  if (is.null(theta)) NA else theta
 }
 
 #' Write an oracle result into the last row's `gap_after` columns
 #'
-#' The last row produced the current mixture, so an oracle over that mixture is
-#' the row's Frank--Wolfe gap. Never overwrites a recorded gap.
+#' The last row produced the current mixture, so this is its Frank--Wolfe gap.
+#' Never overwrites a recorded gap.
 #' @keywords internal
 #' @noRd
 fill_gap <- function(state, gap, theta, part, elapsed) {
-  tr <- state@trace
-  i <- nrow(tr)
-  if (!i || !is.na(tr$gap_after[i])) {
+  rows <- state@trace_rows
+  i <- length(rows)
+  if (!i || !is.na(rows[[i]]$gap_after)) {
     return(state)
   }
-  tr$gap_after[i] <- gap
-  tr$gap_after_theta[i] <- theta_cell(theta)
-  tr$gap_after_part[i] <- as.integer(part)
-  tr$gap_after_elapsed[i] <- elapsed
-  state@trace <- tr
-  state
+  # Element by element: `[<-` with a list would spread a list-valued `theta`.
+  rows[[i]][["gap_after"]] <- gap
+  rows[[i]]["gap_after_theta"] <- list(theta_cell(theta))
+  rows[[i]][["gap_after_part"]] <- as.integer(part)
+  rows[[i]][["gap_after_elapsed"]] <- elapsed
+  S7::set_props(state, trace_rows = rows, .check = FALSE)
 }
 
-
-#' The oracle result already recorded for the current mixture, or `NULL`
-#'
-#' Inverts `fill_gap()`'s `value - 1`. The round trip can differ from a fresh
-#' sweep in the last ulp, so no test should pin identity across it.
-#' @keywords internal
-#' @noRd
-recorded_oracle <- function(state) {
-  tr <- state@trace
-  i <- nrow(tr)
-  if (!i || is.na(tr$gap_after[i]) || is.na(tr$gap_after_part[i])) {
-    return(NULL)
-  }
-  list(
-    value = tr$gap_after[i] + 1,
-    theta = tr$gap_after_theta[[i]],
-    part = tr$gap_after_part[i],
-    elapsed = tr$gap_after_elapsed[i]
-  )
-}
 
 #' Record the whole mixture alongside the trace
 #'
-#' A trace row is a handful of scalars; a snapshot copies every atom and weight,
-#' so the two differ in cost by orders of magnitude and in frequency within a
-#' single verb call. The verb decides when, via `wants_snapshot` -- `record`
-#' cannot, since it does not know whether it sits partway through a `times` loop
-#' or at the end of one.
+#' The verb decides when, via `wants_snapshot()`.
 #' @keywords internal
 #' @noRd
 snapshot_state <- function(state, phase) {
   state@snapshots <- c(
     state@snapshots,
     list(list(
-      iters = state@iters,
+      step = last_row(state)$step,
       phase = phase,
-      atoms = state@atoms,
-      weights = state@weights
+      mixing = state@mixing,
+      part = state@part
     ))
   )
   state
 }
 
 
-#' Should this iteration of a verb take a snapshot?
-#'
-#' `"step"` counts calls, so it fires only on the last iteration; `"all"` counts
-#' iterations, so it fires on every one.
-#' @param last Is this the final iteration of the current call?
+#' Should this iteration of a verb take a snapshot? `last`: final iteration
+#' of the call
 #' @keywords internal
 #' @noRd
 wants_snapshot <- function(state, last) {

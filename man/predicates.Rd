@@ -17,47 +17,41 @@ support_gap_below(tol = 1e-08)
 \item{tol}{Threshold.}
 }
 \value{
-A function of a \link{ripr_state} returning \code{TRUE} or \code{FALSE}.
+A function of \verb{(state, candidate)}, two \link{ripr_state}s, returning
+\code{TRUE} or \code{FALSE}.
 }
 \description{
-The \code{until} argument of each step verb accepts these predicates.
+The \code{until} argument of each step verb accepts these predicates: functions
+\verb{function(state, candidate)} tested before each step, where \code{candidate} is
+the state the pending step would produce (its trace row already appended).
+If satisfied, the step is not taken and the verb returns \code{state}. So
+\code{em_step(1000, until = kl_flat(1e-12))} means "at most a thousand EM sweeps,
+or until a sweep would decrease KL by less than 1e-12". Your own predicate
+must accept both arguments, e.g.
+\code{function(state, candidate) nrow(candidate@trace) > 20}.
 }
 \details{
-Each returns a function of the state, tested before each step: a satisfied
-predicate means no step is taken. For instance,
-\code{em_step(1000, until = kl_flat(1e-12))} means "at most a thousand EM
-sweeps, or until the KL decreases by less than 1e-12".
+\code{\link[=gap_below]{gap_below()}} and \code{\link[=support_gap_below]{support_gap_below()}} estimate the Frank--Wolfe gap of
+\code{state} over the whole null and over the current support respectively. They
+ignore \code{candidate}, so can be asked of one state as \code{gap_below(tol)(state)}.
 
-\code{\link[=gap_below]{gap_below()}} and \code{\link[=support_gap_below]{support_gap_below()}} are estimates of the Frank--Wolfe
-gap, over the whole null and over the current support respectively, so each
-roughly tracks how much KL is still available at that scope.
-
-\code{\link[=kl_flat]{kl_flat()}} is a per-row difference and bounds nothing. Under linear
-convergence at rate \eqn{\rho}{rho} it is \eqn{(1-\rho)}{(1 - rho)} times the
-true suboptimality, and \eqn{\rho}{rho} runs close to 1 here, so a small
-\code{dKL} means converged \emph{or} crawling. Use it as a
-budget.
-
-Convergence is a property of the current iterate, not a statement about the
-total fit. Take another step and a converged state is no longer converged.
-That is why these are predicates rather than a flag on the state.
+\code{\link[=kl_flat]{kl_flat()}} is a per-step difference and bounds nothing: under slow linear
+convergence a small \code{dKL} means converged \emph{or} crawling. Use it as a budget.
 }
 \section{Functions}{
 \itemize{
-\item \code{kl_flat()}: Checks whether the pending step would decrease KL by
-less than \code{tol}. It is recommended for \code{\link[=em_step]{em_step()}} in particular. When
-called externally on a state, it falls back to the change in KL over the
-last two steps.
+\item \code{kl_flat()}: Checks whether the pending step would change the KL
+by less than \code{tol}, comparing the last trace row of \code{candidate} with that
+of \code{state}. It is recommended for \code{\link[=em_step]{em_step()}} in particular.
 
-\item \code{gap_below()}: Checks whether the Frank--Wolfe gap that the current
-mixture attains is below \code{tol}. Inside \code{\link[=fw_step]{fw_step()}} the row is filled by
-the step's own oracle before the check; elsewhere it needs a recorded gap,
-so make sure to set \code{record_gap = TRUE}.
+\item \code{gap_below()}: Checks whether the Frank--Wolfe gap of \code{state} is
+below \code{tol}, reading the oracle cached in \code{state@oracle}. Inside
+\code{\link[=fw_step]{fw_step()}} the cache is always there; elsewhere set \code{record_gap = TRUE}
+on the previous verb.
 
 \item \code{support_gap_below()}: Checks whether the Frank--Wolfe gap on the current
-support, \verb{max_c G(theta_c) - 1} exceeds \code{tol}.
-It tests that the \emph{weights} are optimal for the atoms in the current
-support, rather than the current fit being optimal for the full null.
+support, \verb{max_c G(theta_c) - 1}, is below \code{tol}: whether the \emph{weights} are
+optimal for the current atoms, not whether the fit is optimal.
 
 }}
 \examples{
@@ -66,12 +60,22 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |>
   fw_step(times = 25L, until = gap_below(1e-2))
 gap_below(1e-2)(state)
+
+# Would one more EM sweep leave the KL flat?
+kl_flat(1e-6)(state, em_step(state))
+
+# A predicate of your own sees both states: here, stop before the support
+# would grow past a dozen atoms.
+too_many_atoms <- function(state, candidate) {
+  n_atoms(candidate@mixing) > 12L
+}
+fw_step(state, 10L, until = too_many_atoms)
 }

@@ -14,10 +14,9 @@ n_atoms(x)
 Integer.
 }
 \description{
-A continuous measure has no atoms to count, which is \code{NA}
-rather than \code{0}: zero would say the measure was empty.
+\code{NA} for a continuous measure.
 }
 \examples{
 n_atoms(dirac(theta = c(0.5, 0.5)))
-n_atoms(finite_dist(components = cbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
+n_atoms(finite_dist(atoms = rbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
 }

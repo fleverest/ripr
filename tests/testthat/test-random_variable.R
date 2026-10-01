@@ -101,6 +101,9 @@ test_that("infinite values are allowed", {
 })
 
 # --- The log form -------------------------------------------------------------
+#
+# Read as the `log_f` property, the constructor's own argument: a variable with
+# no log form holds `NULL` there, and every integrator checks for it.
 
 test_that("a likelihood and the arithmetic over it carry a log form", {
   # The log form is what an integrator reads when the values themselves have
@@ -109,20 +112,20 @@ test_that("a likelihood and the arithmetic over it carry a log form", {
   x <- rbind(c(4, 2, 2), c(8, 0, 0))
   R <- likelihood(f$Q) / likelihood(f$P)
 
-  expect_equal(log_evaluate(R, x), log(R(x)))
+  expect_equal(R@log_f(x), log(R(x)))
   expect_equal(
-    log_evaluate(likelihood(f$Q) * likelihood(f$P), x),
+    (likelihood(f$Q) * likelihood(f$P))@log_f(x),
     log(
       likelihood(f$Q)(x) * likelihood(f$P)(x)
     )
   )
   expect_equal(
-    log_evaluate(likelihood(f$Q) + likelihood(f$P), x),
+    (likelihood(f$Q) + likelihood(f$P))@log_f(x),
     log(
       likelihood(f$Q)(x) + likelihood(f$P)(x)
     )
   )
-  expect_equal(log_evaluate(2 * R, x), log(2 * R(x)))
+  expect_equal((2 * R)@log_f(x), log(2 * R(x)))
 })
 
 test_that("the log form agrees with the values where those are infinite", {
@@ -133,8 +136,8 @@ test_that("the log form agrees with the values where those are infinite", {
   R <- likelihood(f$Q) / likelihood(vertex)
   x <- rbind(c(4, 2, 2), c(8, 0, 0))
 
-  expect_equal(log_evaluate(R + R, x), log(R(x) + R(x)))
-  expect_identical(log_evaluate(R + R, c(4, 2, 2)), Inf)
+  expect_equal((R + R)@log_f(x), log(R(x) + R(x)))
+  expect_identical((R + R)@log_f(c(4, 2, 2)), Inf)
 })
 
 test_that("a variable that can be negative has no log form", {
@@ -143,12 +146,12 @@ test_that("a variable that can be negative has no log form", {
   f <- fixture()
   R <- likelihood(f$Q) / likelihood(f$P)
 
-  expect_null(log_evaluate(R - 1, c(4, 2, 2)))
-  expect_null(log_evaluate(likelihood(f$Q) - likelihood(f$P), c(4, 2, 2)))
-  expect_null(log_evaluate(-1 * R, c(4, 2, 2)))
+  expect_null((R - 1)@log_f)
+  expect_null((likelihood(f$Q) - likelihood(f$P))@log_f)
+  expect_null((-1 * R)@log_f)
   # A plain function is one nobody has told the logarithm of.
   plain <- random_variable(function(x) R(x), sample_space = f$space)
-  expect_null(log_evaluate(plain, c(4, 2, 2)))
+  expect_null(plain@log_f)
 })
 
 test_that("`log_f` must be a function, or nothing at all", {
@@ -258,21 +261,41 @@ test_that("the constructor wants a function, and one that returns numbers", {
 test_that("a leaf prints its label", {
   f <- fixture()
   Q <- f$Q
-  expect_match(rv_expression(likelihood(Q)), "^Q$")
-  expect_match(rv_expression(likelihood(Q, label = "alt")), "^alt$")
+  expect_match(format(likelihood(Q, label = "alt")), "^alt$")
   expect_match(
-    rv_expression(random_variable(function(x) x[, 1L], f$space)),
+    format(random_variable(function(x) x[, 1L], f$space)),
     "rv"
   )
 })
 
-test_that("an unlabelled call records how it was written, warts and all", {
-  # `substitute()` captures syntax rather than identity, so a call behind a
-  # helper labels itself with the helper's argument name. Cosmetic, and why
-  # `label` exists.
+test_that("an unlabelled likelihood describes its distribution", {
+  # The label comes from the distribution, not from how the call was written,
+  # so it is the same behind a helper or inside a loop.
   f <- fixture()
+  expect_identical(format(likelihood(f$Q)), "P[theta = (0.5, 0.333, 0.167)]")
   helper <- function(d) likelihood(d)
-  expect_match(rv_expression(helper(f$Q)), "^d$")
+  expect_identical(format(helper(f$Q)), format(likelihood(f$Q)))
+
+  mixed <- mixture(
+    f$family,
+    finite_dist(
+      atoms = rbind(c(0.5, 0.3, 0.2), c(0.2, 0.3, 0.5)),
+      weights = c(0.5, 0.5)
+    )
+  )
+  expect_identical(format(likelihood(mixed)), "P[mixed over 2 atoms]")
+  expect_identical(
+    format(likelihood(mixture(f$family, dirichlet(c(1, 1, 1))))),
+    "P[mixed over dirichlet]"
+  )
+})
+
+test_that("a long parameter is elided in the default label", {
+  f <- fixture(k = 6L)
+  expect_identical(
+    format(likelihood(f$P)),
+    "P[theta = (0.167, 0.167, 0.167, ...)]"
+  )
 })
 
 test_that("a label must be a single string or NULL", {
@@ -286,10 +309,10 @@ test_that("arithmetic prints as the expression that built it", {
   f <- fixture()
   Q <- f$Q
   P <- f$P
-  R <- likelihood(Q) / likelihood(P)
-  expect_equal(rv_expression(R), "Q / P")
-  expect_equal(rv_expression(R / 1.5), "Q / P / 1.5")
-  expect_equal(rv_expression(R + R), "Q / P + Q / P")
+  R <- likelihood(Q, label = "Q") / likelihood(P, label = "P")
+  expect_equal(format(R), "Q / P")
+  expect_equal(format(R / 1.5), "Q / P / 1.5")
+  expect_equal(format(R + R), "Q / P + Q / P")
 })
 
 test_that("brackets appear only where they change the reading", {
@@ -298,18 +321,11 @@ test_that("brackets appear only where they change the reading", {
   f <- fixture()
   Q <- f$Q
   P <- f$P
-  R <- likelihood(Q) / likelihood(P)
-  expect_equal(rv_expression(2 / R), "2 / (Q / P)")
-  expect_equal(rv_expression((R + 1) * 3), "(Q / P + 1) * 3")
-  expect_equal(rv_expression(R - R / 2), "Q / P - Q / P / 2")
-  expect_equal(rv_expression(R / R / 2), "Q / P / (Q / P) / 2")
-})
-
-test_that("a long label is shortened", {
-  f <- fixture()
-  long <- likelihood(mixture(f$family, dirac(c(0.5, 0.3, 0.2))))
-  expect_true(nchar(rv_expression(long)) <= 24L)
-  expect_match(rv_expression(long), "\\.\\.\\.$")
+  R <- likelihood(Q, label = "Q") / likelihood(P, label = "P")
+  expect_equal(format(2 / R), "2 / (Q / P)")
+  expect_equal(format((R + 1) * 3), "(Q / P + 1) * 3")
+  expect_equal(format(R - R / 2), "Q / P - Q / P / 2")
+  expect_equal(format(R / R / 2), "Q / P / (Q / P) / 2")
 })
 
 test_that("printing returns the variable invisibly", {

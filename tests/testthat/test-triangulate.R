@@ -2,14 +2,15 @@
 
 # The `k`-volume of a simplex given by `k + 1` vertices, by Gram determinant
 simplex_volume <- function(space) {
-  edges <- space@vertices[, -1L, drop = FALSE] - space@vertices[, 1L]
-  sqrt(max(det(crossprod(edges)), 0)) / factorial(ncol(edges))
+  v <- space@vertices
+  edges <- sweep(v[-1L, , drop = FALSE], 2L, v[1L, ])
+  sqrt(max(det(tcrossprod(edges)), 0)) / factorial(nrow(edges))
 }
 
 # A regular `n`-gon on the unit circle, whose area is known in closed form.
 polygon_region <- function(n) {
   angle <- 2 * pi * seq_len(n) / n
-  polytope_region(vertices = rbind(cos(angle), sin(angle)))
+  polytope_region(vertices = cbind(cos(angle), sin(angle)))
 }
 
 polygon_area <- function(n) n * sin(2 * pi / n) / 2
@@ -25,7 +26,7 @@ test_that("a pentagon fans into three triangles that tile it", {
   expect_length(cells, 3L)
   for (cell in cells) {
     expect_true(S7_inherits(cell, simplex_region))
-    expect_identical(ncol(cell@vertices), 3L)
+    expect_identical(nrow(cell@vertices), 3L)
   }
   # Areas summing to the pentagon's is the tiling itself: an overlap would
   # overshoot and a gap would undershoot.
@@ -38,7 +39,7 @@ test_that("a pentagon fans into three triangles that tile it", {
 
 test_that("the fan tiles in three dimensions too", {
   cube <- polytope_region(
-    vertices = t(as.matrix(expand.grid(c(0, 1), c(0, 1), c(0, 1))))
+    vertices = as.matrix(expand.grid(c(0, 1), c(0, 1), c(0, 1)))
   )
   cells <- cells(cube)
 
@@ -51,12 +52,12 @@ test_that("the fan tiles in three dimensions too", {
 test_that("every cell of the fan is a cell of the region it came from", {
   hexagon <- polygon_region(6L)
   for (cell in cells(hexagon)) {
-    for (i in seq_len(ncol(cell@vertices))) {
-      expect_true(contains(hexagon, cell@vertices[, i]))
+    for (i in seq_len(nrow(cell@vertices))) {
+      expect_true(contains(hexagon, cell@vertices[i, ]))
     }
     # The centroid is interior, so this catches a cell reflected or built from
     # vertices of the wrong facet, which the vertex test alone would not.
-    expect_true(contains(hexagon, rowMeans(cell@vertices)))
+    expect_true(contains(hexagon, colMeans(cell@vertices)))
   }
 })
 
@@ -66,7 +67,7 @@ test_that("every cell of the fan is a cell of the region it came from", {
 test_that("a polytope that happens to be a simplex still fans to one cell", {
   # Declared as a polytope, so it takes the fan rather than the identity, and
   # the fan's recursion floor is what stops it at one cell.
-  triangle <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(0, 1)))
+  triangle <- polytope_region(vertices = rbind(c(0, 0), c(1, 0), c(0, 1)))
   cells <- cells(triangle)
   expect_length(cells, 1L)
   expect_true(S7_inherits(cells[[1L]], simplex_region))
@@ -81,26 +82,31 @@ test_that("a lower-dimensional polytope is triangulated within its own hull", {
   # `R^3`, so the recursion has to read the hull's dimension off the equality
   # row rather than assume the ambient one.
   square <- polytope_region(
-    vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(1, 1, 0), c(0, 1, 0))
+    vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(1, 1, 0), c(0, 1, 0))
   )
   cells <- cells(square)
   expect_length(cells, 2L)
   for (cell in cells) {
     expect_true(S7_inherits(cell, simplex_region))
-    expect_identical(ncol(cell@vertices), 3L)
+    expect_identical(nrow(cell@vertices), 3L)
   }
 })
 
 
 test_that("a segment in R^3 is one cell, and a point is one cell", {
-  segment <- polytope_region(vertices = cbind(c(0, 0, 0), c(1, 1, 1)))
+  segment <- polytope_region(vertices = rbind(c(0, 0, 0), c(1, 1, 1)))
   cells <- cells(segment)
   expect_length(cells, 1L)
   expect_true(S7_inherits(cells[[1L]], simplex_region))
-  expect_identical(ncol(cells[[1L]]@vertices), 2L)
+  expect_identical(nrow(cells[[1L]]@vertices), 2L)
 
-  single <- polytope_region(vertices = matrix(c(2, 3, 4), ncol = 1L))
+  single <- polytope_region(vertices = matrix(c(2, 3, 4), nrow = 1L))
   expect_length(cells(single), 1L)
+
+  # A point region is the 0-simplex, and its own only cell.
+  p <- point_region(theta = c(0.5, 0.3, 0.2))
+  expect_true(S7_inherits(p, simplex_region))
+  expect_identical(cells(p), list(p))
 })
 
 
@@ -109,13 +115,13 @@ test_that("collinear vertices drop to the two that are extreme", {
   # three affinely dependent points, which `simplex_region()` refuses. The fan
   # drops it before it can reach a cell.
   collinear <- polytope_region(
-    vertices = cbind(c(0, 0), c(1, 1), c(2, 2))
+    vertices = rbind(c(0, 0), c(1, 1), c(2, 2))
   )
   cells <- cells(collinear)
   expect_length(cells, 1L)
   expect_equal(
-    cells[[1L]]@vertices[, order(cells[[1L]]@vertices[1L, ])],
-    cbind(c(0, 0), c(2, 2))
+    cells[[1L]]@vertices[order(cells[[1L]]@vertices[, 1L]), ],
+    rbind(c(0, 0), c(2, 2))
   )
 })
 
@@ -138,13 +144,11 @@ test_that("triangulating an algebra cell starts from its exact form", {
   # on them afterwards.
   plurality_cell <- function(j) {
     v <- diag(3)
-    v[, 1L] <- replace(numeric(3), c(1L, j), 0.5)
+    v[1L, ] <- replace(numeric(3), c(1L, j), 0.5)
     simplex_region(vertices = v)
   }
-  quad <- setdiff(
-    simplex_region(vertices = diag(3)),
-    union(plurality_cell(2L), plurality_cell(3L))
-  )
+  quad <- simplex_region(vertices = diag(3)) -
+    (plurality_cell(2L) | plurality_cell(3L))
   cells <- cells(quad)
   expect_length(cells, 2L)
 
@@ -203,7 +207,7 @@ test_that("a null names the part that failed to decompose", {
   })
   fam <- multinomial_family(n_trials = 2L, k = 3L)
   square <- polytope_region(
-    vertices = cbind(
+    vertices = rbind(
       c(0.5, 0.5, 0),
       c(0, 0.5, 0.5),
       c(0, 0, 1),

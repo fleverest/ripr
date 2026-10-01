@@ -11,11 +11,11 @@ atoms(x)
 \item{x}{A \link{distribution} over a parameter space.}
 }
 \value{
-\verb{(K, C)} numeric matrix.
+\verb{(C, d)} numeric matrix, one atom per row.
 }
 \description{
 Atoms of a distribution
 }
 \examples{
-atoms(finite_dist(components = cbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
+atoms(finite_dist(atoms = rbind(c(0.6, 0.4), c(0.2, 0.8)), weights = c(0.5, 0.5)))
 }

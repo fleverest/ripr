@@ -2,7 +2,7 @@
 % Please edit documentation in R/mixing.R
 \name{discretise}
 \alias{discretise}
-\title{Replace a distribution with a finite one comprised of atoms drawn from it}
+\title{Replace a distribution with the empirical distribution of draws from it}
 \usage{
 discretise(dist, n)
 }
@@ -15,13 +15,10 @@ discretise(dist, n)
 A \link{finite_dist} on \code{n} equally weighted atoms.
 }
 \description{
-Constructs a \link{finite_dist} comprising \code{n} draws from \code{dist} as equally
-weighted atoms. It is the empirical distribution based on a sample drawn
-from it. Converges to \code{dist} as \code{n} grows.
-}
-\details{
-This can be used as a convenient way to approximate a mixture distribution
-if no closed-form exists. See examples.
+Results in a \link{finite_dist} of \code{n} equally weighted draws from \code{dist},
+converging to \code{dist} as \code{n} grows. Useful for approximating a mixture that
+has no closed form, or for approximating a distribution for which it is
+difficult to compute expectations under.
 }
 \examples{
 set.seed(1)

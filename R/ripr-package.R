@@ -10,6 +10,7 @@
 #' @importFrom S7 method<- new_class new_generic new_object new_property
 #' @importFrom S7 S7_class S7_inherits S7_object
 #' @importFrom stats family optimise rgamma rmultinom rnorm sd weights
+#' @importFrom mvtnorm dmvnorm rmvnorm
 #' @importFrom nloptr slsqp
 #' @importFrom utils combn
 ## usethis namespace: end

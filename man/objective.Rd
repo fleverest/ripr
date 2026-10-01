@@ -11,9 +11,9 @@ objective(value, grad, value_batch = NULL)
 
 \item{grad}{Function of a parameter vector returning the gradient, length \code{d}.}
 
-\item{value_batch}{Optional function of a \verb{(d, N)} matrix returning \code{N}
-values. Used to score the seed grid; defaults to applying \code{value} per
-column, which is correct but slower.}
+\item{value_batch}{Optional function of an \verb{(N, d)} matrix, one parameter
+per row, returning \code{N} values. Used to score the seed grid; defaults to
+applying \code{value} per row.}
 }
 \value{
 A list to pass to \code{\link[=maximise_over]{maximise_over()}}.

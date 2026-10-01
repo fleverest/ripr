@@ -1,20 +1,22 @@
-# Internal numerics. Nothing here is RIPr-specific: log-space reductions and an
-# -Inf-safe matrix multiplication. Everything here works in log space.
+# Internal numerics: log-space reductions and an -Inf-safe matrix product.
 #
-# Dimension convention, used consistently throughout this file and the ones
-# that consume it:
+# Dimension convention, used throughout the package: every collection of points
+# is a matrix with one point per row (outcomes and quadrature nodes `(M, K)`,
+# atoms `(C, d)`, vertices and generators `(V, d)`, chart coordinates
+# `(N, n_par)`). A bare vector is one point, i.e. one row (`as_row_matrix()`).
 #
-#   M  rows    | #outcomes, or quadrature nodes
-#   C  columns | mixture components (#atoms)
-#   K          | parameter dimension (for multinomial, #categories)
+#   M | #outcomes, or quadrature nodes
+#   C | mixture components (#atoms), or parameter points in a batch
+#   K | outcome dimension (for multinomial, #categories)
+#   d | parameter dimension
 #
-# So a log-density matrix is (M, C): one row per outcome, one column per atom.
+# The exception is the log-density matrix `compile_loglik(family, x)(theta_mat)`,
+# which is `(M, C)`: its columns are indexed by the rows of `theta_mat`.
 
 #' Replace NaN entries with zero
 #'
-#' `0 / 0` arises wherever a zero count meets a zero category probability. The
-#' outcome has probability zero under that parameter, so its contribution is
-#' zero, not undefined.
+#' `0 / 0` arises where a zero count meets a zero probability; that outcome has
+#' probability zero, so its contribution is zero, not undefined.
 #' @keywords internal
 #' @noRd
 nan_to_zero <- function(x) {
@@ -26,35 +28,10 @@ nan_to_zero <- function(x) {
 }
 
 
-#' Insert a column into an `(M, C)` matrix at position `at`
+#' Offset column `j` of `mat` by `w[j]`
 #'
-#' `at` may be `ncol(mat) + 1`, which appends.
-#' @param mat `(M, C)` numeric matrix.
-#' @param col Length-`M` numeric vector.
-#' @param at Column position the inserted column should occupy afterwards.
-#' @return `(M, C + 1)` numeric matrix.
-#' @keywords internal
-#' @noRd
-insert_col <- function(mat, col, at) {
-  before <- seq_len(at - 1L)
-  after <- seq_len(ncol(mat) - at + 1L) + at - 1L
-  cbind(
-    mat[, before, drop = FALSE],
-    col,
-    mat[, after, drop = FALSE],
-    deparse.level = 0
-  )
-}
-
-
-#' Offset each column of an `(M, C)` matrix by the matching entry of `w`
-#'
-#' Adds the scalar `w[j]` to every entry of column `j`. The column-wise
-#' analogue of plain recycling (which already handles the row-wise case as
-#' `mat + v`), without `sweep`.
-#' @param mat `(M, C)` numeric matrix.
-#' @param w Length-`C` numeric vector, one offset per column.
-#' @return `(M, C)` numeric matrix.
+#' On an `(M, C)` log-density matrix this adds a per-parameter constant; on a
+#' point matrix it translates every point by `w`.
 #' @keywords internal
 #' @noRd
 add_by_col <- function(mat, w) {
@@ -65,12 +42,7 @@ add_by_col <- function(mat, w) {
 }
 
 
-#' Scale each column of an `(M, C)` matrix by the matching entry of `w`
-#'
-#' Divides every entry of column `j` by the scalar `w[j]`.
-#' @param mat `(M, C)` numeric matrix.
-#' @param w Length-`C` numeric vector, one divisor per column.
-#' @return `(M, C)` numeric matrix.
+#' Divide column `j` of `mat` by `w[j]`
 #' @keywords internal
 #' @noRd
 div_by_col <- function(mat, w) {
@@ -81,19 +53,7 @@ div_by_col <- function(mat, w) {
 }
 
 
-#' Numerically stable log-sum-exp of a vector
-#'
-#' Returns `-Inf` when every entry is `-Inf`.
-#' @keywords internal
-#' @noRd
-logsumexp_vec <- function(v) {
-  matrixStats::logSumExp(v)
-}
-
-
-#' Row-wise log-sum-exp: reduce each row over its columns
-#'
-#' `mat` is `(M, C)`; returns a length-`M` vector, one log-sum-exp per row.
+#' Log-sum-exp of each row of an `(M, C)` matrix; length `M`
 #' @keywords internal
 #' @noRd
 row_logsumexp <- function(mat) {
@@ -101,9 +61,7 @@ row_logsumexp <- function(mat) {
 }
 
 
-#' Column-wise log-sum-exp: reduce each column over its rows
-#'
-#' `mat` is `(M, C)`; returns a length-`C` vector, one log-sum-exp per column.
+#' Log-sum-exp of each column of an `(M, C)` matrix; length `C`
 #' @keywords internal
 #' @noRd
 col_logsumexp <- function(mat) {
@@ -111,54 +69,32 @@ col_logsumexp <- function(mat) {
 }
 
 
-#' Log-sum-exp of `v + log_w`, i.e. `log(sum_i w_i exp(v_i))`
+#' `tcrossprod()` treating `0 * -Inf` as `0`
 #'
-#' @param v Numeric vector of log values.
-#' @param log_w Numeric vector of log weights, same length.
+#' `(M, K)` non-negative `a` by `(C, K)` `b` gives `(M, C)`. A zero weight on a
+#' `-Inf` log-probability contributes zero; a positive weight still gives
+#' `-Inf`. The second product that finds those entries is skipped when `b` has
+#' no `-Inf`.
 #' @keywords internal
 #' @noRd
-logsumexp_weighted <- function(v, log_w) {
-  logsumexp_vec(v + log_w)
-}
-
-
-#' Matrix multiplication treating `0 * -Inf` as `0`
-#'
-#' Standard `%*%` yields `NaN` for any `0 * -Inf` product. This variant zeroes
-#' those contributions (correct when a zero count means "this log-probability is
-#' never used") while still propagating `-Inf` wherever a strictly positive
-#' weight meets a `-Inf`.
-#'
-#' The `-Inf` bookkeeping needs a second matrix multiply to find which output
-#' entries are poisoned, so it is skipped entirely when `b` has no `-Inf` at
-#' all. This is the case in most scenarios, so the guard halves the cost of
-#' this function, which is used very frequently during optimisation.
-#'
-#' @param a `(M, K)` numeric matrix (or vector), assumed non-negative.
-#' @param b `(K, C)` numeric matrix (or vector), may contain `-Inf`.
-#' @return `(M, C)` numeric matrix.
-#' @keywords internal
-#' @noRd
-matmul_0_ninf <- function(a, b) {
-  a <- as.matrix(a)
-  b <- as.matrix(b)
+tcrossprod_0_ninf <- function(a, b) {
+  a <- as_row_matrix(a)
+  b <- as_row_matrix(b)
   neg_inf <- is.infinite(b) & b < 0
   if (!any(neg_inf)) {
-    return(a %*% b)
+    return(tcrossprod(a, b))
   }
   b_safe <- b
   b_safe[neg_inf] <- 0
-  out <- a %*% b_safe
-  out[(a != 0) %*% neg_inf > 0] <- -Inf
+  out <- tcrossprod(a, b_safe)
+  out[tcrossprod(a != 0, neg_inf) > 0] <- -Inf
   out
 }
 
 
-#' Coerce an outcome argument to an `(M, K)` matrix
-#'
-#' A bare length-`K` vector is a single outcome, i.e. one row.
+#' Coerce a point, or points, to a one-point-per-row matrix
 #' @keywords internal
 #' @noRd
-as_outcome_matrix <- function(x) {
+as_row_matrix <- function(x) {
   if (is.null(dim(x))) matrix(x, nrow = 1L) else as.matrix(x)
 }

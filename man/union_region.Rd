@@ -18,26 +18,12 @@ A \code{union_region}, or the lone \link{convex_region} it was given.
 }
 \description{
 The union \eqn{\bigcup_i \Theta_{0i}}{union_i Theta_0i} of finitely many
-\link{convex_region}s, which generally is not convex. A null hypothesis may be one
-such union, and so may be the support of a truncated prior.
+\link{convex_region}s, e.g. a null hypothesis or a truncated prior's support. It
+is not a \link{convex_region}, so has no \code{\link[=chart]{chart()}} or \code{\link[=project]{project()}}; algorithms
+run over its \code{\link[=parts]{parts()}} or \code{\link[=cells]{cells()}} instead. Given exactly one convex
+region, \code{union_region()} returns it unchanged.
 
-\code{format()} gives the same summary on one line, without the class
-banner and the per-cell listing that \code{print()} adds.
-}
-\details{
-A \code{union_region} is a \link{region} but deliberately \strong{not} a \link{convex_region}.
-\code{\link[=chart]{chart()}}, \code{\link[=project]{project()}}, \code{maximise_over()} assume convexity, and a union of
-convex sets is not convex. What this class does implement is \code{\link[=space_dim]{space_dim()}},
-\code{\link[=contains]{contains()}}, \code{\link[=parts]{parts()}} and \code{\link[=cells]{cells()}}, so that optimisation procedures that
-require certain properties may operate on the individual components that
-comply.
-
-For instance, \code{maximise_over} requires a single continuous coordinate system
-for the entire space, so it runs on a loop over the regions \code{\link[=parts]{parts()}}.
-\code{certify} for a \link{multinomial_family} runs only over \link{simplex_region}s, so
-we may compute triangulation accessible via \code{\link[=cells]{cells()}}.
-
-Given exactly one convex region, \code{union_region()} returns it unchanged.
+\code{format()} gives the same summary on one line.
 }
 \section{Properties}{
 
@@ -49,21 +35,22 @@ Given exactly one convex region, \code{union_region()} returns it unchanged.
 \examples{
 # The K = 3 plurality null: two overlapping sub-simplices.
 union_region(
-  simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-  simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+  simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+  simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 )
 
 # Nesting is flattened, so these agree:
 s <- simplex_region(vertices = diag(3))
 h <- halfspace_region(normal = c(1, -1, 0))
-n_parts(union_region(s, h))
-n_parts(union_region(list(s, h)))
-n_parts(union_region(union_region(s), list(h)))
+length(parts(union_region(s, h)))
+length(parts(union_region(list(s, h))))
+length(parts(union_region(union_region(s), list(h))))
 
 # One cell is already a region, so it is handed back as it came:
 identical(union_region(s), s)
 }
 \seealso{
-\link{region_algebra} for the set-operation verbs: \code{union()} dispatches
-to this constructor, and \code{intersect()} computes new regions from old.
+\link{region_algebra} for the set-operation operators: \code{x | y}
+forwards to this constructor, while \code{x & y} and \code{x - y} compute new
+regions from old.
 }

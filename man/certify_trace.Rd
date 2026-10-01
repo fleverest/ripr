@@ -8,7 +8,7 @@ certify_trace(
   x,
   null,
   tol = 1e-06,
-  max_nodes = 20000L,
+  max_splits = 20000L,
   max_coefficients = 1024^2
 )
 }
@@ -19,48 +19,36 @@ certify_trace(
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
-\item{max_nodes}{Cap on subdivisions \emph{per cell} for branch-and-bound
-algorithms, so a part triangulated into several cells is allowed
-\code{max_nodes} in each. The per-part \code{iterations} reported below is the total
-actually spent, which is what to read the cap against.}
+\item{max_splits}{Cap on branch-and-bound subdivisions \emph{per cell}; a
+triangulated part gets \code{max_splits} in each of its cells.}
 
-\item{max_coefficients}{Refuse above this many Bernstein coefficients
-(for bounding multinomial expectation in simplices).}
+\item{max_coefficients}{Refuse above this many Bernstein coefficients.}
 }
 \value{
 A data frame with \code{part}, \code{cell}, \code{id}, \code{parent}, \code{depth}, \code{born},
 \code{retired}, \code{fate}, \code{upper}, \code{volume} and a \code{vertices} list column, plus the
 certificate itself in the \code{"certificate"} attribute and the per-iteration
-bound in \code{"trace"}.
+bound in \code{"trace"}. The certificate is the same \link{ripr_certificate} that
+\code{\link[=certify]{certify()}} returns.
 }
 \description{
-Same computation as \code{\link[=certify]{certify()}}, reporting the branch-and-bound tree instead
-of the certificate. One row per node of the search, per cell.
+Same computation as \code{\link[=certify]{certify()}}, returning the branch-and-bound tree: one
+row per node, per cell. The nodes live at any iteration tile their cell, so
+at \code{K = 3} the \code{vertices} column (\verb{(K, K)} matrices, one vertex per row)
+draws the partition at every step.
 }
 \details{
-The nodes live at any iteration tile their cell exactly, so at \code{K = 3} the
-\code{vertices} column draws the partition of the facet directly, in barycentric
-coordinates, at every step and not merely at the end.
-\code{depth} against \code{born} shows the shape of the tree: a max-bound queue rule
-can produce a chain rather than anything balanced, which is visible here and
-nowhere else.
-
-A cell is one branch-and-bound run and \code{id} restarts at 1 in each, so group
-by \code{cell} before reading \code{id} or matching \code{parent}. \code{part} says which of the
-declared parts a cell came from, and a triangulated part contributes one
-tree per cell rather than one between them; \code{traces} and \code{incumbent_traces}
-are per cell on the same terms.
-
-Only bounding methods that use branch and bound populate this. A method that
-bounds in closed form contributes no rows.
+Each cell is a separate run and \code{id} restarts at 1 in each, so group by
+\code{cell} before matching \code{parent}. A triangulated part contributes one tree per
+cell. Point cells, bounded in closed form, contribute no rows.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 X <- likelihood(fam(c(0.4, 0.35, 0.25)))

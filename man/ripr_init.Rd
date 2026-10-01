@@ -21,20 +21,18 @@ ripr_init(
 
 \item{engine}{An engine spec, e.g. \code{\link[=exact_engine]{exact_engine()}}.}
 
-\item{atoms}{Optional list of \verb{(d, n_i)} matrices, one per part of the
-null region. \code{NULL} places one atom per part by projecting the
-alternative's reference point, which is the sensible default and what the
-examples use. Empty parts are \code{ncol = 0} matrices, which the loop handles
-without a special case.}
+\item{atoms}{Optional list of \verb{(n_i, d)} matrices, one atom per row and one
+matrix per part of the null region (\code{nrow = 0} for an empty part). \code{NULL}
+places one atom per part by projecting the alternative's reference point.}
 
-\item{weights}{Optional list matching \code{atoms}; defaults to uniform.}
+\item{weights}{Optional list matching \code{atoms}, one weight per atom; the
+weights over all parts together must sum to 1. Defaults to uniform.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the starting mixture,
-filling the \code{gap_after} columns on the init row. Off by default: the sweep
-costs about as much as a \code{\link[=fw_step]{fw_step()}}.}
+filling the init row's \code{gap_after} columns and caching the result for the
+first \code{\link[=fw_step]{fw_step()}}. Off by default: it costs about one \code{\link[=fw_step]{fw_step()}}.}
 
-\item{control}{From \code{\link[=ripr_control]{ripr_control()}}. Its \code{snapshot} setting applies here as
-it does for other verbs.}
+\item{control}{From \code{\link[=ripr_control]{ripr_control()}}.}
 }
 \value{
 A \link{ripr_state} with no iterations run.
@@ -47,8 +45,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))

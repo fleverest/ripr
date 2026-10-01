@@ -5,107 +5,85 @@
 \title{KL Minimisation Oracles}
 \description{
 The RIPr fit minimises \eqn{KL(Q \| P)}{KL(Q || P)} over mixtures \code{P} whose
-components lie in the null. An \emph{oracle} proposes the single component to
-bring in next, and \code{\link[=fw_step]{fw_step()}} and \code{\link[=lb_step]{lb_step()}} differ only in how far ahead
-they look.
+components lie in the null. An \emph{oracle} proposes the next component to
+bring in; \code{\link[=fw_step]{fw_step()}} and \code{\link[=lb_step]{lb_step()}} differ only in how far ahead they look.
 }
 \details{
-Write \eqn{P_i}{P_i} for the mixture at the current iterate and
-\eqn{G(\theta) = E_Q[P_\theta / P_i] = E_\theta[Q / P_i]}{G(theta) = E_Q[P_theta / P_i] = E_theta[Q / P_i]},
-the same integral written two ways.
+Write \eqn{P_i}{P_i} for the current mixture and
+\eqn{G(\theta) = E_Q[P_\theta / P_i] = E_\theta[Q / P_i]}{G(theta) = E_Q[P_theta / P_i] = E_theta[Q / P_i]}.
 
 The Frank--Wolfe \insertCite{Jaggi2013}{ripr} linear oracle \code{\link[=fw_step]{fw_step()}} asks
-how fast KL falls if an infinitesimal amount of mass moves towards
+how fast KL falls as an infinitesimal amount of mass moves towards
 \eqn{P_\theta}{P_theta}:
 
 \deqn{\left.\frac{d}{d\epsilon} KL\!\left(Q \,\|\, (1-\epsilon) P_i + \epsilon P_\theta\right)\right|_{\epsilon=0} = 1 - G(\theta).}{d/d(eps) KL(Q || (1 - eps) P_i + eps P_theta) =  1 - G(theta) at eps=0.}
 
-In the language of safe, anytime-valid inference, this is the location in
-the null that the current likelihood ratio \eqn{R_i=Q/P_i}{R_i=Q/P_i} "fails
-to be an e-variable the most", i.e. the point that maximises the expected
-value of \eqn{R_i}{R_i}.
+Equivalently, it finds where in the null the likelihood ratio
+\eqn{R_i=Q/P_i}{R_i=Q/P_i} most fails to be an e-variable. The attained
+\eqn{\sup_{\theta \in \Theta_0} G(\theta) = 1 + \mathrm{gap}}{sup G = 1 + gap}
+bounds the KL suboptimality by Frank--Wolfe duality. Since the search is
+non-convex, the reported gap is only a lower bound on the true gap. It is
+the gap of the mixture the step started \emph{from}, so it fills the previous
+row's \code{gap_after}.
 
-The attained maximum is
-\eqn{\sup_{\theta \in \Theta_0} G(\theta) = 1 + \mathrm{gap}}{sup G = 1 + gap},
-which bounds the suboptimality (in KL) via Frank--Wolfe duality, a well known
-result in the convex optimisation literature \insertCite{Jaggi2013}{ripr}.
-
-The implementation of \code{\link[=fw_step]{fw_step()}} yields a lower-bound on the gap at no extra
-cost, since it approximates the Frank--Wolfe oracle. It is to be treated only
-as a lower bound on the true duality gap, since finding the true supremum is
-non-convex in general. Note that what comes free is the gap of the mixture
-the step started \emph{from}: it is recorded as \code{oracle_value}, and also fills
-the previous row's \code{gap_after} columns, since that row produced this
-mixture.
-
-The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle \code{\link[=lb_step]{lb_step()}} does
-not linearise the objective. It asks which atom minimises KL after the weight
-selection inner optimisation:
+The Li--Barron \insertCite{LiBarron1999}{ripr} greedy oracle \code{\link[=lb_step]{lb_step()}}
+does not linearise; it picks the atom minimising KL after choosing its
+weight:
 
 \deqn{\theta^* = \arg\min_{\theta \in \Theta_0} KL\!\left(Q \,\|\, (1 - w(\theta)) P_i + w(\theta) P_\theta\right),}{theta* = argmin_theta KL(Q || (1 - w(theta)) P_i + w(theta) P_theta),}
 
-where \eqn{w(\theta)}{w(theta)} depends on the weight update procedure.
-
-The weight selection may be an inner optimisation nested inside every
-objective evaluation, so evaluating each candidate may cost a line search
-or, with a corrective solve, a full re-optimisation of every weight.
-There is no duality result that bounds suboptimality with this oracle, but
-we can estimate the Frank--Wolfe gap via a second optimisation sweep with the
-Frank--Wolfe oracle by setting \code{record_gap = TRUE} in \code{\link[=lb_step]{lb_step()}}, without
-adding the corresponding atom.
+where \eqn{w(\theta)}{w(theta)} comes from the weight update. Each
+candidate may therefore cost a line search, or a full weight solve under
+correction. It has no duality bound; \code{record_gap = TRUE} estimates the
+Frank--Wolfe gap with an extra linear-oracle sweep, without adding its atom.
 }
 \section{What a trace row records}{
-Every verb writes one row per step, and its columns split by which mixture
-they measure. The distinction matters because a row spans a step: it starts
-at one mixture and ends at another.
+Every verb writes one row per step to \code{state@trace}. A row spans a step, so
+its columns split by which mixture they measure.
 
 \describe{
-\item{\code{oracle_value}, \code{oracle_theta}}{What the oracle found on the way
-\emph{in}, at the mixture the row stepped from. For \code{\link[=fw_step]{fw_step()}} that is
-\eqn{G(\theta^*) = 1 + \mathrm{gap}}{G(theta*) = 1 + gap} and its
-maximiser, so \code{oracle_value - 1} is the pre-step gap for free; for
-\code{\link[=lb_step]{lb_step()}} it is the Li--Barron objective, which is not a gap; for
-\code{\link[=weight_step]{weight_step()}} it is the pre-sweep support gap plus one, with no
-\code{oracle_theta}. For the oracle verbs,
-\code{oracle_theta} is the point the step proposed, which is where the atom went
-when \code{part} is not \code{NA}. This is how a row indicates that the step accepted
-the candidate rather than moving away from it.}
-\item{\code{kl}, \code{gap_after}, \code{gap_after_theta}, \code{gap_after_part}}{The
-mixture the row \emph{produced}, and the linear oracle's verdict on it: the
-Frank--Wolfe gap, where the maximiser sits, and which part it sits in.
-Filled by \code{record_gap = TRUE}, or by the next \code{\link[=fw_step]{fw_step()}}'s oracle. A row
-nothing has measured yet is \code{NA}.}
-\item{\code{elapsed}}{Time the step rule's work took, excluding any
-diagnostics (e.g. \code{record_gap}, \code{snapshot}, or the \code{until} predicate).
-\code{elapsed} is per step, not cumulative, so for the cumulative time spent
-stepping use \code{cumsum(trace$elapsed)}.}
+\item{\code{step}, \code{phase}}{The row's index (\code{\link[=ripr_init]{ripr_init()}}'s row is 0) and the
+verb that wrote it (\code{"init"}, \code{"fw"}, \code{"lb"}, \code{"em"} or \code{"weight"}).
+Count steps of a kind with e.g. \code{cumsum(trace$phase == "fw")}.}
+\item{\code{oracle_value}, \code{oracle_theta}}{What the step's own search found at
+the mixture it stepped \emph{from}. For \code{\link[=fw_step]{fw_step()}}, \code{oracle_theta} is the
+linear oracle's maximiser and \code{oracle_value} is \code{NA} (its value is the
+previous row's \code{gap_after + 1}). For \code{\link[=lb_step]{lb_step()}} \code{oracle_value} is the
+Li--Barron objective, not a gap; for \code{\link[=weight_step]{weight_step()}} it is the pre-sweep
+support gap plus one, with no \code{oracle_theta}. When \code{part} is not \code{NA}, the
+atom went to \code{oracle_theta}.}
+\item{\code{kl}, \code{gap_after}, \code{gap_after_theta}, \code{gap_after_part}}{The mixture
+the row \emph{produced}, and the linear oracle's gap, maximiser and part for
+it. Filled by \code{record_gap = TRUE} or the next \code{\link[=fw_step]{fw_step()}}; otherwise \code{NA}.}
+\item{\code{gap_after_elapsed}}{Seconds the search that filled \code{gap_after}
+took.}
+\item{\code{part}, \code{step_size}, \code{direction}, \code{support_size}, \code{max_weight}}{
+Where an oracle step put its atom (\code{NA} if none), the step length and
+direction, and the size and heaviest weight of the produced mixture.}
+\item{\code{elapsed}}{Seconds of the step rule's work, excluding diagnostics
+(\code{record_gap}, \code{snapshot}, \code{until}). An \code{\link[=fw_step]{fw_step()}} row includes the
+linear-oracle search it consumed, even if cached. Per step; use
+\code{cumsum(trace$elapsed)} for the total.}
 }
 
-Both \code{theta} columns are list columns holding the family's parameter itself,
-so \code{trace$oracle_theta[[i]]} is the point row \code{i} proposed, and \code{is.na()}
-finds the rows that recorded none. They are lists rather than matrices so
-that a family whose parameter is not a numeric vector still fits.
+Both \code{theta} columns are list columns holding the family's parameter, with
+\code{NA} for rows that recorded none.
 
-A row followed by an \code{\link[=fw_step]{fw_step()}} row has \code{gap_after} equal to that row's
-\code{oracle_value - 1}: the step reads a recorded oracle back rather than
-searching the same mixture twice, so an fw run pays one search per step. An
-fw run's final row stays \code{NA} unless \code{record_gap = TRUE} swept it or
-\code{until} stopped the run (the check's oracle fills it);
-\code{ripr_finish(record_gap = TRUE)} measures the mixture it returns.
+\code{state@oracle} caches the linear oracle's result for the current mixture
+only: a step that changes the mixture clears it and \code{record_gap = TRUE}
+sets it. \code{\link[=fw_step]{fw_step()}} uses the cache when present, so an fw run pays one
+search per step. The final row's \code{gap_after} stays \code{NA} unless
+\code{record_gap = TRUE} or \code{until} stopped the run; \code{ripr_finish(record_gap = TRUE)} measures the mixture it returns.
 }
 
 \section{Which to use}{
-It is advisable to use \code{\link[=fw_step]{fw_step()}} unless there is a specific reason not to.
-It is cheaper per iteration and has similar if not the same convergence
-guarantees, though no convergence guarantee applies in either case if the
-oracle can not be trusted---as is the case here.
+Prefer \code{\link[=fw_step]{fw_step()}}: it is cheaper per iteration with similar guarantees
+(none of which strictly hold, since the oracle is heuristic).
 
-Expect the two to disagree sharply on the reported gap even when they agree
-on KL, and do not read that as one fitting better. The Frank--Wolfe oracle
-places its atom exactly at the worst-case \eqn{\theta}{theta}, so the mixture
-absorbs the very point defining the gap; the Li--Barron oracle places its
-atom wherever the post-step KL is smallest, leaving that point untouched.
-Two fits can sit at near-identical KL with gaps orders of magnitude apart.
+Expect the two to disagree sharply on the gap even if the KL is similar.
+Frank--Wolfe places its atom exactly at the worst-case \eqn{\theta}{theta},
+absorbing the point that defines the gap; Li--Barron places it wherever
+post-step KL is smallest, leaving that point untouched.
 }
 
 \references{

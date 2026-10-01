@@ -1,47 +1,38 @@
-#' @include control.R state.R steps.R
+#' @include control.R mixing.R state.R steps.R
 NULL
 
-# Fitting the RIPr mixture
-#
-# `ripr_init()` builds the starting point, the step verbs advance it, and
-# `ripr_finish()` turns it into a mixture object. Everything exported by
-# the package for the fitting process is here.
-#
-# There is no fixed pipeline. Which algorithm runs is decided by which verbs are
-# called and in what order, so `ripr_control()` holds no algorithm settings:
+# Fitting the RIPr mixture. There is no fixed pipeline: the algorithm is the
+# sequence of verbs called.
 #
 #     fit <- ripr_init(Q, H0) |>
 #       fw_step(10) |>
 #       em_step(100) |>
 #       ripr_finish()
 #
-# Every verb takes `times` and an optional `until` predicate, and every verb
-# records one trace row per iteration.
+# Every verb takes `times` and `until`, and records one trace row per iteration.
 
 #' Begin a RIPr fit
 #'
 #' @param alternative The alternative \eqn{Q}{Q}, an [distribution].
 #' @param null A [null_model].
 #' @param engine An engine spec, e.g. [exact_engine()].
-#' @param atoms Optional list of `(d, n_i)` matrices, one per part of the
-#'   null region. `NULL` places one atom per part by projecting the
-#'   alternative's reference point, which is the sensible default and what the
-#'   examples use. Empty parts are `ncol = 0` matrices, which the loop handles
-#'   without a special case.
-#' @param weights Optional list matching `atoms`; defaults to uniform.
+#' @param atoms Optional list of `(n_i, d)` matrices, one atom per row and one
+#'   matrix per part of the null region (`nrow = 0` for an empty part). `NULL`
+#'   places one atom per part by projecting the alternative's reference point.
+#' @param weights Optional list matching `atoms`, one weight per atom; the
+#'   weights over all parts together must sum to 1. Defaults to uniform.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the starting mixture,
-#'   filling the `gap_after` columns on the init row. Off by default: the sweep
-#'   costs about as much as a [fw_step()].
-#' @param control From [ripr_control()]. Its `snapshot` setting applies here as
-#'   it does for other verbs.
+#'   filling the init row's `gap_after` columns and caching the result for the
+#'   first [fw_step()]. Off by default: it costs about one [fw_step()].
+#' @param control From [ripr_control()].
 #' @return A [ripr_state] with no iterations run.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
@@ -56,13 +47,12 @@ ripr_init <- function(
   record_gap = FALSE,
   control = ripr_control()
 ) {
-  started <- proc.time()[["elapsed"]]
+  clock <- stopwatch()
   resolved <- resolve_engine(engine, alternative, null@family)
 
   if (is.null(atoms)) {
-    # The alternative's modal parameter when there is one: the projection lands
-    # near where W_1 puts its mass, which is where the RIPr will be. Falls back
-    # to the family's canonical point, since Q need not be a mixture at all.
+    # Seed near where W_1 puts its mass. Q need not be a mixture, hence the
+    # family fallback.
     ref <- if (S7_inherits(alternative, mixture)) {
       reference_point(alternative@mixing)
     } else {
@@ -70,7 +60,7 @@ ripr_init <- function(
     }
     atoms <- lapply(
       parts(null@region),
-      \(s) matrix(init_point(s, ref), ncol = 1L)
+      \(s) matrix(init_point(s, ref), nrow = 1L)
     )
   }
   if (length(atoms) != n_parts(null@region)) {
@@ -83,44 +73,53 @@ ripr_init <- function(
       call. = FALSE
     )
   }
-  atoms <- lapply(atoms, as.matrix)
+  atoms <- lapply(atoms, as_row_matrix)
+  prts <- parts(null@region)
+  for (i in seq_along(atoms)) {
+    inside <- apply(atoms[[i]], 1L, \(theta) contains(prts[[i]], theta))
+    if (!all(as.logical(inside))) {
+      stop(
+        "every atom must lie in its own part; an atom given for part ",
+        i,
+        " does not.",
+        call. = FALSE
+      )
+    }
+  }
 
-  sizes <- vapply(atoms, ncol, integer(1))
+  sizes <- vapply(atoms, nrow, integer(1))
   if (sum(sizes) == 0L) {
     stop("at least one part must carry an atom.", call. = FALSE)
   }
-  if (is.null(weights)) {
-    weights <- lapply(sizes, \(n) rep(1 / sum(sizes), n))
+  weights <- if (is.null(weights)) {
+    rep(1 / sum(sizes), sum(sizes))
+  } else {
+    unlist(weights, use.names = FALSE)
   }
 
   state <- ripr_state(
-    atoms = atoms,
-    weights = weights,
+    mixing = finite_dist(
+      # An empty part may be any `nrow = 0` matrix, whatever its column count.
+      atoms = do.call(rbind, unname(atoms[sizes > 0L])),
+      weights = weights
+    ),
+    part = rep(seq_along(atoms), sizes),
     alternative = alternative,
     null = null,
     engine = resolved,
-    control = control,
-    trace = empty_trace(),
-    snapshots = list(),
-    iters = c(fw = 0L, lb = 0L, em = 0L, weight = 0L)
+    control = control
   )
   ld <- compile_engine(resolved)
   log_p <- log_p_at_nodes(state, ld)
-  kl <- kl_divergence(state, log_p)
-  # The clock stops here: the sweep below is a diagnostic the caller asked for,
-  # and its cost belongs to `record_gap` rather than to initialising.
-  elapsed <- proc.time()[["elapsed"]] - started
-  state <- record(state, phase = "init", kl = kl, elapsed = elapsed)
+  # Exclude the optional `record_gap` sweep from the init row's time.
+  state <- record(
+    state,
+    phase = "init",
+    kl = kl_at(state@engine, log_p),
+    elapsed = clock()
+  )
   if (record_gap) {
-    swept_at <- proc.time()[["elapsed"]]
-    swept <- linear_gap(state, log_p, ld, flat_atoms(state))
-    state <- fill_gap(
-      state,
-      swept$gap,
-      swept$theta,
-      swept$part,
-      proc.time()[["elapsed"]] - swept_at
-    )
+    state <- search_gap(state, log_p, ld)
   }
   if (wants_snapshot(state, last = TRUE)) {
     state <- snapshot_state(state, "init")
@@ -133,100 +132,89 @@ ripr_init <- function(
 
 #' Predicates for early stopping
 #'
-#' The `until` argument of each step verb accepts these predicates.
+#' The `until` argument of each step verb accepts these predicates: functions
+#' `function(state, candidate)` tested before each step, where `candidate` is
+#' the state the pending step would produce (its trace row already appended).
+#' If satisfied, the step is not taken and the verb returns `state`. So
+#' `em_step(1000, until = kl_flat(1e-12))` means "at most a thousand EM sweeps,
+#' or until a sweep would decrease KL by less than 1e-12". Your own predicate
+#' must accept both arguments, e.g.
+#' `function(state, candidate) nrow(candidate@trace) > 20`.
 #'
-#' Each returns a function of the state, tested before each step: a satisfied
-#' predicate means no step is taken. For instance,
-#' `em_step(1000, until = kl_flat(1e-12))` means "at most a thousand EM
-#' sweeps, or until the KL decreases by less than 1e-12".
+#' [gap_below()] and [support_gap_below()] estimate the Frank--Wolfe gap of
+#' `state` over the whole null and over the current support respectively. They
+#' ignore `candidate`, so can be asked of one state as `gap_below(tol)(state)`.
 #'
-#' [gap_below()] and [support_gap_below()] are estimates of the Frank--Wolfe
-#' gap, over the whole null and over the current support respectively, so each
-#' roughly tracks how much KL is still available at that scope.
-#'
-#' [kl_flat()] is a per-row difference and bounds nothing. Under linear
-#' convergence at rate \eqn{\rho}{rho} it is \eqn{(1-\rho)}{(1 - rho)} times the
-#' true suboptimality, and \eqn{\rho}{rho} runs close to 1 here, so a small
-#' `dKL` means converged *or* crawling. Use it as a
-#' budget.
-#'
-#' Convergence is a property of the current iterate, not a statement about the
-#' total fit. Take another step and a converged state is no longer converged.
-#' That is why these are predicates rather than a flag on the state.
+#' [kl_flat()] is a per-step difference and bounds nothing: under slow linear
+#' convergence a small `dKL` means converged *or* crawling. Use it as a budget.
 #'
 #' @param tol Threshold.
-#' @return A function of a [ripr_state] returning `TRUE` or `FALSE`.
+#' @return A function of `(state, candidate)`, two [ripr_state]s, returning
+#'   `TRUE` or `FALSE`.
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |>
 #'   fw_step(times = 25L, until = gap_below(1e-2))
 #' gap_below(1e-2)(state)
+#'
+#' # Would one more EM sweep leave the KL flat?
+#' kl_flat(1e-6)(state, em_step(state))
+#'
+#' # A predicate of your own sees both states: here, stop before the support
+#' # would grow past a dozen atoms.
+#' too_many_atoms <- function(state, candidate) {
+#'   n_atoms(candidate@mixing) > 12L
+#' }
+#' fw_step(state, 10L, until = too_many_atoms)
 #' @name predicates
 NULL
 
-#' @describeIn predicates Checks whether the pending step would decrease KL by
-#'   less than `tol`. It is recommended for [em_step()] in particular. When
-#'   called externally on a state, it falls back to the change in KL over the
-#'   last two steps.
+#' @describeIn predicates Checks whether the pending step would change the KL
+#'   by less than `tol`, comparing the last trace row of `candidate` with that
+#'   of `state`. It is recommended for [em_step()] in particular.
 #' @export
 kl_flat <- function(tol = 1e-12) {
-  function(state, stepped = NULL) {
-    kl <- state@trace$kl
-    if (!is.null(stepped)) {
-      return(
-        length(kl) >= 1L &&
-          abs(utils::tail(stepped@trace$kl, 1L) - utils::tail(kl, 1L)) < tol
-      )
-    }
-    length(kl) >= 2L && abs(diff(utils::tail(kl, 2L))) < tol
+  function(state, candidate) {
+    abs(last_row(candidate)$kl - last_row(state)$kl) < tol
   }
 }
 
-#' @describeIn predicates Checks whether the Frank--Wolfe gap that the current
-#'   mixture attains is below `tol`. Inside [fw_step()] the row is filled by
-#'   the step's own oracle before the check; elsewhere it needs a recorded gap,
-#'   so make sure to set `record_gap = TRUE`.
+#' @describeIn predicates Checks whether the Frank--Wolfe gap of `state` is
+#'   below `tol`, reading the oracle cached in `state@oracle`. Inside
+#'   [fw_step()] the cache is always there; elsewhere set `record_gap = TRUE`
+#'   on the previous verb.
 #' @export
 gap_below <- function(tol = 1e-8) {
-  function(state) {
-    tr <- state@trace
-    fresh <- tr$fw == state@iters[["fw"]] &
-      tr$lb == state@iters[["lb"]] &
-      tr$em == state@iters[["em"]] &
-      tr$weight == state@iters[["weight"]]
-    g <- tr$gap_after[fresh & !is.na(tr$gap_after)]
-    if (!length(g)) {
+  function(state, candidate) {
+    if (is.null(state@oracle)) {
       stop(
         "no gap recorded for the current mixture. Set `record_gap = TRUE` ",
-        "on the previous verb, or use this predicate as `until`.",
+        "on the previous verb, or use this predicate as `until` in `fw_step()`.",
         call. = FALSE
       )
     }
-    utils::tail(g, 1L) < tol
+    state@oracle$value - 1 < tol
   }
 }
 
 #' @describeIn predicates Checks whether the Frank--Wolfe gap on the current
-#'   support, `max_c G(theta_c) - 1` exceeds `tol`.
-#'   It tests that the *weights* are optimal for the atoms in the current
-#'   support, rather than the current fit being optimal for the full null.
+#'   support, `max_c G(theta_c) - 1`, is below `tol`: whether the *weights* are
+#'   optimal for the current atoms, not whether the fit is optimal.
 #' @export
 support_gap_below <- function(tol = 1e-8) {
-  function(state) {
-    ld <- compile_engine(state@engine)
-    ld_all <- ld(flat_atoms(state))
-    log_p <- log_p_at_nodes(state, ld)
-    g <- exp(col_logsumexp(ld_all - log_p + state@engine@log_w))
-    max(g) - 1 < tol
+  function(state, candidate) {
+    ld_all <- compile_engine(state@engine)(state@mixing@atoms)
+    log_p <- mixture_log_p(ld_all, state@mixing@weights)
+    max(atom_g(ld_all, log_p, state@engine)) - 1 < tol
   }
 }
 
@@ -235,17 +223,13 @@ support_gap_below <- function(tol = 1e-8) {
 
 #' Run a verb's loop, recording and snapshotting as it goes
 #'
-#' `advance(state, ld)` computes one step without committing it, returning the
-#' stepped state, that state's log-density at the nodes, the row for `record`,
-#' and optionally `before`: the input state after any trace write the step's
-#' work produced. The loop adopts `before`, builds the state the step would
-#' make, and asks `until(state, candidate)`: a break keeps the `before` write
-#' and discards the candidate; otherwise the candidate is adopted.
+#' `advance(state, ld)` returns `list(state, log_p, row)` for one uncommitted
+#' step; the candidate is adopted unless `until(state, candidate)`.
 #'
-#' The clock spans `advance` alone: snapshots, `record_gap` sweeps and the
-#' `until` predicate are excluded. An advance that consumed a read-back oracle
-#' reports the stored search time as `reused`, which is added to its row's
-#' `elapsed`.
+#' For `uses_oracle` verbs the linear oracle is searched before the step if not
+#' cached, so `advance` only reads `state@oracle`; this also fills the last
+#' row's `gap_after` and lets `gap_below()` answer inside the loop. The clock
+#' spans `advance` alone, plus the consumed search's `elapsed`.
 #' @keywords internal
 #' @noRd
 run_steps <- function(
@@ -254,43 +238,30 @@ run_steps <- function(
   until,
   phase,
   record_gap,
-  advance
+  advance,
+  uses_oracle = FALSE
 ) {
   rlang::check_number_whole(times, min = 1, max = 2147483647)
+  check_until(until)
   ld <- compile_engine(state@engine)
 
   for (i in seq_len(times)) {
-    started <- proc.time()[["elapsed"]]
-    stepped <- advance(state, ld)
-    # A read-back adds the stored search time, so the row prices the search
-    # its step consumed wherever that search physically ran.
-    elapsed <- proc.time()[["elapsed"]] -
-      started +
-      (if (is.null(stepped$reused)) 0 else stepped$reused)
-    if (!is.null(stepped$before)) {
-      state <- stepped$before
+    if (uses_oracle && is.null(state@oracle)) {
+      state <- search_gap(state, log_p_at_nodes(state, ld), ld)
     }
+    clock <- stopwatch()
+    stepped <- advance(state, ld)
+    elapsed <- clock() + if (uses_oracle) state@oracle$elapsed else 0
     candidate <- do.call(
       record,
-      c(
-        list(bump(stepped$state, phase), phase = phase, elapsed = elapsed),
-        stepped$row
-      )
+      c(list(stepped$state, phase = phase, elapsed = elapsed), stepped$row)
     )
-    if (!is.null(until) && isTRUE(call_until(until, state, candidate))) {
+    if (!is.null(until) && isTRUE(until(state, candidate))) {
       break
     }
     state <- candidate
     if (record_gap) {
-      swept_at <- proc.time()[["elapsed"]]
-      swept <- linear_gap(state, stepped$log_p, ld, flat_atoms(state))
-      state <- fill_gap(
-        state,
-        swept$gap,
-        swept$theta,
-        swept$part,
-        proc.time()[["elapsed"]] - swept_at
-      )
+      state <- search_gap(state, stepped$log_p, ld)
     }
     if (wants_snapshot(state, i == times)) {
       state <- snapshot_state(state, phase)
@@ -300,44 +271,62 @@ run_steps <- function(
 }
 
 
-#' Ask a predicate about the state and the step waiting to be taken
-#'
-#' A predicate with two or more formals also receives the state the step
-#' would make; one with a single formal is asked about the current state
-#' alone.
+#' Refuse an `until` that cannot take two states
 #' @keywords internal
 #' @noRd
-call_until <- function(until, state, candidate) {
-  if (length(formals(until)) >= 2L) {
-    until(state, candidate)
-  } else {
-    until(state)
+check_until <- function(until) {
+  if (is.null(until)) {
+    return(invisible())
   }
+  args <- if (is.function(until)) formals(args(until)) else NULL
+  if (!is.function(until) || (!"..." %in% names(args) && length(args) < 2L)) {
+    stop(
+      "`until` must be a function of `(state, candidate)`; see ?predicates.",
+      call. = FALSE
+    )
+  }
+  invisible()
 }
 
 
-#' The linear oracle at the current mixture, read back or searched
+#' Search the linear oracle over the current mixture and cache the result
 #'
-#' Reuses an oracle already recorded for the current mixture; otherwise
-#' searches and writes the result to the last trace row via `fill_gap()`.
+#' Sets `state@oracle` and fills the last row's `gap_after`. The only place the
+#' linear oracle runs during a fit. `log_p` is the current mixture's.
 #' @keywords internal
 #' @noRd
-oracle_at <- function(state, log_p, ld) {
-  found <- recorded_oracle(state)
-  if (!is.null(found)) {
-    return(list(
-      state = state,
-      found = found,
-      reused = if (is.na(found$elapsed)) 0 else found$elapsed
-    ))
-  }
-  started <- proc.time()[["elapsed"]]
+search_gap <- function(state, log_p, ld) {
+  clock <- stopwatch()
   found <- search_null(state, linear_oracle(state, log_p, ld))
-  searched <- proc.time()[["elapsed"]] - started
+  elapsed <- clock()
+  state <- fill_gap(state, found$value - 1, found$theta, found$part, elapsed)
+  state@oracle <- list(
+    value = found$value,
+    theta = found$theta,
+    part = found$part,
+    elapsed = elapsed
+  )
+  state
+}
+
+
+#' Step towards an oracle's `found` `theta`/`part`, as `run_steps()` expects
+#' of `advance`; `...` goes to `plan_step()`
+#' @keywords internal
+#' @noRd
+step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
+  planned <- plan_step(state, log_p, ld, ...)(found$theta)
   list(
-    state = fill_gap(state, found$value - 1, found$theta, found$part, searched),
-    found = found,
-    reused = 0
+    state = commit_step(state, found$theta, found$part, planned),
+    log_p = planned$log_p,
+    row = list(
+      kl = planned$kl,
+      oracle_value = oracle_value,
+      oracle_theta = found$theta,
+      part = if (planned$uses_candidate) found$part else NA_integer_,
+      step_size = planned$gamma,
+      direction = planned$direction
+    )
   )
 }
 
@@ -345,37 +334,30 @@ oracle_at <- function(state, log_p, ld) {
 #' Frank--Wolfe step
 #'
 #' Maximises \eqn{G(\theta)}{G(theta)} over the null, then moves the iterate
-#' towards the maximiser. See [oracles] for technical details.
+#' towards the maximiser; see [oracles]. The search is skipped if
+#' `state@oracle` already holds it (e.g. after `record_gap = TRUE`), so each
+#' step costs one search.
 #'
-#' `correct = TRUE` yields the fully-corrective Frank--Wolfe scheme: the step
-#' is taken, then every weight is re-solved with the atoms held fixed. It is
-#' effectively the same thing as `fw_step(1) |> weight_step(big_num)`, but as
-#' a single verb rather than two.
+#' `correct = TRUE` gives fully-corrective Frank--Wolfe: after each step every
+#' weight is re-solved to optimality over the current atoms.
 #'
 #' @param state A [ripr_state].
 #' @param times Steps to take.
 #' @param variant Which Frank--Wolfe algorithm to run. `"standard"` moves only
-#'   towards the atom the oracle found. `"away-step"` may instead move away from
-#'   the worst atom the mixture already carries, taking whichever of the two the
-#'   linear model prefers (i.e. the one that maximises \eqn{\langle -\nabla f, d\rangle}{<-grad f, d>})
-#'   and then chooses a step length in that direction. `"pairwise"` moves mass
-#'   from that worst atom to the new oracle atom directly, leaving every other
-#'   weight untouched.
+#'   towards the oracle's atom. `"away-step"` may instead move away from the
+#'   worst current atom, whichever maximises
+#'   \eqn{\langle -\nabla f, d\rangle}{<-grad f, d>}. `"pairwise"` moves mass
+#'   from that worst atom directly to the new one.
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
-#' @param correct Whether to use "fully-corrective" steps that re-solve for the
-#'   weights with the atoms held fixed, run to `fc_tol` and `fc_max_iter` from
-#'   [ripr_control()]. Can be quite expensive. Note that the step size found by
-#'   the method selected via `size` is only used as a seed for the
-#'   fully-corrective solve.
+#' @param correct Re-solve the weights with atoms fixed after each step, to
+#'   `fc_tol` and `fc_max_iter` from [ripr_control()]. Can be expensive; the
+#'   `size` step only seeds the solve.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture
-#'   after each step, filling the `gap_after` columns. `FALSE` by default. Rows
-#'   before the last fill either way, from the next step's oracle reading the
-#'   sweep back, so `TRUE` buys the final row's measurement at the cost of
-#'   about one extra step.
-#' @param until (Optional) A predicate, tested before each step. It is given
-#'   the current state, and when it accepts two arguments the state the step
-#'   would make, so that a predicate can decide whether to stop early based
-#'   on the change between the two states. See [predicates].
+#'   after each step, filling `gap_after`. Earlier rows fill anyway from the
+#'   next step's search, so `TRUE` buys the final row's gap for about one extra
+#'   step.
+#' @param until Optional predicate `function(state, candidate)` tested before
+#'   each step; see [predicates].
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
 #' @examples
@@ -384,8 +366,8 @@ oracle_at <- function(state, log_p, ld) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
@@ -393,7 +375,7 @@ oracle_at <- function(state, log_p, ld) {
 #' state@trace$kl
 #'
 #' # Where each step put its atom.
-#' do.call(cbind, state@trace$oracle_theta[state@trace$phase == "fw"])
+#' do.call(rbind, state@trace$oracle_theta[state@trace$phase == "fw"])
 #' @export
 fw_step <- function(
   state,
@@ -413,35 +395,19 @@ fw_step <- function(
     until,
     "fw",
     record_gap = record_gap,
+    uses_oracle = TRUE,
     advance = function(state, ld) {
-      log_p <- log_p_at_nodes(state, ld)
-      oracle <- oracle_at(state, log_p, ld)
-      state <- oracle$state
-      found <- oracle$found
-      planned <- plan_step(
+      step_towards(
         state,
-        log_p,
+        state@oracle,
+        # Already recorded as the previous row's `1 + gap_after`.
+        oracle_value = NA_real_,
+        log_p_at_nodes(state, ld),
         ld,
         directions = directions,
         size = size,
-        gamma_fixed = schedule_gamma(schedule_index(state)),
-        correct = correct,
-        at = insert_index(state, found$part)
-      )(found$theta)
-
-      list(
-        before = state,
-        reused = oracle$reused,
-        state = commit_step(state, found$theta, found$part, planned),
-        log_p = planned$log_p,
-        row = list(
-          kl = planned$kl,
-          oracle_value = found$value,
-          oracle_theta = found$theta,
-          part = if (planned$uses_candidate) found$part else NA_integer_,
-          step_size = planned$gamma,
-          direction = planned$direction
-        )
+        gamma_fixed = schedule_gamma(state),
+        correct = correct
       )
     }
   )
@@ -450,13 +416,14 @@ fw_step <- function(
 
 #' Li--Barron greedy step
 #'
-#' Scores each candidate by the KL it yields *after* the new weights are
-#' chosen, so the step rule runs as an inner optimisation. Considerably more
-#' expensive than [fw_step()]; see [oracles].
+#' Scores each candidate by the KL left *after* its weight is chosen, so the
+#' step rule is an inner optimisation. Considerably more expensive than
+#' [fw_step()]; see [oracles].
 #'
 #' @inheritParams fw_step
-#' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the step
-#'   *produced*, filling the `gap_after` columns. `FALSE` by default.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture,
+#'   filling `gap_after` and caching it for [gap_below()] and [fw_step()].
+#'   `FALSE` by default.
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
 #' @examples
@@ -465,8 +432,8 @@ fw_step <- function(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
@@ -491,36 +458,25 @@ lb_step <- function(
     record_gap,
     function(state, ld) {
       log_p <- log_p_at_nodes(state, ld)
+      gamma_fixed <- schedule_gamma(state)
       obj <- nonlinear_oracle(
         state,
         log_p,
         ld,
         size = size,
-        gamma_fixed = schedule_gamma(schedule_index(state)),
+        gamma_fixed = gamma_fixed,
         correct = correct
       )
       found <- search_null(state, obj)
-      planned <- plan_step(
+      step_towards(
         state,
+        found,
+        oracle_value = found$value,
         log_p,
         ld,
         size = size,
-        gamma_fixed = schedule_gamma(schedule_index(state)),
-        correct = correct,
-        at = insert_index(state, found$part)
-      )(found$theta)
-
-      list(
-        state = commit_step(state, found$theta, found$part, planned),
-        log_p = planned$log_p,
-        row = list(
-          kl = planned$kl,
-          oracle_value = found$value,
-          oracle_theta = found$theta,
-          part = if (planned$uses_candidate) found$part else NA_integer_,
-          step_size = planned$gamma,
-          direction = planned$direction
-        )
+        gamma_fixed = gamma_fixed,
+        correct = correct
       )
     }
   )
@@ -529,14 +485,13 @@ lb_step <- function(
 
 #' EM sweep
 #'
-#' Each sweep updates every weight, then moves every atom within its own
-#' part. The support neither grows nor shrinks: only an oracle method such as
-#' [fw_step()] or [lb_step()] can add an atom to the mixture.
+#' Each sweep updates every weight, then moves every atom within its own part.
+#' The support never changes size; only [fw_step()] or [lb_step()] add atoms.
 #'
 #' @inheritParams fw_step
-#' @param record_gap Sweep the Frank--Wolfe oracle over the mixture the sweep
-#'   *produced*, filling the `gap_after` columns. Off by default, since it
-#'   costs a full oracle sweep per row.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture,
+#'   filling `gap_after` and caching it for [gap_below()] and [fw_step()].
+#'   Off by default: a full oracle sweep per row.
 #' @return The updated [ripr_state].
 #' @seealso [oracles], [predicates]
 #' @examples
@@ -545,8 +500,8 @@ lb_step <- function(
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
@@ -566,7 +521,7 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
       list(
         state = stepped,
         log_p = log_p,
-        row = list(kl = kl_divergence(stepped, log_p = log_p))
+        row = list(kl = kl_at(stepped@engine, log_p))
       )
     }
   )
@@ -576,19 +531,13 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' Weight correction step
 #'
 #' \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)} with the atoms
-#' held fixed: the exact M-step for the weights, guaranteed monotone in KL.
-#' Iterated to convergence this is the corrective half of fully-corrective
-#' Frank--Wolfe, so `fw_step(1) |> weight_step(big_num)` is one FCFW iteration.
-#' `fw_step(1, correct = TRUE)` is the same iteration taken in one verb, which
-#' is what to reach for when a row should price the whole of it; this verb is
-#' for correcting weights on its own account, with its own rows and its own
-#' stopping rule. Note that `lb_step(1) |> weight_step(big_num)` is *not* one
-#' Li--Barron step with fully corrective weights incorporated as the inner
-#' optimisation.
+#' held fixed: the exact M-step for the weights, monotone in KL. Repeated, it
+#' converges only slowly to the optimal weights; to solve for optimal weights in
+#' one go, the current API supports only `fw_step(correct = TRUE)` or
+#' `ripr_finish(reoptimise = TRUE)`.
 #'
-#' `until = support_gap_below(tol)` is the natural stopping rule, and is what
-#' makes `times` a budget rather than a target. Expect to reach it: the rate
-#' degrades as atoms crowd together, which is what Frank--Wolfe makes them do.
+#' Stop with `until = support_gap_below(tol)`, making `times` a budget.
+#' Convergence slows as atoms crowd together.
 #'
 #' @inheritParams em_step
 #' @return The updated [ripr_state].
@@ -599,8 +548,8 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
@@ -617,26 +566,23 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
     "weight",
     record_gap,
     function(state, ld) {
-      ld_all <- ld(flat_atoms(state))
-      log_p <- log_p_at_nodes(state, ld)
+      ld_all <- ld(state@mixing@atoms)
+      w <- state@mixing@weights
       sweep <- weight_sweep(
         ld_all,
-        flat_weights(state),
-        log_p,
+        w,
+        mixture_log_p(ld_all, w),
         engine = state@engine
       )
-      stepped <- set_weights(state, sweep$weights)
+      stepped <- set_mixture(state, weights = sweep$weights)
       new_log_p <- log_p_at_nodes(stepped, ld)
       list(
         state = stepped,
         log_p = new_log_p,
         row = list(
-          kl = kl_divergence(stepped, log_p = new_log_p),
-          # The residual is the gap over the current support, measured
-          # before the sweep, so it says what this sweep had left to gain.
-          # It is a maximum over the atoms rather than over the null, so no
-          # `oracle_theta` goes with it -- the location is already in the
-          # mixture.
+          kl = kl_at(stepped@engine, new_log_p),
+          # The pre-sweep support gap; no `oracle_theta`, since its location
+          # is already an atom.
           oracle_value = sweep$residual + 1
         )
       )
@@ -647,110 +593,230 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 
 # --- Finishing ----------------------------------------------------------------
 
-#' Turn a fitted state into a mixture
+#' A finished RIPr fit
 #'
-#' Converts a fitted state into a mixture. By default that is all it does: the
-#' weights come across as they stand and nothing is dropped.
+#' [ripr_finish()] returns the fitted mixing measure, the mixture it induces,
+#' fit diagnostics, and the state it came from. The constructor is internal.
 #'
-#' *Experimental feature*:
+#' The trace, snapshots and pre-finish mixture stay on `fit@state`. Finishing
+#' may reorder, reweight or drop atoms, so use `W0` and `part`, not
+#' `fit@state@mixing`.
 #'
-#' Two optional refinements, independently switchable so their effect can be
-#' measured. Both are off by default, so what is returned is what was fitted.
-#' `reoptimise` re-solves the weights over the current atoms, atoms fixed.
-#' `identify` tests each atom in ascending weight order and zeroes it if
-#' removing it does not increase KL. With both on they alternate until a round
-#' removes nothing, because each makes the other work better: removing an atom
-#' frees mass the survivors should absorb, and the removal test renormalises
-#' rather than re-optimises, so it understates how good a removal is until the
-#' weights have caught up. Usually one or two rounds.
-#'
-#' Neither is safe earlier in a fit. Nothing can restore a zeroed atom, so run
-#' mid-fit `identify` ratchets the support down; it is sound here only because
-#' the atoms have stopped moving.
-#'
-#' `identify` never increases KL -- it compares two feasible points and keeps
-#' the better -- but it does not *certify* that a removed atom is zero at the
-#' optimum. A certified rule would come from the duality gap, in the manner of
-#' the safe screening literature, and needs the dual of this problem deriving
-#' first.
-#'
-#' `prune` then drops atoms at or below its value. At the default of `0` that
-#' is nothing, unless `identify` ran, in which case it is exactly the atoms it
-#' zeroed. A positive value drops more, which may raise KL.
-#'
-#' Refining lowers KL and can *raise* the gap: the weight solve optimises over
-#' the current support, which need not be where \eqn{\sup G}{sup G} is small,
-#' and dropping atoms leaves more of the null uncovered. Measured on a `K = 4`
-#' problem, both refinements together took KL from 0.120 to 0.096 and the gap
-#' from 0.43 to 1.28. Which matters depends on whether the mixture is wanted for
-#' its fit or for a certificate resting on the gap.
-#'
-#' @param state A [ripr_state].
-#' @param prune Drop atoms with weight at or below this. Must be below 1.
-#' @param reoptimise Re-solve the weights before pruning. Off by default.
-#' @param identify Zero atoms whose removal does not increase KL. Off by
-#'   default.
-#' @param record_gap Sweep the Frank--Wolfe oracle over the *returned* mixture,
-#'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
-#' @param tol,max_iter Passed to the weight solve.
-#' @param max_rounds Cap on refinement rounds.
-#' @return A list with `W0` (a [finite_dist]), `P_star` (a [mixture]), `kl` of
-#'   the returned mixture, `gap_fit` (the last Frank--Wolfe gap recorded during
-#'   fitting, which may describe an earlier iterate than the returned mixture;
-#'   `NA` if none was), `gap_final` (the Frank--Wolfe gap over the final
-#'   mixture, `NA` unless `record_gap = TRUE`), `rounds`, `atoms`, `weights`
-#'   `part`, `trace` and `snapshots`.
-#' @references
-#'   \insertRef{FercoqGramfortSalmon2015}{ripr}
+#' @param W0 The fitted mixing measure, a [finite_dist] over the null.
+#' @param P_star The mixture `W0` induces through the null's family, the
+#'   approximate RIPr.
+#' @param part Integer vector, the part of the null holding each atom of `W0`.
+#'   Atoms are grouped in part order, so `part` is non-decreasing.
+#' @param kl \eqn{KL(Q \| P^*)}{KL(Q || P*)} of the returned mixture, under
+#'   the state's quadrature rule.
+#' @param gap_fit The last Frank--Wolfe gap recorded during fitting, which may
+#'   describe an earlier iterate than the returned mixture; `NA` if none was.
+#' @param gap_final The Frank--Wolfe gap over the returned mixture, `NA` unless
+#'   [ripr_finish()] was called with `record_gap = TRUE`.
+#' @param rounds Number of refinement rounds [ripr_finish()] ran; `0` when
+#'   neither `reoptimise` nor `identify` was on.
+#' @param state The [ripr_state] the fit was finished from.
+#' @return A `ripr_fit`.
+#' @seealso [ripr_finish()]
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' plurality <- null_model(
 #'   fam,
 #'   list(
-#'     simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-#'     simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- fam(c(0.4, 0.35, 0.25))
+#' fit <- ripr_init(Q, plurality) |>
+#'   fw_step(times = 10L) |>
+#'   ripr_finish(record_gap = TRUE)
+#' fit
+#' fit@W0
+#' fit@part
+#' utils::tail(fit@state@trace$kl)
+ripr_fit <- new_class(
+  "ripr_fit",
+  properties = list(
+    W0 = finite_dist,
+    P_star = mixture,
+    part = class_integer,
+    kl = class_numeric,
+    gap_fit = class_numeric,
+    gap_final = class_numeric,
+    rounds = class_integer,
+    state = ripr_state
+  ),
+  validator = function(self) {
+    if (length(self@part) != nrow(self@W0@atoms)) {
+      return("`part` must have one entry per atom of `W0`")
+    }
+    scalars <- list(
+      kl = self@kl,
+      gap_fit = self@gap_fit,
+      gap_final = self@gap_final,
+      rounds = self@rounds
+    )
+    for (nm in names(scalars)) {
+      if (length(scalars[[nm]]) != 1L) {
+        return(sprintf("`%s` must be a single number", nm))
+      }
+    }
+    NULL
+  }
+)
+
+
+#' @description `print()` shows the returned mixture, its KL, the gaps that
+#'   were measured, and how much history the state carries.
+#' @rdname ripr_fit
+#' @usage NULL
+method(print, ripr_fit) <- function(x, ...) {
+  tr <- x@state@trace
+  gaps <- c(
+    if (!is.na(x@gap_final)) {
+      paste(format(signif(x@gap_final, 3L)), "final")
+    },
+    if (!is.na(x@gap_fit)) {
+      paste(format(signif(x@gap_fit, 3L)), "while fitting")
+    }
+  )
+
+  cat("<ripr_fit>\n")
+  cat("  mixture  ", format(x@P_star), "\n", sep = "")
+  cat("  KL       ", format(signif(x@kl, 6L)), "\n", sep = "")
+  cat(
+    "  gap      ",
+    if (length(gaps)) paste(gaps, collapse = ", ") else "none recorded",
+    "\n",
+    sep = ""
+  )
+  cat(
+    "  refined  ",
+    if (x@rounds) count_label(x@rounds, "round") else "no",
+    "\n",
+    sep = ""
+  )
+  cat(
+    "  trace    ",
+    nrow(tr),
+    ngettext(nrow(tr), " row", " rows"),
+    ", ",
+    length(x@state@snapshots),
+    ngettext(length(x@state@snapshots), " snapshot", " snapshots"),
+    "\n",
+    sep = ""
+  )
+  invisible(x)
+}
+
+
+#' @description `format()` gives the atom count and KL on one line.
+#' @rdname ripr_fit
+#' @usage NULL
+method(format, ripr_fit) <- function(x, ...) {
+  sprintf(
+    "ripr_fit: %s, KL %s",
+    count_label(nrow(x@W0@atoms), "atom"),
+    format(signif(x@kl, 6L))
+  )
+}
+
+
+#' Turn a fitted state into a mixture
+#'
+#' Converts a fitted state into a mixture. By default the weights come across
+#' as they stand and nothing is dropped.
+#'
+#' *Experimental*: two optional refinements, both off by default. `reoptimise`
+#' re-solves the weights over the current atoms (to `fc_tol`/`fc_max_iter`).
+#' `identify` zeroes, lightest first, each atom whose removal does not increase
+#' KL. With both on they alternate until a round removes nothing. They are sound
+#' only because the atoms have stopped moving; `identify` never increases KL but
+#' does not *certify* that a removed atom is zero at the optimum.
+#'
+#' Atoms with weight at or below `threshold` are then dropped: by default only
+#' those `identify` zeroed. A positive value may raise KL.
+#'
+#' Refining lowers KL but can *raise* the gap, since the weights are optimised
+#' over the current support and dropping atoms leaves more of the null
+#' uncovered. Choose according to whether you want the fit or a certificate
+#' resting on the gap.
+#'
+#' @param state A [ripr_state].
+#' @param threshold Drop atoms with weight at or below this. Must be below 1.
+#' @param reoptimise Re-solve the weights before dropping any. Off by default.
+#' @param identify Zero atoms whose removal does not increase KL. Off by
+#'   default.
+#' @param record_gap Sweep the Frank--Wolfe oracle over the *returned* mixture,
+#'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
+#' @param max_rounds Cap on refinement rounds.
+#' @return A [ripr_fit], whose `W0` is the mixing measure (a [finite_dist]),
+#'   `P_star` the mixture it induces, and `kl`, `gap_fit` and `gap_final`
+#'   describe it. The state it was finished from, with its trace and
+#'   snapshots, is kept as `fit@state`.
+#' @references
+#'   \insertRef{FercoqGramfortSalmon2015}{ripr}
+#' @seealso [ripr_fit]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
 #'   )
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 #' fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
-#' fit$kl
-#' fit$gap_fit
-#' fit$gap_final
+#' fit
+#' fit@kl
+#' fit@gap_fit
+#' fit@gap_final
 #' @export
 ripr_finish <- function(
   state,
-  prune = 0,
+  threshold = 0,
   reoptimise = FALSE,
   identify = FALSE,
   record_gap = FALSE,
-  tol = 1e-10,
-  max_iter = 500L,
   max_rounds = 10L
 ) {
-  rlang::check_number_decimal(prune)
+  rlang::check_number_decimal(threshold)
   rlang::check_bool(reoptimise)
   rlang::check_bool(identify)
   rlang::check_bool(record_gap)
-  if (prune >= 1) {
-    stop("`prune` must be below 1; every weight is at most 1.", call. = FALSE)
+  if (threshold >= 1) {
+    stop(
+      "`threshold` must be below 1; every weight is at most 1.",
+      call. = FALSE
+    )
   }
 
   engine <- state@engine
+  ctl <- state@control
   ld <- compile_engine(engine)
-  ld_all <- ld(flat_atoms(state))
-  w <- flat_weights(state)
+  support <- atoms(state@mixing)
+  ld_all <- ld(support)
+  w <- weights(state@mixing)
 
-  # One round only when a single refinement is on: with nothing removed there is
-  # nothing for a second solve to absorb, and with no solve the removal test
-  # sees the same weights every time.
+  # Alternating only helps with both on: with one alone a second round would
+  # repeat the first.
   rounds <- 0L
   if (reoptimise || identify) {
     for (round in seq_len(if (reoptimise && identify) max_rounds else 1L)) {
       rounds <- round
       if (reoptimise) {
-        w <- solve_weights(ld_all, w, engine, tol = tol, max_iter = max_iter)
+        w <- solve_weights(
+          ld_all,
+          w,
+          engine,
+          tol = ctl$fc_tol,
+          max_iter = ctl$fc_max_iter
+        )
       }
       if (!identify) {
         break
@@ -764,42 +830,31 @@ ripr_finish <- function(
     }
   }
 
-  keep <- w > prune
-  if (!any(keep)) {
-    stop(
-      "no atom has weight above `prune` (",
-      prune,
-      "); the largest is ",
-      signif(max(w), 3),
-      ".",
-      call. = FALSE
-    )
-  }
-
-  mixing <- finite_dist(
-    components = flat_atoms(state)[, keep, drop = FALSE],
-    weights = w[keep] / sum(w[keep])
+  # Group atoms by part, so `W0` lines up with `part`.
+  by_order <- order(state@part)
+  w <- w[by_order] / sum(w)
+  mixing <- prune(
+    finite_dist(atoms = support[by_order, , drop = FALSE], weights = w),
+    threshold = threshold
   )
-  log_p <- mixture_log_p(ld(mixing@components), mixing@weights)
-  gaps <- state@trace$gap_after[!is.na(state@trace$gap_after)]
+  log_p <- mixture_log_p(ld(mixing@atoms), mixing@weights)
+  gaps <- state@trace$gap_after
+  gaps <- gaps[!is.na(gaps)]
 
-  list(
+  ripr_fit(
     W0 = mixing,
     P_star = mixture(engine@family, mixing),
-    # Of what is being returned, not of the state it came from: refining and
-    # pruning both change the mixture.
-    kl = expect_q(engine, engine@log_q - log_p),
+    part = state@part[by_order][w > threshold],
+    # Of the returned mixture, not the state's.
+    kl = kl_at(engine, log_p),
     gap_fit = if (length(gaps)) utils::tail(gaps, 1L) else NA_real_,
     gap_final = if (record_gap) {
-      linear_gap(state, log_p, ld, mixing@components)$gap
+      oracle <- linear_oracle(state, log_p, ld)
+      search_null(state, oracle, seeds = mixing@atoms)$value - 1
     } else {
       NA_real_
     },
-    rounds = rounds,
-    atoms = state@atoms,
-    weights = state@weights,
-    part = flat_part(state)[keep],
-    trace = state@trace,
-    snapshots = state@snapshots
+    rounds = as.integer(rounds),
+    state = state
   )
 }

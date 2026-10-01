@@ -3,30 +3,26 @@
 %   R/gaussian.R
 \name{draw}
 \alias{draw}
-\alias{draw,ripr::dirac-method}
 \alias{draw,ripr::finite_dist-method}
 \alias{draw,ripr::dirichlet-method}
 \alias{draw,ripr::truncated_dirichlet-method}
 \alias{draw,ripr::gaussian_dist-method}
 \title{Draw outcomes from a distribution}
 \usage{
-draw(dist, n_obs)
+draw(dist, n)
 }
 \arguments{
 \item{dist}{A \link{distribution}.}
 
-\item{n_obs}{Number of draws.}
+\item{n}{Number of draws.}
 }
 \value{
-\verb{(n_obs, K)} numeric matrix.
+\verb{(n, K)} numeric matrix.
 }
 \description{
-A point mass draws the same parameter every time.
-
 A finite distribution draws its atoms with probability equal to
-their weights. Repeats stay in place rather than being grouped:
-\code{\link[=kernel_draw]{kernel_draw()}} is vectorised over parameters, so a repeated row costs
-nothing.
+their weights; a \code{\link[=dirac]{dirac()}} does so without changing the state of the
+pseudorandom number generator.
 
 Rejection sampling from \code{Dir(alpha)}, keeping the proposals the
 region contains.
@@ -34,5 +30,5 @@ region contains.
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 4L, k = 3L)
-draw(fam(c(0.5, 0.3, 0.2)), n_obs = 3L)
+draw(fam(c(0.5, 0.3, 0.2)), n = 3L)
 }

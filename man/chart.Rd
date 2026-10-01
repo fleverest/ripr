@@ -14,8 +14,8 @@ A list comprising:
 \describe{
 \item{\code{n_par}}{dimension of the coordinate space.}
 \item{\code{to_theta(u)}}{maps coordinates to the parameter vector.}
-\item{\code{to_theta_batch(u_mat)}}{\verb{(n_par, N)} coordinates to \verb{(d, N)}
-parameters.}
+\item{\code{to_theta_batch(u_mat)}}{\verb{(N, n_par)} coordinates, one point per
+row, to \verb{(N, d)} parameters.}
 \item{\code{from_theta(theta)}}{Coordinates for a point in the parameter space,
 satisfying the constraints.}
 \item{\code{jacobian(u)}}{\verb{(d, n_par)} derivative of \code{to_theta} at \code{u}.}
@@ -23,19 +23,18 @@ satisfying the constraints.}
 where a coordinate is free.}
 \item{\code{heq(u)}, \code{heqjac(u)}}{equality constraint (\code{heq(u) = 0} on the
 feasible set) and its Jacobian, or \code{NULL} when there is none.}
-\item{\code{seed(n)}}{\verb{(n_par, n)} random feasible coordinates for a
-multi-start search, drawn to suit the space's own geometry.}
+\item{\code{seed(n)}}{\verb{(n, n_par)} random feasible coordinates, one point per
+row, for a multi-start search, drawn to suit the space's own geometry.}
 }
 }
 \description{
-Returns a list of closures that define mappings between the parameter space
-and a coordinate space, together with the coordinate constraints stated
-explicitly, which is what lets a constrained optimiser such as SLSQP run
+Closures mapping between the parameter space and a coordinate space, with
+the coordinate constraints stated so a constrained optimiser (SLSQP) can run
 on the set.
 }
 \examples{
 # One part of the K = 3 plurality null: `theta_1 <= theta_2` in the simplex.
-s <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+s <- simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 ch <- chart(s)
 ch$n_par
 

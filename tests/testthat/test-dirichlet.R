@@ -13,17 +13,14 @@ truncated <- function(alpha, region, ...) {
 
 plurality_part <- function(j, k = 3L) {
   vertices <- diag(k)
-  vertices[, 1L] <- replace(numeric(k), c(1L, j), 0.5)
+  vertices[1L, ] <- replace(numeric(k), c(1L, j), 0.5)
   simplex_region(vertices = vertices)
 }
 
 # `{theta : theta_1 >= theta_2, theta_3}`, where candidate 1 wins outright.
 plurality_complement <- function(k = 3L) {
   family <- multinomial_family(n_trials = 1L, k = k)
-  setdiff(
-    family@parameter_space,
-    union_region(lapply(2:k, plurality_part, k = k))
-  )
+  family@parameter_space - union_region(lapply(2:k, plurality_part, k = k))
 }
 
 # --- Concentrations -----------------------------------------------------------
@@ -108,44 +105,25 @@ test_that("a uniform Dirichlet induces the uniform law over the lattice", {
 
 # --- The quadrature, against closed forms -------------------------------------
 
-test_that("the reference rule integrates monomials on the simplex exactly", {
-  # `int_T prod_j lambda_j^m_j / int_T 1 = (K-1)! prod m_j! / (|m|+K-1)!`
-  monomial <- function(k, m) {
-    rule <- ripr:::reference_simplex_rule(k, degree = sum(m))
-    weight <- exp(rule$log_w)
-    integral <- sum(weight * apply(rule$lambda, 1L, function(l) prod(l^m)))
-    integral / sum(weight)
-  }
-  exact <- function(k, m) {
-    factorial(k - 1L) * prod(factorial(m)) / factorial(sum(m) + k - 1L)
-  }
-
-  # The check from first principles: E[lambda_1 lambda_2] under Dir(1, 1, 1).
-  expect_equal(monomial(3L, c(1, 1, 0)), 1 / 12, tolerance = 1e-12)
-
-  cases <- list(
-    list(k = 2L, m = c(5, 2)),
-    list(k = 3L, m = c(4, 3, 2)),
-    list(k = 4L, m = c(2, 1, 0, 3)),
-    list(k = 4L, m = c(0, 0, 0, 0))
-  )
-  for (case in cases) {
-    expect_equal(
-      monomial(case$k, case$m),
-      exact(case$k, case$m),
-      tolerance = 1e-12
-    )
-  }
-})
-
-test_that("quadrature nodes lie strictly inside the simplex", {
-  # This is what keeps `log(theta)` finite: an exponent of zero, which
-  # `alpha_j == 1` with `x_j == 0` produces, would otherwise meet `-Inf`.
+test_that("a concentration of one meets a zero count without a -Inf", {
+  # The quadrature nodes lie strictly inside the simplex, which is what keeps
+  # `log(theta)` finite: an exponent of zero, which `alpha_j == 1` with
+  # `x_j == 0` produces, would otherwise meet `-Inf`. Outcomes with a zero
+  # count are exactly those.
   for (k in c(2L, 3L, 4L)) {
-    rule <- ripr:::reference_simplex_rule(k, degree = 9L)
-    expect_true(all(rule$lambda > 0))
-    expect_equal(rowSums(rule$lambda), rep(1, nrow(rule$lambda)))
-    expect_true(all(is.finite(rule$log_w)))
+    family <- multinomial_family(n_trials = 4L, k = k)
+    outcomes <- enumerate_space(family@sample_space)
+    alpha <- c(1, rep(2, k - 1L))
+    got <- log_density(
+      family(truncated(alpha, family@parameter_space)),
+      outcomes
+    )
+    expect_true(all(is.finite(got)))
+    expect_equal(
+      got,
+      log_density(family(dirichlet(alpha = alpha)), outcomes),
+      tolerance = 1e-10
+    )
   }
 })
 
@@ -169,36 +147,23 @@ test_that("truncating to the whole simplex reproduces the untruncated law", {
 test_that("the cell integrals add up across a decomposition of the simplex", {
   # The one thing a single-cell check cannot see: whether each cell's weights
   # carry the right `abs(det(V))`. Splitting the simplex into pieces that are
-  # neither the identity nor of equal volume, then summing, does.
+  # neither the identity nor of equal volume, and truncating to all of them at
+  # once, must give back the untruncated law: the density is a ratio of sums of
+  # cell integrals, which only cancels to the closed form if every cell is
+  # weighted by its own volume.
   family <- k3_family(7L)
+  outcomes <- enumerate_space(family@sample_space)
   alpha <- c(3, 2, 2)
-  whole <- truncated(alpha, family@parameter_space)
-  pieces <- lapply(
-    parts(disjoin(union_region(
-      plurality_part(2L),
-      plurality_part(3L),
-      plurality_complement()
-    ))),
-    function(cell) truncated(alpha, cell)
-  )
-  expect_gt(length(pieces), 2L)
-
-  beta <- matrix(c(alpha + c(4, 2, 1), alpha), nrow = 3L)
-  total <- rowSums(vapply(
-    pieces,
-    function(w) exp(ripr:::log_region_integral(w, beta)),
-    numeric(ncol(beta))
+  pieces <- disjoin(union_region(
+    plurality_part(2L),
+    plurality_part(3L),
+    plurality_complement()
   ))
+  expect_gt(length(parts(pieces)), 2L)
 
   expect_equal(
-    log(total),
-    ripr:::log_region_integral(whole, beta),
-    tolerance = 1e-10
-  )
-  # And the whole-simplex integral is the multivariate Beta function.
-  expect_equal(
-    ripr:::log_region_integral(whole, beta),
-    colSums(lgamma(beta)) - lgamma(colSums(beta)),
+    log_density(family(truncated(alpha, pieces)), outcomes),
+    log_density(family(dirichlet(alpha = alpha)), outcomes),
     tolerance = 1e-10
   )
 })
@@ -243,64 +208,74 @@ test_that("raising the degree beyond the exact one changes nothing", {
 
 # Join the edge midpoints: four congruent children, each a quarter of the area.
 quadrisect <- function(v) {
-  m <- cbind(
-    (v[, 1] + v[, 2]) / 2,
-    (v[, 1] + v[, 3]) / 2,
-    (v[, 2] + v[, 3]) / 2
+  m <- rbind(
+    (v[1, ] + v[2, ]) / 2,
+    (v[1, ] + v[3, ]) / 2,
+    (v[2, ] + v[3, ]) / 2
   )
   list(
-    cbind(v[, 1], m[, 1], m[, 2]),
-    cbind(v[, 2], m[, 1], m[, 3]),
-    cbind(v[, 3], m[, 2], m[, 3]),
+    rbind(v[1, ], m[1, ], m[2, ]),
+    rbind(v[2, ], m[1, ], m[3, ]),
+    rbind(v[3, ], m[2, ], m[3, ]),
     m
   )
 }
 
-subdivide <- function(v, depth) {
+subdivide_cells <- function(v, depth) {
   if (depth == 0L) {
     return(list(v))
   }
   unlist(
-    lapply(quadrisect(v), subdivide, depth = depth - 1L),
+    lapply(quadrisect(v), subdivide_cells, depth = depth - 1L),
     recursive = FALSE
   )
 }
 
-# The unnormalised integral over one cell, at `beta = alpha`, which is the
-# measure the cell carries under `Dir(alpha)`.
-cell_measure <- function(vertices, alpha) {
-  w <- truncated(alpha, simplex_region(vertices = vertices))
-  exp(log_region_integral(w, matrix(alpha, ncol = 1L)))
+# The law truncated to the union of simplices with the given vertex matrices.
+# Cells that only share faces leave closed slivers of those faces behind when
+# the union is disjoined, which the constructor drops with a warning; here
+# every piece is full-dimensional, so that warning is noise.
+truncated_to <- function(alpha, vertex_list) {
+  region <- union_region(lapply(vertex_list, \(v) simplex_region(vertices = v)))
+  withCallingHandlers(
+    truncated(alpha, region),
+    ripr_degenerate_warning = function(w) invokeRestart("muffleWarning")
+  )
 }
 
-test_that("subdividing the simplex leaves the total measure unchanged", {
-  # The rule is exact, so a decomposition has to sum back to the closed form to
-  # rounding, however fine it is. This is the additive counterpart of the
-  # self-normalisation test above: that one fixes the total over outcomes at
-  # one `alpha`, this one fixes the total over cells at one outcome.
+test_that("subdividing the simplex leaves the law unchanged", {
+  # The rule is exact, so a decomposition has to give back the closed form to
+  # rounding, however fine it is. The density divides one sum of cell
+  # integrals by another, so it only comes out right if the integrals add up.
+  # This is the additive counterpart of the self-normalisation test above: that
+  # one fixes the total over outcomes, this one the total over cells.
+  family <- k3_family(5L)
+  outcomes <- enumerate_space(family@sample_space)
   for (alpha in list(c(1, 1, 1), c(4, 3, 2))) {
-    exact <- exp(sum(lgamma(alpha)) - lgamma(sum(alpha)))
-    for (depth in 0:3) {
-      cells <- subdivide(diag(3), depth)
-      total <- sum(vapply(cells, cell_measure, numeric(1), alpha = alpha))
+    closed <- log_density(family(dirichlet(alpha = alpha)), outcomes)
+    for (depth in 0:2) {
+      cells <- subdivide_cells(diag(3), depth)
       expect_equal(length(cells), 4^depth)
-      expect_equal(total, exact, tolerance = 1e-13)
+      got <- log_density(family(truncated_to(alpha, cells)), outcomes)
+      expect_equal(got, closed, tolerance = 1e-12)
     }
   }
 })
 
-test_that("subdividing a truncated support leaves its measure unchanged", {
-  medial <- cbind(c(.5, .5, 0), c(.5, 0, .5), c(0, .5, .5))
+test_that("subdividing a truncated support leaves its law unchanged", {
+  family <- k3_family(5L)
+  outcomes <- enumerate_space(family@sample_space)
+  medial <- rbind(c(.5, .5, 0), c(.5, 0, .5), c(0, .5, .5))
   alpha <- c(4, 3, 2)
-  coarse <- cell_measure(medial, alpha)
-  for (depth in 1:3) {
-    cells <- subdivide(medial, depth)
-    total <- sum(vapply(cells, cell_measure, numeric(1), alpha = alpha))
-    expect_equal(total, coarse, tolerance = 1e-13)
+  coarse <- log_density(family(truncated_to(alpha, list(medial))), outcomes)
+  for (depth in 1:2) {
+    cells <- subdivide_cells(medial, depth)
+    got <- log_density(family(truncated_to(alpha, cells)), outcomes)
+    expect_equal(got, coarse, tolerance = 1e-12)
   }
 })
 
-test_that("cells of degenerate aspect ratio do not degrade the total", {
+test_that("cells of degenerate aspect ratio do not degrade the law", {
   # Quadrisection keeps every child similar to its parent, so it never tests
   # conditioning. A fan to geometrically spaced points on the opposite edge
   # does: cell `i` has base `2^-i` against a fixed height, so the vertex
@@ -310,17 +285,18 @@ test_that("cells of degenerate aspect ratio do not degrade the total", {
   q <- rbind(0, 1 - s, s)
   slivers <- lapply(
     seq_len(m + 1L),
-    function(i) cbind(c(1, 0, 0), q[, i], q[, i + 1L])
+    function(i) rbind(c(1, 0, 0), q[, i], q[, i + 1L])
   )
   expect_gt(max(vapply(slivers, kappa, numeric(1))), 1e6)
   expect_lt(min(vapply(slivers, function(v) abs(det(v)), numeric(1))), 1e-6)
 
+  family <- k3_family(5L)
+  outcomes <- enumerate_space(family@sample_space)
   for (alpha in list(c(1, 1, 1), c(4, 3, 2))) {
-    total <- sum(vapply(slivers, cell_measure, numeric(1), alpha = alpha))
     expect_equal(
-      total,
-      exp(sum(lgamma(alpha)) - lgamma(sum(alpha))),
-      tolerance = 1e-13
+      log_density(family(truncated_to(alpha, slivers)), outcomes),
+      log_density(family(dirichlet(alpha = alpha)), outcomes),
+      tolerance = 1e-12
     )
   }
 })
@@ -336,7 +312,7 @@ test_that("a symmetric prior over mirrored cells gives permuted densities", {
   # coordinates, `{theta_2 <= theta_1}`.
   lower <- plurality_part(2L)
   upper <- simplex_region(
-    vertices = cbind(c(0.5, 0.5, 0), c(1, 0, 0), c(0, 0, 1))
+    vertices = rbind(c(0.5, 0.5, 0), c(1, 0, 0), c(0, 0, 1))
   )
 
   alpha <- rep(2, 3)
@@ -349,7 +325,7 @@ test_that("a symmetric prior over mirrored cells gives permuted densities", {
 # --- Regions the measure refuses ----------------------------------------------
 
 test_that("a region with no full-dimensional cell at all is refused", {
-  segment <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 0.5, 0.5)))
+  segment <- simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 0.5, 0.5)))
   point <- point_region(theta = c(0.5, 0.3, 0.2))
   expect_error(truncated(c(2, 2, 2), segment), "measure zero")
   expect_error(truncated(c(2, 2, 2), point), "measure zero")
@@ -359,9 +335,11 @@ test_that("lower-dimensional cells are dropped with a warning, not refused", {
   # A degenerate piece integrates to zero, so it cannot change an answer --
   # only waste the caller's assumption that it counted for something.
   medial <- simplex_region(
-    vertices = cbind(c(.5, .5, 0), c(.5, 0, .5), c(0, .5, .5))
+    vertices = rbind(c(.5, .5, 0), c(.5, 0, .5), c(0, .5, .5))
   )
-  sliver <- simplex_region(vertices = cbind(c(1, 0, 0), c(0.9, 0.1, 0)))
+  # Vertices whose coordinates sum to exactly 1 in binary, so the segment lies
+  # in the simplex exactly and a mixture over the region is well defined.
+  sliver <- simplex_region(vertices = rbind(c(1, 0, 0), c(0.75, 0.25, 0)))
   mixed <- union_region(medial, sliver)
 
   expect_warning(
@@ -371,19 +349,20 @@ test_that("lower-dimensional cells are dropped with a warning, not refused", {
   expect_warning(truncated(c(4, 3, 2), mixed), "measure zero")
   expect_length(w@cells, 1L)
 
-  # And the surviving cell carries exactly the measure the whole region had.
+  # And the surviving cell carries exactly the law the whole region had.
   clean <- truncated(c(4, 3, 2), medial)
-  shape <- matrix(c(4, 3, 2), ncol = 1L)
+  family <- k3_family(6L)
+  outcomes <- enumerate_space(family@sample_space)
   expect_equal(
-    log_region_integral(w, shape),
-    log_region_integral(clean, shape),
+    log_density(family(w), outcomes),
+    log_density(family(clean), outcomes),
     tolerance = 1e-13
   )
 })
 
 test_that("a region outside or beyond the simplex is refused", {
   tetrahedron <- simplex_region(
-    vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+    vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
   )
   expect_error(
     truncated(c(2, 2, 2), halfspace_region(normal = c(1, -1, 0))),
@@ -433,7 +412,7 @@ test_that("draw on an untruncated Dirichlet lands in the simplex", {
 test_that("a region the prior barely reaches errors rather than looping", {
   set.seed(1)
   corner <- simplex_region(
-    vertices = cbind(
+    vertices = rbind(
       c(1, 0, 0),
       c(0.999, 0.001, 0),
       c(0.999, 0, 0.001)
@@ -469,23 +448,31 @@ test_that("a continuous mixing measure has no support to list", {
   }
 })
 
-test_that("reference_point seeds the optimiser from inside the region", {
-  # The mode when every concentration exceeds 1, the mean otherwise, projected
-  # onto the region when the untruncated point is outside it.
-  expect_equal(reference_point(dirichlet(c(4, 3, 2))), c(3, 2, 1) / 6)
-  expect_equal(reference_point(dirichlet(c(1, 3, 2))), c(1, 3, 2) / 6)
+test_that("a fit starts from inside the alternative's region", {
+  # `ripr_init()` seeds every part of the null at the alternative's reference
+  # point, projected onto the part. Over a null that is the whole simplex the
+  # projection changes nothing, so the seed is the reference point itself: the
+  # mode when every concentration exceeds 1, the mean otherwise, projected onto
+  # the region when the untruncated point is outside it.
+  family <- k3_family(4L)
+  whole <- null_model(family, family@parameter_space)
+  start <- function(mixing) {
+    as.vector(ripr_init(family(mixing), whole)@mixing@atoms)
+  }
+  expect_equal(start(dirichlet(c(4, 3, 2))), c(3, 2, 1) / 6)
+  expect_equal(start(dirichlet(c(1, 3, 2))), c(1, 3, 2) / 6)
 
   region <- plurality_complement()
-  inside <- reference_point(truncated(c(4, 3, 2), region))
+  inside <- start(truncated(c(4, 3, 2), region))
   expect_true(contains(region, inside))
 
   # A prior whose mode sits in the null still has to start somewhere legal.
-  outside <- reference_point(truncated(c(2, 6, 6), region))
+  outside <- start(truncated(c(2, 6, 6), region))
   expect_true(contains(region, outside))
 })
 
 test_that("a Dirichlet mixed through the wrong family errors naming both", {
-  wrong <- gaussian_family(dim = 3L)(dirichlet(alpha = c(2, 2, 2)))
+  wrong <- gaussian_family(d = 3L)(dirichlet(alpha = c(2, 2, 2)))
   expect_error(
     log_density(wrong, c(0, 0, 0)),
     "`dirichlet` over a `gaussian_family`"
@@ -506,34 +493,32 @@ test_that("the concentration count must match the family's categories", {
     k3_family(4L)(dirichlet(c(2, 2))),
     "over 2 dimensions but the family's parameters have 3"
   )
-  # The density method keeps its own check, now only reachable by calling it
-  # directly, since no mixture over a mismatched pair can be constructed.
-  expect_error(
-    ripr:::mixture_log_density(
-      dirichlet(c(2, 2)),
-      k3_family(4L),
-      c(2L, 1L, 1L)
-    ),
-    "2 entries but the family has 3 categories"
-  )
 })
 
 # --- Plumbing into a fit ------------------------------------------------------
 
 test_that("an exact engine resolves against a truncated Dirichlet", {
   family <- k3_family(8L)
+  plurality <- union_region(plurality_part(2L), plurality_part(3L))
   Q <- family(truncated(c(4, 3, 2), plurality_complement()))
-  engine <- resolve_engine(exact_engine(), Q, family)
+  engine <- ripr_init(Q, null_model(family, plurality))@engine
 
-  expect_true(deterministic(engine))
+  expect_true(engine@deterministic)
   expect_equal(sum(exp(engine@log_w)), 1, tolerance = 1e-12)
-  expect_equal(n_nodes(engine), nrow(enumerate_space(family@sample_space)))
+  expect_equal(
+    nrow(engine@nodes),
+    nrow(enumerate_space(family@sample_space))
+  )
 })
 
 test_that("gauss-hermite refuses a Dirichlet alternative", {
   family <- k3_family(8L)
+  plurality <- union_region(plurality_part(2L), plurality_part(3L))
   Q <- family(truncated(c(4, 3, 2), plurality_complement()))
-  expect_error(resolve_engine(gh_engine(5L), Q, family), "Gaussian alternative")
+  expect_error(
+    ripr_init(Q, null_model(family, plurality), engine = gh_engine(5L)),
+    "Gaussian alternative"
+  )
 })
 
 test_that("a truncated Dirichlet alternative fits against the plurality null", {
@@ -541,7 +526,7 @@ test_that("a truncated Dirichlet alternative fits against the plurality null", {
   k <- 3L
   family <- multinomial_family(n_trials = 10L, k = k)
   plurality <- union_region(lapply(2:k, plurality_part, k = k))
-  alternative <- setdiff(family@parameter_space, plurality)
+  alternative <- family@parameter_space - plurality
 
   Q <- family(truncated(c(4, 3, 2), alternative))
   state <- ripr_init(Q, null_model(family, plurality), engine = exact_engine())
@@ -549,13 +534,13 @@ test_that("a truncated Dirichlet alternative fits against the plurality null", {
   state <- em_step(state, times = 60L, until = kl_flat(1e-9))
   fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE)
 
-  expect_true(is.finite(fit$kl))
-  expect_gt(fit$kl, 0)
+  expect_true(is.finite(fit@kl))
+  expect_gt(fit@kl, 0)
   # Both verbs are monotone in KL, so a rise would mean the alternative's
   # density and the engine's weights had come apart.
   expect_true(all(diff(state@trace$kl) <= 1e-12))
-  expect_true(kl_flat(1e-5)(state))
-  expect_lte(fit$kl, state@trace$kl[[1L]])
+  expect_lt(abs(diff(utils::tail(state@trace$kl, 2L))), 1e-5)
+  expect_lte(fit@kl, state@trace$kl[[1L]])
 })
 
 
@@ -572,7 +557,7 @@ test_that("Dirichlet mixing measures print their concentration", {
   expect_no_match(out, "@")
 
   region <- simplex_region(
-    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+    vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
   )
   out <- paste(
     capture.output(print(truncated_dirichlet(alpha = c(4, 3, 2), region = region))),
@@ -582,4 +567,64 @@ test_that("Dirichlet mixing measures print their concentration", {
   expect_match(out, "alpha  (4, 3, 2)", fixed = TRUE)
   expect_match(out, "region simplex_region", fixed = TRUE)
   expect_no_match(out, "@")
+})
+
+
+# --- Internal kernels ---------------------------------------------------------
+
+test_that("the reference rule integrates monomials on the simplex exactly", {
+  # The collapsed-coordinate rule underneath every truncated density.
+  # Publicly its exactness only shows through ratios of integrals, where an
+  # error common to numerator and denominator can cancel, so its degree is
+  # pinned on bare monomials here.
+  # `int_T prod_j lambda_j^m_j / int_T 1 = (K-1)! prod m_j! / (|m|+K-1)!`
+  monomial <- function(k, m) {
+    rule <- reference_simplex_rule(k, degree = sum(m))
+    weight <- exp(rule$log_w)
+    integral <- sum(weight * apply(rule$lambda, 1L, function(l) prod(l^m)))
+    integral / sum(weight)
+  }
+  exact <- function(k, m) {
+    factorial(k - 1L) * prod(factorial(m)) / factorial(sum(m) + k - 1L)
+  }
+
+  # The check from first principles: E[lambda_1 lambda_2] under Dir(1, 1, 1).
+  expect_equal(monomial(3L, c(1, 1, 0)), 1 / 12, tolerance = 1e-12)
+
+  cases <- list(
+    list(k = 2L, m = c(5, 2)),
+    list(k = 3L, m = c(4, 3, 2)),
+    list(k = 4L, m = c(2, 1, 0, 3)),
+    list(k = 4L, m = c(0, 0, 0, 0))
+  )
+  for (case in cases) {
+    expect_equal(
+      monomial(case$k, case$m),
+      exact(case$k, case$m),
+      tolerance = 1e-12
+    )
+  }
+})
+
+
+test_that("a dropped measure-zero cell does not stay in the law's support", {
+  # The sliver's vertex rows miss summing to 1 by a rounding error; once it is
+  # dropped, mixing over the law must not check containment against it.
+  fam <- multinomial_family(n_trials = 3L, k = 3L)
+  region <- simplex_region(
+    vertices = rbind(c(1, 0, 0), c(0.5, 0.5, 0), c(0, 0, 1))
+  ) | polytope_region(vertices = rbind(c(1, 0, 0), c(0.9, 0.1, 0)))
+  expect_warning(
+    w <- truncated_dirichlet(alpha = c(2, 2, 2), region = region),
+    class = "ripr_degenerate_warning"
+  )
+  total <- sum(exp(log_density(fam(w), enumerate_space(fam@sample_space))))
+  expect_equal(total, 1, tolerance = 1e-10)
+})
+
+test_that("dirichlet_draws() stays on the simplex for tiny alpha", {
+  set.seed(1)
+  d <- dirichlet_draws(rep(1e-3, 3L), 1000L)
+  expect_false(anyNA(d))
+  expect_equal(rowSums(d), rep(1, 1000L))
 })

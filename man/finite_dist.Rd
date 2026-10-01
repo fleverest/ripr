@@ -6,10 +6,10 @@
 \alias{print,ripr::finite_dist-method}
 \title{A distribution on finitely many atoms, \verb{sum_c w_c delta_\{theta_c\}}}
 \usage{
-finite_dist(components = NULL, weights = integer(0))
+finite_dist(atoms = NULL, weights = integer(0))
 }
 \arguments{
-\item{components}{\verb{(K, C)} numeric matrix, one parameter vector per column.}
+\item{atoms}{\verb{(C, d)} numeric matrix, one parameter vector (atom) per row.}
 
 \item{weights}{Length-\code{C} numeric vector summing to 1.}
 }
@@ -26,7 +26,7 @@ otherwise; \code{\link[=atoms]{atoms()}} and \code{\link[=weights]{weights()}} g
 }
 \examples{
 d <- finite_dist(
-  components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+  atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
   weights = c(0.5, 0.5)
 )
 n_atoms(d)

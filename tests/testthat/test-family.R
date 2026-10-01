@@ -10,15 +10,15 @@ test_that("a family carries the sample space its outcomes live in", {
   # Enumeration, membership and dimension belong to the space; a family only
   # holds a reference to one. Their properties live in `test-sample_space.R`.
   fam <- multinomial_family(n_trials = 4, k = 3)
-  expect_identical(fam@sample_space, count_space(n = 4L, k = 3L))
-  expect_identical(gaussian_family(dim = 2)@sample_space, real_region(2L))
+  expect_identical(fam@sample_space, count_space(n_trials = 4L, k = 3L))
+  expect_identical(gaussian_family(d = 2)@sample_space, real_region(2L))
 })
 
 test_that("a family carries the parameter space its parameters live in", {
   fam <- multinomial_family(n_trials = 7, k = 5)
   expect_equal(space_dim(fam@parameter_space), 5L)
   expect_true(contains(fam@parameter_space, rep(1 / 5, 5)))
-  expect_equal(space_dim(gaussian_family(dim = 3)@parameter_space), 3L)
+  expect_equal(space_dim(gaussian_family(d = 3)@parameter_space), 3L)
 })
 
 # --- Log density --------------------------------------------------------------
@@ -32,7 +32,7 @@ test_that("the multinomial pmf sums to 1 over its support", {
     c(0.5, 0.5, 0) # a boundary parameter: log(0) = -Inf in the kernel
   )) {
     expect_equal(
-      sum(exp(kernel_loglik(fam, theta, x))),
+      sum(exp(log_density(fam(theta), x))),
       1,
       tolerance = rounding_tol(1)
     )
@@ -41,30 +41,30 @@ test_that("the multinomial pmf sums to 1 over its support", {
 
 test_that("a boundary parameter gives -Inf, not NaN, off its face", {
   fam <- multinomial_family(n_trials = 4, k = 3)
-  ld <- kernel_loglik(fam, c(0.5, 0.5, 0), enumerate_space(fam@sample_space))
+  ld <- log_density(fam(c(0.5, 0.5, 0)), enumerate_space(fam@sample_space))
   expect_false(anyNA(ld))
   dead <- enumerate_space(fam@sample_space)[, 3] > 0 # positive count in the zero-probability category
   expect_true(all(ld[dead] == -Inf))
   expect_true(all(is.finite(ld[!dead])))
 })
 
-test_that("kernel_loglik_batch column c equals kernel_loglik of column c", {
+test_that("kernel_loglik_batch column c equals the density at row c", {
   fam <- multinomial_family(n_trials = 6, k = 4)
   x <- enumerate_space(fam@sample_space)
-  theta_mat <- cbind(
+  theta_mat <- rbind(
     c(0.25, 0.25, 0.25, 0.25),
     c(0.7, 0.1, 0.1, 0.1),
     c(0.4, 0.3, 0.2, 0.1)
   )
   batched <- kernel_loglik_batch(fam, theta_mat, x)
-  for (i in seq_len(ncol(theta_mat))) {
-    expect_equal(batched[, i], kernel_loglik(fam, theta_mat[, i], x))
+  for (i in seq_len(nrow(theta_mat))) {
+    expect_equal(batched[, i], log_density(fam(theta_mat[i, ]), x))
   }
 })
 
-test_that("kernel_loglik accepts a bare vector as one outcome", {
+test_that("a bare vector is one outcome", {
   fam <- multinomial_family(n_trials = 10, k = 2)
-  expect_length(kernel_loglik(fam, c(0.5, 0.5), c(8, 2)), 1L)
+  expect_length(log_density(fam(c(0.5, 0.5)), c(8, 2)), 1L)
 })
 
 # --- Compiled log-likelihood --------------------------------------------------
@@ -81,8 +81,8 @@ test_that("a compiled evaluator is reusable across different theta", {
     c(0.5, 0.5, 0)
   )) {
     expect_equal(
-      as.vector(ld(matrix(theta, ncol = 1L))),
-      kernel_loglik(fam, theta, x)
+      as.vector(ld(matrix(theta, nrow = 1L))),
+      log_density(fam(theta), x)
     )
   }
 })
@@ -94,9 +94,9 @@ test_that("a compiled evaluator does not alias its outcome matrix", {
   fam <- multinomial_family(n_trials = 6, k = 3)
   x <- enumerate_space(fam@sample_space)
   ld <- compile_loglik(fam, x)
-  before <- ld(matrix(c(0.5, 0.3, 0.2), ncol = 1L))
+  before <- ld(matrix(c(0.5, 0.3, 0.2), nrow = 1L))
   x[1L, 1L] <- 99L
-  expect_equal(ld(matrix(c(0.5, 0.3, 0.2), ncol = 1L)), before)
+  expect_equal(ld(matrix(c(0.5, 0.3, 0.2), nrow = 1L)), before)
 })
 
 test_that("a family with no compile_loglik method errors", {
@@ -112,7 +112,7 @@ test_that("a family with no compile_loglik method errors", {
 
 # --- Score --------------------------------------------------------------------
 
-test_that("Mnom score matches a central finite difference of kernel_loglik", {
+test_that("Mnom score matches a central finite difference of the log density", {
   # Differentiated along simplex-tangent directions, since theta must stay on
   # the simplex. The score is returned in raw coordinates, so the directional
   # derivative is what lines up.
@@ -123,8 +123,8 @@ test_that("Mnom score matches a central finite difference of kernel_loglik", {
   eps <- 1e-6
 
   for (dir in list(c(1, -1, 0), c(0, 1, -1), c(1, 0, -1))) {
-    fd <- (kernel_loglik(fam, theta + eps * dir, x) -
-      kernel_loglik(fam, theta - eps * dir, x)) /
+    fd <- (log_density(fam(theta + eps * dir), x) -
+      log_density(fam(theta - eps * dir), x)) /
       (2 * eps)
     expect_equal(as.vector(s %*% dir), fd, tolerance = 1e-5)
   }
@@ -153,7 +153,7 @@ test_that("draw returns the right shape and respects the trial total", {
     for (k in 1:5) {
       fam <- multinomial_family(n_trials = n_trials, k = k)
       theta <- seq_len(k) / sum(seq_len(k))
-      d <- kernel_draw(fam, matrix(theta, nrow = k, ncol = n))
+      d <- kernel_draw(fam, matrix(theta, nrow = n, ncol = k, byrow = TRUE))
       expect_equal(dim(d), c(n, k))
       expect_true(all(rowSums(d) == n_trials))
     }
@@ -161,19 +161,19 @@ test_that("draw returns the right shape and respects the trial total", {
 })
 
 
-test_that("kernel_draw draws one observation per parameter column", {
+test_that("kernel_draw draws one observation per parameter row", {
   set.seed(1)
   fam <- multinomial_family(n_trials = 20L, k = 3L)
 
   # Three different parameters, one draw each -- not three draws from one.
-  theta <- cbind(c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
-  expect_equal(kernel_draw(fam, theta), t(theta) * 20L)
+  theta <- rbind(c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+  expect_equal(kernel_draw(fam, theta), theta * 20L)
 
-  # A bare vector is one column, so one draw.
+  # A bare vector is one row, so one draw.
   expect_equal(dim(kernel_draw(fam, c(0.5, 0.3, 0.2))), c(1L, 3L))
 })
 
-test_that("kernel_draw agrees in distribution with the per-column sampler", {
+test_that("kernel_draw agrees in distribution with the per-row sampler", {
   # The conditional-binomial construction has to match `rmultinom()`, which is
   # what it replaced. Compared on the full sample space rather than on moments.
   set.seed(1)
@@ -185,7 +185,7 @@ test_that("kernel_draw agrees in distribution with the per-column sampler", {
   key <- function(m) apply(m, 1L, paste, collapse = ",")
   tally <- function(d) tabulate(match(key(d), key(outcomes)), nrow(outcomes))
 
-  got <- tally(kernel_draw(fam, matrix(theta, nrow = 3L, ncol = n)))
+  got <- tally(kernel_draw(fam, matrix(theta, nrow = n, ncol = 3L, byrow = TRUE)))
   want <- n * exp(log_density(fam(theta), outcomes))
   chi <- sum((got - want)^2 / want)
   expect_gt(pchisq(chi, nrow(outcomes) - 1L, lower.tail = FALSE), 1e-4)
@@ -193,10 +193,10 @@ test_that("kernel_draw agrees in distribution with the per-column sampler", {
 
 test_that("kernel_draw handles parameters with zero-probability categories", {
   # `p_j / (1 - sum p)` is 0/0 once the remaining probability is spent, which
-  # a column ending in zeros reaches before its last category.
+  # a row ending in zeros reaches before its last category.
   set.seed(1)
   fam <- multinomial_family(n_trials = 8L, k = 4L)
-  theta <- cbind(c(0.5, 0.5, 0, 0), c(1, 0, 0, 0), c(0, 0, 0, 1))
+  theta <- rbind(c(0.5, 0.5, 0, 0), c(1, 0, 0, 0), c(0, 0, 0, 1))
   d <- kernel_draw(fam, theta)
 
   expect_false(anyNA(d))

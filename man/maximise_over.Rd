@@ -11,7 +11,8 @@ maximise_over(space, obj, seeds = NULL, n_seeds = 200L, n_restarts = 25L)
 
 \item{obj}{An \code{\link[=objective]{objective()}}.}
 
-\item{seeds}{Optional \verb{(d, m)} matrix of parameter-space points to seed from.}
+\item{seeds}{Optional \verb{(m, d)} matrix of parameter-space points to seed
+from, one per row.}
 
 \item{n_seeds}{Random seeds drawn from the chart.}
 
@@ -21,20 +22,16 @@ maximise_over(space, obj, seeds = NULL, n_seeds = 200L, n_restarts = 25L)
 \code{list(theta = , value = )} with \code{theta} in the space.
 }
 \description{
-Multi-start SLSQP in the space's own \code{\link[=chart]{chart()}}: seed coordinates are scored
-in batch, the best \code{n_restarts} are refined under the chart's declared
-constraints, and the best refinement wins. Written once and shared by all
-geometries, since only the charts should differ.
+Multi-start SLSQP in the space's own \code{\link[=chart]{chart()}}: seeds are scored in batch,
+the best \code{n_restarts} are refined under the chart's constraints, and the
+best refinement wins.
 }
 \details{
-\strong{The result is a lower bound on the true supremum, not the supremum.} The
-objective is generally non-convex, so this search is a heuristic. Restarts
-will converge to local maxima. Anything needing an upper bound must obtain
-it some other way, e.g. via certification.
+\strong{The result is a lower bound on the supremum, not the supremum}: the
+objective is generally non-convex. Upper bounds need certification.
 
-\code{seeds} should always include the current mixture's atoms. Without them the
-returned value can fall below \verb{max_j G(theta_j)}, which the mixture already
-guarantees is at least 1, and a duality gap computed from it would come out
-spuriously negative.
+\code{seeds} should include the current mixture's atoms; otherwise the value can
+fall below \verb{max_j G(theta_j)} (at least 1) and a duality gap computed from
+it can come out spuriously negative.
 }
 \keyword{internal}

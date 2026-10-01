@@ -6,16 +6,16 @@
 \alias{cells,ripr::union_region-method}
 \alias{cells,ripr::polyhedron_region-method}
 \alias{cells,ripr::simplex_region-method}
-\alias{cells,ripr::point_region-method}
 \title{The convex regions a region decomposes into for optimisation}
 \usage{
-cells(space, max_cells = 1000L, .budget = NULL)
+cells(space, max_cells = getOption("ripr.max_cells", 1000L), .budget = NULL)
 }
 \arguments{
 \item{space}{A \link{region}.}
 
 \item{max_cells}{The number of simplices triangulation may produce before
-giving up (default \code{1000L}).}
+giving up. Defaults to the \code{ripr.max_cells} option, or \code{1000L} when that
+is unset.}
 
 \item{.budget}{Internal: the shared budget a union hands its parts. Leave
 it \code{NULL}.}
@@ -24,30 +24,17 @@ it \code{NULL}.}
 A list of \link{convex_region} objects whose union is \code{space}.
 }
 \description{
-Every region is its own only cell unless it says otherwise. A region that is
-a union of convex pieces returns those pieces here, and a geometry that can
-be triangulated will return its triangulation. Things that search or enclose
-then run on each convex cell, without needing to know which region it came
-from.
+A union returns its pieces and a triangulable geometry its triangulation;
+any other region is its own only cell. Cells may overlap.
+Contrast \code{\link[=parts]{parts()}}, which is what the region was declared as.
 
 An empty region has no cells.
 
-A union's cells are its parts' cells, flattened: the parts are
-what was declared, the cells are what the algorithms run on. The parts
-share one \code{max_cells} budget, so the cap is on the union's total.
+A union's cells are its parts' cells, flattened, without
+exceeding the shared \code{max_cells} budget.
 
-A polyhedron's cells are its triangulation: the fan of
-simplices described in \code{\link[=polytope_region]{polytope_region()}}. Boundedness is what decides
-it, not the class -- an unbounded polyhedron has no simplicial
-decomposition and is its own only cell, as is one that is a simplex
-already: \code{\link[=simplex_region]{simplex_region()}}, or \code{\link[=point_region]{point_region()}}, the degenerate one.
-}
-\details{
-Cells may overlap. This is fine for our case because a supremum over a union
-is a supremum over any cover. Overlaps may cost time but the results will
-still be valid.
-
-Contrast \code{\link[=parts]{parts()}}, which is what the region was declared as.
+A bounded polyhedron's cells are its triangulation; an
+unbounded one, or a \code{\link[=simplex_region]{simplex_region()}}, is its own only cell.
 }
 \examples{
 cells(simplex_region(vertices = diag(3)))

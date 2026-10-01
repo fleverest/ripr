@@ -13,11 +13,8 @@ is_bounded(space)
 \code{TRUE} or \code{FALSE}.
 }
 \description{
-A region is bounded when its generator description has no rays and no
-lineality.
-}
-\details{
-A \link{union_region} is bounded when every one of its \code{parts()} is.
+Bounded means no rays and no lineality; a \link{union_region} is bounded when
+all its \code{parts()} are.
 }
 \examples{
 is_bounded(simplex_region(vertices = diag(3)))

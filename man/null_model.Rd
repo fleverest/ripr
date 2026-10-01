@@ -6,39 +6,28 @@
 \alias{format,ripr::null_model-method}
 \title{A null hypothesis: a family together with its parameter region}
 \usage{
-null_model(family, region, max_cells = 1000L)
+null_model(family, region, max_cells = getOption("ripr.max_cells", 1000L))
 }
 \arguments{
 \item{family}{A \link{parametric_family}.}
 
-\item{region}{The null's geometry: any \link{region}. A single \link{convex_region}
-is stored as it comes, since one convex set is already a region; a list of
-them becomes the \link{union_region} of its elements.}
+\item{region}{The null's geometry: any \link{region}, or a list of
+\link{convex_region}s, which becomes their \link{union_region}.}
 
 \item{max_cells}{The number of simplices the decomposition may produce
-before giving up (default \code{1000L}).}
+before giving up. Defaults to the \code{ripr.max_cells} option, or \code{1000L}
+when that is unset.}
 }
 \value{
 A \code{null_model}.
 }
 \description{
 \eqn{H_0 = \{P_\theta : \theta \in \bigcup_i \Theta_{0i}\}}{H_0 = {P_theta : theta in union_i Theta_0i}}.
-The null is a set of \emph{distributions}, so it needs both the model and the
-geometry; keeping them together means nothing downstream has to carry them as
-separate arguments that could disagree.
+Each convex part of the region (see \code{\link[=parts]{parts()}}) is itself a null.
+The decomposition into \code{\link[=cells]{cells()}} is computed once, at construction. Test
+membership with \code{contains(null@region, theta)}.
 
 \code{format()} gives the family and part count on one line.
-}
-\details{
-Each convex part of the region is itself a null hypothesis. This package
-calls them parts, because \code{\link[=parts]{parts()}} is what any \link{region} answers whether
-or not it happens to be a null, but the two words mean the same thing here.
-
-The decomposition into \code{\link[=cells]{cells()}} is taken once, at construction, and kept.
-Every sweep of a fit searches it and every certification encloses it, so
-triangulating a part on each call would repeat an exact-arithmetic
-computation that cannot change: a \code{null_model} is immutable, and its region
-with it.
 }
 \section{Properties}{
 
@@ -49,9 +38,7 @@ with it.
 in part order: \code{cells(parts(region)[[1]])}, then those of part 2, and so
 on.}
 \item{\code{cell_part}}{Which part each cell came from, as an index into
-\code{parts(region)}. This is what lets an algorithm run on cells and still
-report a part: \code{state@atoms} is indexed by part, and so is the \code{part}
-element \code{\link[=ripr_finish]{ripr_finish()}} returns.}
+\code{parts(region)}; used to report the \code{part} of each atom in a fit.}
 }
 }
 
@@ -61,8 +48,11 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
+null <- null_model(fam, list(halfspace_region(c(1, -1, 0))))
+contains(null@region, c(0.2, 0.5, 0.3))
+contains(null@region, c(0.6, 0.2, 0.2))
 }

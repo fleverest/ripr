@@ -2,27 +2,13 @@
 NULL
 
 # Random variables on a sample space, and arithmetic over them.
-#
-# A random variable maps one element of the sample space to one number, or `n`
-# elements to `n` numbers. Instances are callable, and check their input before
-# mapping it: a variable is only defined on its own sample space, and silently
-# reshaping the wrong thing would return a number rather than a complaint.
-#
-# Nothing here relates to e-values, other than the fact that e-values are
-# a random variable. The mixture likelihood ratio `Q / P_star` can be turned
-# into an e-variable (for H_0) by dividing by sup_theta E_theta[Q/P_star],
-# where the supremum is taken over the null.
 
 #' A random variable on a sample space
 #'
-#' A `random_variable` `X` takes one element of the sample space (a length-`d`
-#' vector for a `d`-dimensional sample space) and returns a number, or `n`
-#' elements as an `(n, d)` matrix and returns `n` numbers. The input is checked
-#' by [validate_outcome()] first.
-#'
-#' `Inf` can be a legitimate value here. A likelihood ratio can be genuinely
-#' infinite when the denominator is not absolutely continuous with respect to
-#' the numerator.
+#' A callable `random_variable` maps a length-`d` outcome to a number, or an
+#' `(n, d)` matrix of outcomes to `n` numbers, after checking they belong to
+#' its sample space. `Inf` is a legitimate value, e.g. a likelihood ratio whose
+#' denominator is zero.
 #'
 #' @param f The mapping that defines the random variable, accepting an `(n, d)`
 #'   matrix and returning `n` numbers.
@@ -30,12 +16,11 @@ NULL
 #' @param label How to name this variable when printing. Ignored when `op` is
 #'   given, since the expression is then built from the operands.
 #' @param op The operator that produced this variable, or `NA` for a leaf. Set
-#'   by [random_variable_arithmetic]; there is rarely a reason to pass it.
-#' @param operands The operands `op` combined, or an empty list for a leaf. Set
-#'   alongside `op`, and used only for printing.
-#' @param log_f (Optional) The same mapping in log space, for a variable that is
-#'   non-negative everywhere: `log_f(x)` must equal `log(f(x))`. `NULL` when
-#'   it may take negative values.
+#'   by [random_variable_arithmetic]; unnecessary externally.
+#' @param operands The operands `op` combined, or an empty list for a leaf.
+#'   Used only for printing.
+#' @param log_f Optional: the same mapping in log space, `log_f(x) ==
+#'   log(f(x))`, for a non-negative variable. `NULL` otherwise.
 #' @return A callable `random_variable`.
 #' @seealso [likelihood()], [random_variable_arithmetic]
 #' @examples
@@ -84,11 +69,7 @@ random_variable <- new_class(
 )
 
 
-#' A mapping that checks its input and its output
-#'
-#' The input must be an outcome of `sample_space`, as [validate_outcome()]
-#' decides, and the output must be numbers. The value form and the log form of
-#' a variable are wrapped alike.
+#' Wrap `f` to validate its input against `sample_space` and require numbers out.
 #' @keywords internal
 #' @noRd
 checked_mapping <- function(f, sample_space) {
@@ -105,31 +86,7 @@ checked_mapping <- function(f, sample_space) {
 }
 
 
-#' Evaluate a random variable in log space
-#'
-#' \eqn{\log X(x)}{log X(x)} at each of `outcomes`, or `NULL` when the variable
-#' carries no log form. Every caller should handle the `NULL`, since a variable
-#' need not have a log form, e.g. if it takes negative values.
-#'
-#' @param x A [random_variable].
-#' @param outcomes Outcomes to evaluate at, as [validate_outcome()] accepts.
-#' @return Numeric vector of log values, or `NULL`.
-#' @keywords internal
-#' @noRd
-log_evaluate <- function(x, outcomes) {
-  if (!has_log_form(x)) {
-    return(NULL)
-  }
-  x@log_f(outcomes)
-}
-
-
 #' Does this variable have a known log form?
-#'
-#' Whether `log_evaluate()` will answer with numbers rather than `NULL`.
-#'
-#' @param x A [random_variable].
-#' @return `TRUE` or `FALSE`.
 #' @keywords internal
 #' @noRd
 has_log_form <- function(x) !is.null(x@log_f)
@@ -137,32 +94,14 @@ has_log_form <- function(x) !is.null(x@log_f)
 
 # --- Printing -----------------------------------------------------------------
 
-#' Shorten a label that came from deparsing an inline argument
-#'
-#' `likelihood(Q)` gives a short label, but an expression written in
-#' place gives back the whole expression, which swamps the printed line.
-#' @keywords internal
-#' @noRd
-short_label <- function(label, width = 24L) {
-  if (is.na(label) || nchar(label) <= width) {
-    return(label)
-  }
-  paste0(substr(label, 1L, width - 3L), "...")
-}
-
-
 #' Binding strength, for deciding where brackets are needed
 #' @keywords internal
 #' @noRd
 op_precedence <- function(op) if (op %in% c("*", "/")) 2L else 1L
 
 
-#' Render a random variable as the expression that built it
-#'
-#' Leaves show their label; derived variables show their operands joined by the
-#' operator. Brackets appear only where they change the reading: around a weaker
-#' operand, and around an equally strong right operand of `-` or `/`, neither of
-#' which associates.
+#' Render a random variable as the expression that built it. Brackets only
+#' around a weaker operand, or an equally strong right operand of `-` or `/`.
 #' @keywords internal
 #' @noRd
 rv_expression <- function(x) {
@@ -170,7 +109,7 @@ rv_expression <- function(x) {
     return(format(x, digits = 7L))
   }
   if (is.na(x@op)) {
-    return(short_label(x@label))
+    return(x@label)
   }
   here <- op_precedence(x@op)
   side <- function(operand, right) {
@@ -200,11 +139,6 @@ method(print, random_variable) <- function(x, ...) {
 
 #' @description `format()` gives the expression alone, without the class
 #'   banner `print()` adds.
-#'
-#' Needed rather than inherited: the parent is `class_function`, so
-#' `format.default()` reaches `deparse()`. `rv_expression()` already calls
-#' `format()` on non-`random_variable` operands, which is how `X / 4.27`
-#' renders its divisor, so the generic has to work on these too.
 #' @rdname random_variable
 #' @usage NULL
 method(format, random_variable) <- function(x, ...) rv_expression(x)
@@ -217,21 +151,21 @@ method(format, random_variable) <- function(x, ...) rv_expression(x)
 #' \eqn{X(x) = P(x)}{X(x) = P(x)}. A likelihood ratio is then a quotient of two
 #' of these: `likelihood(Q) / likelihood(P_star)`.
 #' @param dist A [distribution].
-#' @param label How to name it when printing. `NULL` takes how the argument was
-#'   written, so `likelihood(Q)` prints as `Q`. This degenerates when
-#'   the call is behind a helper or inside a loop, since it records how the
-#'   variable was written rather than what it is. Name it yourself if that
-#'   matters to you.
+#' @param label How to name it when printing. `NULL` describes the
+#'   distribution, e.g. `P[theta = (0.5, 0.5)]` or `P[mixed over 3 atoms]`;
+#'   pass a short name such as `"Q"` when printing ratios.
 #' @return A [random_variable].
 #' @seealso [random_variable_arithmetic]
 #' @examples
-#' fam <- gaussian_family(dim = 2)
+#' fam <- gaussian_family(d = 2)
 #' Q <- likelihood(mixture(fam, dirac(c(0.5, 0.5))))
-#' Q(c(2,2))
+#' Q
+#' Q(c(2, 2))
+#' likelihood(fam(c(0.5, 0.5)), label = "Q")
 #' @export
 likelihood <- function(dist, label = NULL) {
   if (is.null(label)) {
-    label <- deparse1(substitute(dist))
+    label <- likelihood_label(dist)
   }
   if (!is.character(label) || length(label) != 1L || is.na(label)) {
     stop("`label` must be a single string, or NULL.", call. = FALSE)
@@ -241,10 +175,33 @@ likelihood <- function(dist, label = NULL) {
     function(x) exp(log_density(dist, x)),
     sample_space = dist@sample_space,
     label = label,
-    # A density is non-negative, and the distribution already answers in log
-    # space, so the log form here is the honest one rather than `log(exp(.))`.
     log_f = function(x) log_density(dist, x)
   )
+}
+
+
+#' The default label for `likelihood()`. A mixture omits its family's name;
+#' long parameter vectors are elided so the label fits inside an expression.
+#' @keywords internal
+#' @noRd
+likelihood_label <- function(dist) {
+  inner <- if (!S7_inherits(dist, mixture)) {
+    format(dist)
+  } else {
+    n <- n_atoms(dist@mixing)
+    if (identical(n, 1L)) {
+      theta <- signif(atoms(dist@mixing)[1L, ], 3L)
+      if (length(theta) > 4L) {
+        theta <- c(theta[1:3], "...")
+      }
+      paste0("theta = (", toString(theta), ")")
+    } else if (is.na(n)) {
+      paste("mixed over", class_name(dist@mixing))
+    } else {
+      paste("mixed over", count_label(n, "atom"))
+    }
+  }
+  paste0("P[", inner, "]")
 }
 
 
@@ -252,25 +209,18 @@ likelihood <- function(dist, label = NULL) {
 
 #' Arithmetic on random variables and scalars
 #'
-#' In the following document `X`, `Y` and `Z` are random variables; `a` and `b`
-#' are length-1 numerics.
+#' Random variables combine with each other and with single numbers under `+`,
+#' `-`, `*` and `/`, pointwise: `Z <- X + Y` is `Z(x) = X(x) + Y(x)`, and
+#' `2 * X + 3` rescales `X`. Other operators are not supported.
 #'
-#' Random variables may be scaled, transformed and combined by the arithmetic
-#' operations `+`, `-`, `*` and `/`. For instance, we may define a random
-#' variable `Y` from `X` by the linear transformation `Y <- 2 * X + 3`.
-#' Similarly `Z <- X + Y` is the variable defined by `Z(x) = X(x) + Y(x)`, and
-#' likewise for `-`, `*` and `/`. Comparison and other operators are not
-#' currently supported.
-#'
-#' If both operands are random variables, they must be defined on the same sample
-#' space, checked here rather than at evaluation, so a mismatch is reported where
-#' it was written.
+#' Two random variables must share a sample space; a mismatch is an error when
+#' the expression is built, not when it is evaluated.
 #'
 #' @param e1,e2 A [random_variable] or a single number, at least one of them a
 #'   random variable.
 #' @return A [random_variable].
 #' @examples
-#' fam <- gaussian_family(dim = 1)
+#' fam <- gaussian_family(d = 1)
 #' X <- random_variable(\(x) dnorm(x, 1), sample_space = fam@sample_space)
 #' Y <- 2 * X + 3
 #' Y(as.matrix(0:2))
@@ -280,10 +230,8 @@ likelihood <- function(dist, label = NULL) {
 NULL
 
 
-#' Whether two sample spaces are the same space
-#'
-#' Checks whether they are the same class and have the same properties.
-#' `identical()` breaks when serialising / deserialising with `saveRDS()`.
+#' Same class and properties. Not `identical()`, which fails after a `saveRDS()`
+#' round trip.
 #' @keywords internal
 #' @noRd
 same_space <- function(x, y) {
@@ -291,11 +239,8 @@ same_space <- function(x, y) {
 }
 
 
-#' Both operands must live on the same sample space
-#'
-#' Compared by value, not identity: two separately built `count_space(20, 3)`
-#' objects are the same space, so variables from unrelated families over the
-#' same space combine freely.
+#' The operands' common sample space, compared by value so separately built
+#' equal spaces combine freely.
 #' @keywords internal
 #' @noRd
 shared_space <- function(e1, e2) {
@@ -316,12 +261,8 @@ shared_space <- function(e1, e2) {
 }
 
 
-#' An operand's log form, for building the derived variable's own
-#'
-#' A random variable answers with its `log_f`, which may be absent; a constant
-#' answers with its logarithm, which exists only where the constant is
-#' non-negative. `NULL` means there is none, and it propagates: a derived
-#' variable has a log form only if both its operands do.
+#' An operand's log form, or `NULL` if it has none (a negative constant, or a
+#' variable without `log_f`). A derived variable has one only if both do.
 #' @keywords internal
 #' @noRd
 log_operand <- function(e) {
@@ -332,17 +273,12 @@ log_operand <- function(e) {
   if (length(value) != 1L || is.na(value) || value < 0) {
     return(NULL)
   }
-  # A scalar, which every combiner recycles against the other operand.
   function(x) log(value)
 }
 
 
-#' How an operator acts on operands held in log space
-#'
-#' Multiplication and division are addition and subtraction of logs, and
-#' addition is a row-wise log-sum-exp over the pair. Subtraction has no entry:
-#' `X - Y` is negative wherever `Y` exceeds `X`, so no log form exists for it in
-#' general and `NULL` says so.
+#' How an operator acts in log space; `NULL` for `-`, whose result may be
+#' negative.
 #' @keywords internal
 #' @noRd
 log_combiner <- function(symbol) {
@@ -355,38 +291,33 @@ log_combiner <- function(symbol) {
   )
 }
 
+#' An operand as a function of the outcomes; a constant becomes a scalar.
+#' @keywords internal
+#' @noRd
+value_operand <- function(e) {
+  if (S7_inherits(e, random_variable)) {
+    return(e)
+  }
+  value <- as.numeric(e)
+  if (length(value) != 1L) {
+    stop(
+      "only a single number may be combined with a random variable.",
+      call. = FALSE
+    )
+  }
+  function(x) value
+}
 
-#' Build the derived variable for a binary operator
-#'
-#' Evaluates each operand in turn, so the input is checked once per operand
-#' rather than once. That is a few microseconds against a mixture density, and
-#' it keeps every variable independently valid rather than trusting a caller.
-#'
-#' The log form is carried along the same way the value is, so a ratio of two
-#' likelihoods keeps one: `log X - log Y` stays finite over outcomes where
-#' `X / Y` is near `0 / 0`.
+
+#' Build the derived variable for a binary operator. The log form is carried
+#' along, so a likelihood ratio stays finite where `X / Y` is near `0 / 0`.
 #' @keywords internal
 #' @noRd
 combine_rv <- function(e1, e2, symbol) {
   space <- shared_space(e1, e2)
   op <- get(symbol, envir = baseenv())
-  left <- if (S7_inherits(e1, random_variable)) e1 else NULL
-  right <- if (S7_inherits(e2, random_variable)) e2 else NULL
-  const_left <- if (is.null(left)) as.numeric(e1) else NULL
-  const_right <- if (is.null(right)) as.numeric(e2) else NULL
-
-  if (!is.null(const_left) && length(const_left) != 1L) {
-    stop(
-      "only a single number may be combined with a random variable.",
-      call. = FALSE
-    )
-  }
-  if (!is.null(const_right) && length(const_right) != 1L) {
-    stop(
-      "only a single number may be combined with a random variable.",
-      call. = FALSE
-    )
-  }
+  left <- value_operand(e1)
+  right <- value_operand(e2)
 
   log_left <- log_operand(e1)
   log_right <- log_operand(e2)
@@ -398,9 +329,7 @@ combine_rv <- function(e1, e2, symbol) {
   random_variable(
     function(x) {
       force(x)
-      a <- if (is.null(left)) const_left else left(x)
-      b <- if (is.null(right)) const_right else right(x)
-      op(a, b)
+      op(left(x), right(x))
     },
     sample_space = space,
     op = symbol,
@@ -410,66 +339,20 @@ combine_rv <- function(e1, e2, symbol) {
 }
 
 
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`+`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "+")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`+`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, "+")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`+`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "+")
-}
-
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`-`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "-")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`-`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, "-")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`-`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "-")
-}
-
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`*`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "*")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`*`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, "*")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`*`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "*")
-}
-
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`/`, list(random_variable, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "/")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`/`, list(random_variable, class_numeric)) <- function(e1, e2) {
-  combine_rv(e1, e2, "/")
-}
-#' @rdname random_variable_arithmetic
-#' @usage NULL
-method(`/`, list(class_numeric, random_variable)) <- function(e1, e2) {
-  combine_rv(e1, e2, "/")
-}
+# Define random variable arithmetic
+local({
+  signatures <- list(
+    list(random_variable, random_variable),
+    list(random_variable, class_numeric),
+    list(class_numeric, random_variable)
+  )
+  for (symbol in c("+", "-", "*", "/")) {
+    for (signature in signatures) {
+      generic <- get(symbol, envir = baseenv())
+      method(generic, signature) <- local({
+        symbol <- symbol
+        function(e1, e2) combine_rv(e1, e2, symbol)
+      })
+    }
+  }
+})

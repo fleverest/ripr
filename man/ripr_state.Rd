@@ -7,63 +7,82 @@
 \title{State of a RIPr fit}
 \usage{
 ripr_state(
-  atoms = list(),
-  weights = list(),
+  mixing = finite_dist(),
+  part = integer(0),
   alternative = distribution(),
   null = null_model(),
   engine = quadrature(),
   control = list(),
-  trace = NULL,
+  trace_rows = list(),
   snapshots = list(),
-  iters = integer(0)
+  oracle = NULL
 )
 }
 \arguments{
-\item{atoms}{List of \verb{(d, n_i)} matrices, one per part of the null region.}
+\item{mixing}{The current mixture, a \link{finite_dist} over the null.}
 
-\item{weights}{List of numeric vectors matching \code{atoms}, summing to 1 overall.}
+\item{part}{Integer vector with one entry per atom of \code{mixing}: the part of
+the null region holding each atom.}
 
 \item{alternative}{The alternative \eqn{Q}{Q}.}
 
 \item{null}{A \link{null_model}.}
 
-\item{engine}{A resolved \link{quadrature}.}
+\item{engine}{A resolved \code{quadrature}.}
 
 \item{control}{From \code{\link[=ripr_control]{ripr_control()}}.}
 
-\item{trace}{Data frame, one row per recorded event. See \link{oracles} for what
-the columns mean and which mixture each of them measures.}
+\item{trace_rows}{List of trace rows, one per step, each a named list;
+read them through \code{trace}.}
 
-\item{snapshots}{List of recorded mixtures.}
+\item{snapshots}{List of recorded mixtures, each \code{list(step, phase, mixing, part)}: the trace row and verb it was taken at, and the mixture then.}
 
-\item{iters}{Named integer counts of steps taken, one name per verb.}
+\item{oracle}{The linear oracle's verdict on the \emph{current} mixture, or
+\code{NULL} when nothing has measured it: \code{list(value, theta, part, elapsed)},
+with \eqn{\sup G = 1 + \mathrm{gap}}{sup G = 1 + gap}, its argmax, part,
+and search seconds. A cache: any step that changes the mixture clears it,
+a \code{record_gap = TRUE} sweep sets it, and the next \code{\link[=fw_step]{fw_step()}} consumes it.
+\code{\link[=gap_below]{gap_below()}} reads it.}
 }
 \value{
 A \code{ripr_state}.
 }
 \description{
-Atoms and weights are lists indexed by part: element \code{i} holds the atoms
-belonging to \eqn{\Theta_{0i}}{Theta_0i}. The part tag matters because the
-parts overlap, so an atom in an intersection would otherwise be ambiguous
-about which chart to search in, and a parallel index vector would make that
-an invariant to check rather than one to hold structurally. Weights are
-normalised across the whole list, not within a part.
+The mixing measure is a \link{finite_dist}, whose atoms are in the order they
+joined it (a new atom is appended last). \code{part} records which part of the
+null each atom belongs to, since parts may overlap.
 }
 \details{
-\code{\link[=ripr_init]{ripr_init()}} builds the state and the step verbs advance it; the
-constructor is not part of the public API.
+\code{\link[=ripr_init]{ripr_init()}} builds the state and the step verbs advance it. The constructor
+is not public.
 }
+\section{Trace}{
+
+\code{state@trace} is a read-only data frame with one row per step, the first
+being \code{\link[=ripr_init]{ripr_init()}}'s; see \link{oracles} for the columns.
+}
+
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality)
 state
+state@mixing
+state@part
+
+# Nothing has measured the starting mixture yet.
+is.null(state@oracle)
+# We may pass `record_gap = TRUE` to `ripr_init()` to sweep the oracle over
+# the initial state.
+state <- ripr_init(Q, plurality, record_gap = TRUE)
+state@oracle$value - 1
+state@trace$gap_after
 }
 \keyword{internal}

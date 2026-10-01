@@ -11,22 +11,19 @@ em_step(state, times = 1L, record_gap = FALSE, until = NULL)
 
 \item{times}{Steps to take.}
 
-\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the sweep
-\emph{produced}, filling the \code{gap_after} columns. Off by default, since it
-costs a full oracle sweep per row.}
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture,
+filling \code{gap_after} and caching it for \code{\link[=gap_below]{gap_below()}} and \code{\link[=fw_step]{fw_step()}}.
+Off by default: a full oracle sweep per row.}
 
-\item{until}{(Optional) A predicate, tested before each step. It is given
-the current state, and when it accepts two arguments the state the step
-would make, so that a predicate can decide whether to stop early based
-on the change between the two states. See \link{predicates}.}
+\item{until}{Optional predicate \verb{function(state, candidate)} tested before
+each step; see \link{predicates}.}
 }
 \value{
 The updated \link{ripr_state}.
 }
 \description{
-Each sweep updates every weight, then moves every atom within its own
-part. The support neither grows nor shrinks: only an oracle method such as
-\code{\link[=fw_step]{fw_step()}} or \code{\link[=lb_step]{lb_step()}} can add an atom to the mixture.
+Each sweep updates every weight, then moves every atom within its own part.
+The support never changes size; only \code{\link[=fw_step]{fw_step()}} or \code{\link[=lb_step]{lb_step()}} add atoms.
 }
 \examples{
 set.seed(1)
@@ -34,8 +31,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))

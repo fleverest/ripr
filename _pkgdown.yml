@@ -13,7 +13,6 @@ reference:
   - space
   - space_dim
   - contains
-  - validate_outcome
   - enumerate_space
   - is_finite_space
   - count_space
@@ -27,8 +26,6 @@ reference:
   - multinomial_family
   - gaussian_family
   - compile_loglik
-  - kernel_loglik
-  - kernel_loglik_batch
   - score
   - kernel_draw
 
@@ -53,12 +50,8 @@ reference:
   - real_region
   - chart
   - project
-  - init_point
   - parts
-  - n_parts
   - cells
-  - n_cells
-  - region_dim
   - is_empty
   - is_bounded
 
@@ -77,7 +70,6 @@ reference:
     regions.
   contents:
   - null_model
-  - in_null
 
 - title: Distributions
   desc: >
@@ -101,7 +93,6 @@ reference:
   - weights.distribution
   - discretise
   - prune
-  - reference_point
 
 - title: Random variables
   desc: >
@@ -117,17 +108,9 @@ reference:
     Expectations under the alternative are approximated by a `quadrature`
     rule: exact enumeration, Monte Carlo, or Gauss-Hermite.
   contents:
-  - quadrature
-  - n_nodes
-  - deterministic
-  - compile_engine
-  - expect_q
-  - log_expect_q
-  - expect_se
   - exact_engine
   - mc_engine
   - gh_engine
-  - resolve_engine
 
 - title: Fitting the RIPr
   desc: >
@@ -145,8 +128,7 @@ reference:
   - weight_step
   - predicates
   - ripr_finish
-  - flat_atoms
-  - flat_weights
+  - ripr_fit
 
 - title: Certification
   desc: >
@@ -154,5 +136,8 @@ reference:
     random variable, to correct a fitted ratio into a genuine e-variable.
   contents:
   - certify
+  - ripr_certificate
+  - e_variable
   - certify_trace
   - sup_lb
+  - ripr_search

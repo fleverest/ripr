@@ -11,7 +11,7 @@ log_region_integral(mixing, shape)
 \arguments{
 \item{mixing}{A \link{dirichlet_dist}.}
 
-\item{shape}{\verb{(K, M)} matrix of Dirichlet shape vectors, one per column:
+\item{shape}{\verb{(M, K)} matrix of Dirichlet shape vectors, one per row:
 \code{alpha + x} for the numerator, \code{alpha} for the normaliser.}
 }
 \value{
@@ -19,21 +19,13 @@ Length-\code{M} numeric vector.
 }
 \description{
 \eqn{\log \int_A \prod_j \theta_j^{\beta_j - 1} \mathrm{d}\theta}{
-log int_A prod_j theta_j^(beta_j - 1) dtheta}, evaluated at every column of
-\code{shape} at once. This term is what differentiates the \code{\link[=dirichlet]{dirichlet()}}
-from a \code{\link[=truncated_dirichlet]{truncated_dirichlet()}}.
+log int_A prod_j theta_j^(beta_j - 1) dtheta} for every row of \code{shape}.
+Unnormalised because callers take a ratio of two, so common factors cancel.
 
 Over the whole simplex the integral is the multivariate Beta
 function, so this is exact and ignores the degree \code{shape} implies.
 
-A quadrature sum over the cells, exact because the integrand is
-a monomial of degree \code{max(colSums(shape)) - K}.
-}
-\details{
-No normalisation is applied here because call sites require a ratio of two
-such integrals at a time, so any common factor cancels.
-
-The degree of the integrand is \code{colSums(shape) - K}, so \code{shape} has all the
-information that a quadrature implementation needs.
+A quadrature sum over the cells, exact to degree
+\code{max(rowSums(shape)) - K}.
 }
 \keyword{internal}

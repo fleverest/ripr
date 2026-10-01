@@ -4,23 +4,22 @@
 \alias{mc_engine}
 \title{Monte Carlo integration against draws from the alternative}
 \usage{
-mc_engine(n_draws)
+mc_engine(n)
 }
 \arguments{
-\item{n_draws}{Number of draws.}
+\item{n}{Number of draws.}
 }
 \value{
-An engine spec for \code{\link[=resolve_engine]{resolve_engine()}}.
+An engine spec, to pass as the \code{engine} argument of \code{\link[=ripr_init]{ripr_init()}}.
 }
 \description{
-Nodes are \code{n_draws} draws from the alternative with uniform weights. The
-draws are frozen when the spec is resolved, so a fit is reproducible under
-\code{set.seed()}; resolving the same spec again draws afresh, which is how
-certification obtains a sample independent of the fit.
+Nodes are \code{n} draws from the alternative with equal weights, fixed for the
+fit (reproducible under \code{set.seed()}). Certification re-resolves the spec to
+get an independent sample.
 }
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- mixture(fam, dirac(c(0.5, 0.5)))
-resolve_engine(mc_engine(200L), Q, fam)
+null <- null_model(fam, simplex_region(vertices = rbind(c(0.5, 0.5), c(0, 1))))
+ripr_init(fam(c(0.6, 0.4)), null, engine = mc_engine(200L))
 }

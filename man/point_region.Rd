@@ -10,18 +10,12 @@ point_region(theta)
 \item{theta}{The parameter vector.}
 }
 \value{
-A \code{point_region}.
+A \code{point_region}, which is also a \code{\link[=simplex_region]{simplex_region()}}.
 }
 \description{
-The degenerate convex set \eqn{\{\theta\}}{{theta}}. Its role is to let a
-likelihood ratio state the null it is valid for: \eqn{Q / P_\theta}{Q / P_theta}
-is an e-variable for \eqn{\{P_\theta\}}{{P_theta}}.
-}
-\details{
-It is technically a simplex, but it requires no validation so we have a
-separate class for it. \code{\link[=certify]{certify()}} treats it separately too: the supremum
-over one parameter is the expectation at that point, so a point null is
-certified by direct evaluation rather than by any enclosing method.
+The degenerate convex set \eqn{\{\theta\}}{{theta}}, e.g. the null for
+which a likelihood ratio \eqn{Q / P_\theta}{Q / P_theta} is an e-variable.
+It is the 0-simplex; \code{\link[=certify]{certify()}} handles it by direct evaluation.
 }
 \examples{
 point_region(theta = c(0.5, 0.3, 0.2))

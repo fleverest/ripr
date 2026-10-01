@@ -4,10 +4,10 @@
 \alias{gaussian_family}
 \title{Gaussian sampling family with known covariance}
 \usage{
-gaussian_family(dim, sigma = NULL)
+gaussian_family(d, sigma = NULL)
 }
 \arguments{
-\item{dim}{Integer dimension of the observation.}
+\item{d}{Integer dimension of the observation.}
 
 \item{sigma}{Known covariance matrix, or \code{NULL} for the identity.}
 }
@@ -19,11 +19,11 @@ Observations are single draws \eqn{X \sim N(\theta, \Sigma)}{X ~ N(theta, sigma)
 with \eqn{\Sigma}{sigma} known, so the parameter is the mean.
 }
 \details{
-The sample space is \code{\link[=real_region]{real_region()}}, which cannot be enumerated: pair this
-family with \code{\link[=mc_engine]{mc_engine()}} or \code{\link[=gh_engine]{gh_engine()}} rather than \code{\link[=exact_engine]{exact_engine()}}. It
-is also a family for which a certified gap bound is unavailable.
+The sample space \code{\link[=real_region]{real_region()}} cannot be enumerated: use \code{\link[=mc_engine]{mc_engine()}} or
+\code{\link[=gh_engine]{gh_engine()}}, not \code{\link[=exact_engine]{exact_engine()}}. No certified gap bound is available at
+the time of writing.
 }
 \examples{
-gaussian_family(dim = 2L)
-gaussian_family(dim = 2L, sigma = diag(c(1, 4)))
+gaussian_family(d = 2L)
+gaussian_family(d = 2L, sigma = diag(c(1, 4)))
 }

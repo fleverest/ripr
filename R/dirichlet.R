@@ -1,26 +1,20 @@
 #' @include mixing.R distribution.R multinomial.R region.R
-#' @include polytope_region.R
+#' @include polytope_region.R gauss.R
 NULL
 
-# Dirichlet priors, both truncated and non-truncated versions
-#
-# The mixture a Dirichlet prior induces over multinomial counts is a ratio of
-# two integrals of the same shape:
+# Dirichlet priors, untruncated and truncated. The induced mixture over counts
+# is a ratio of integrals over the prior's support `A`:
 #
 #   P_W(x) = C(x) I(alpha + x) / I(alpha),   I(b) = int_A prod_j theta_j^(b_j-1)
 #
-# over the prior's support `A`. The Beta normaliser and the truncation constant
-# both sit in `I(alpha)` and cancel, so nothing here ever computes the mass the
-# prior places on the region. A = full simplex gives `I = B`, the multivariate
-# Beta function, and P_W is a Dirichlet-multinomial; a truncation replaces it
-# with a quadrature rule.
+# so the Beta normaliser and truncation constant cancel and the prior mass of
+# `A` is never computed. On the full simplex `I` is the multivariate Beta
+# function; a truncation replaces it with a quadrature rule.
 
 # --- Concentrations -----------------------------------------------------------
 
-#' Validate Dirichlet concentration parameters
-#'
-#' The closed form [dirichlet()] evaluates is exact for real ones, so
-#' only the quadrature in [truncated_dirichlet()] needs the integer restriction.
+#' Validate Dirichlet concentrations. Only the quadrature in
+#' [truncated_dirichlet()] needs integers; [dirichlet()]'s closed form is exact.
 #' @keywords internal
 #' @noRd
 as_concentration <- function(alpha, integer = FALSE) {
@@ -59,10 +53,7 @@ as_concentration <- function(alpha, integer = FALSE) {
 }
 
 
-#' A reference point for a Dirichlet distribution
-#'
-#' The mode when it is interior, which needs every concentration above 1, and
-#' the mean otherwise. Only used to seed an optimiser.
+#' The mode when interior (every concentration above 1), else the mean.
 #' @keywords internal
 #' @noRd
 dirichlet_centre <- function(alpha) {
@@ -74,13 +65,17 @@ dirichlet_centre <- function(alpha) {
 }
 
 
-#' `(K, n)` draws from `Dir(alpha)`
+#' `n` draws from `Dir(alpha)` as an `(n, K)` matrix, by row. Each gamma
+#' variate is drawn on the log scale as `log Gamma(alpha + 1) + log(U) / alpha`,
+#' so small `alpha` cannot underflow to zero.
 #' @keywords internal
 #' @noRd
 dirichlet_draws <- function(alpha, n) {
   k <- length(alpha)
-  g <- matrix(stats::rgamma(n * k, shape = alpha), nrow = k, ncol = n)
-  div_by_col(g, colSums(g))
+  by_row <- \(x) matrix(x, nrow = n, ncol = k, byrow = TRUE)
+  log_g <- by_row(log(stats::rgamma(n * k, shape = alpha + 1))) +
+    by_row(log(stats::runif(n * k)) / alpha)
+  exp(log_g - row_logsumexp(log_g))
 }
 
 
@@ -88,25 +83,18 @@ dirichlet_draws <- function(alpha, n) {
 
 #' Dirichlet priors over the simplex
 #'
-#' The abstract parent of [dirichlet()] and [truncated_dirichlet()]:
-#' a Dirichlet law \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the
-#' probability simplex, possibly truncated to a particular [region]. Paired with
-#' a [multinomial_family()] it induces a continuous mixture.
+#' A Dirichlet law \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the
+#' probability simplex, possibly truncated to a [region]. Paired with a
+#' [multinomial_family()] it induces a continuous mixture. `dirichlet_dist` is
+#' the abstract parent of [dirichlet()] and [truncated_dirichlet()].
 #'
-#' Concentrations must be positive. [truncated_dirichlet()] narrows that to
-#' positive **integers**, because the exactness of Gauss-Jacobi quadrature
-#' requires it; [dirichlet()] evaluates a closed form and takes any
-#' positive reals.
-#'
-#' @param alpha Length-`K` vector of positive concentrations, `K >= 2`. The
-#'   property both subclasses share; `dirichlet_dist` is abstract and is
-#'   not constructed directly. [truncated_dirichlet()] narrows this to whole
-#'   numbers; [dirichlet()] does not.
+#' @param alpha Length-`K` vector of positive concentrations, `K >= 2`.
+#'   [truncated_dirichlet()] requires whole numbers.
 #' @param region A [region] of the probability simplex in `R^K`, bounded and
 #'   full-dimensional. [truncated_dirichlet()] only.
-#' @param degree_slack Internal: Raise the rule's degree by this much. The
-#'   default of `0` is already exact, so this is only useful for testing that it
-#'   is working as expected. [truncated_dirichlet()] only.
+#' @param degree_slack Raise the quadrature rule's degree by this much. The
+#'   default of `0` is already exact; this exists for testing.
+#'   [truncated_dirichlet()] only.
 #' @param max_nodes Refuse a rule with more nodes than this.
 #'   [truncated_dirichlet()] only.
 #' @return A `dirichlet` or a `truncated_dirichlet`; both are
@@ -119,19 +107,20 @@ dirichlet_draws <- function(alpha, n) {
 #' Q <- fam(dirichlet(alpha = c(4, 3, 2)))
 #' sum(exp(log_density(Q, enumerate_space(fam@sample_space))))
 #'
-#' # A uniform prior gives every outcome the same mass -- the Bose-Einstein
-#' # count, `choose(n + K - 1, K - 1)` outcomes each of equal probability.
+#' # A uniform prior gives each of the `choose(n + K - 1, K - 1)` outcomes
+#' # equal mass.
 #' flat <- fam(dirichlet(alpha = c(1, 1, 1)))
 #' unique(round(exp(log_density(flat, enumerate_space(fam@sample_space))), 12))
 #' 1 / choose(6 + 3 - 1, 3 - 1)
 #'
-#' # The plurality null, and the region where candidate 1 wins outright.
-#' plurality <- union(simplex_region(vertices = cbind(
+#' # The plurality null
+#' plurality <- simplex_region(vertices = rbind(
 #'   c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)
-#' )), simplex_region(vertices = cbind(
+#' )) | simplex_region(vertices = rbind(
 #'   c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)
-#' )))
-#' alt <- setdiff(fam@parameter_space, plurality)
+#' ))
+#' # and the region where candidate 1 wins outright
+#' alt <- fam@parameter_space - plurality
 #'
 #' W1 <- truncated_dirichlet(alpha = c(4, 3, 2), region = alt)
 #'
@@ -160,7 +149,7 @@ dirichlet_dist <- new_class(
 method(format, dirichlet_dist) <- function(x, ...) {
   sprintf(
     "%s: alpha %s",
-    attr(S7_class(x), "name"),
+    class_name(x),
     theta_label(x@alpha)
   )
 }
@@ -169,17 +158,10 @@ method(format, dirichlet_dist) <- function(x, ...) {
 #' Log of the unnormalised Dirichlet integral over a region
 #'
 #' \eqn{\log \int_A \prod_j \theta_j^{\beta_j - 1} \mathrm{d}\theta}{
-#' log int_A prod_j theta_j^(beta_j - 1) dtheta}, evaluated at every column of
-#' `shape` at once. This term is what differentiates the [dirichlet()]
-#' from a [truncated_dirichlet()].
-#'
-#' No normalisation is applied here because call sites require a ratio of two
-#' such integrals at a time, so any common factor cancels.
-#'
-#' The degree of the integrand is `colSums(shape) - K`, so `shape` has all the
-#' information that a quadrature implementation needs.
+#' log int_A prod_j theta_j^(beta_j - 1) dtheta} for every row of `shape`.
+#' Unnormalised because callers take a ratio of two, so common factors cancel.
 #' @param mixing A [dirichlet_dist].
-#' @param shape `(K, M)` matrix of Dirichlet shape vectors, one per column:
+#' @param shape `(M, K)` matrix of Dirichlet shape vectors, one per row:
 #'   `alpha + x` for the numerator, `alpha` for the normaliser.
 #' @return Length-`M` numeric vector.
 #' @keywords internal
@@ -205,7 +187,7 @@ method(mixture_log_density, list(dirichlet_dist, multinomial_family)) <-
         call. = FALSE
       )
     }
-    x <- as_outcome_matrix(x)
+    x <- as_row_matrix(x)
     if (ncol(x) != k) {
       stop(
         "outcomes must have ",
@@ -216,7 +198,7 @@ method(mixture_log_density, list(dirichlet_dist, multinomial_family)) <-
         call. = FALSE
       )
     }
-    shape <- cbind(t(x) + mixing@alpha, mixing@alpha)
+    shape <- rbind(add_by_col(x, mixing@alpha), mixing@alpha)
     log_i <- log_region_integral(mixing, shape)
     denom <- length(log_i)
     log_multinom_coef(x, family@n_trials) + log_i[-denom] - log_i[denom]
@@ -226,12 +208,9 @@ method(mixture_log_density, list(dirichlet_dist, multinomial_family)) <-
 # --- The untruncated case -----------------------------------------------------
 
 #' @section Over the full probability simplex:
-#' \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the whole simplex. Paired
-#' with a [multinomial_family()] it induces a Dirichlet-multinomial distribution
-#' over count data.
-#'
-#' It has a closed form, so evaluating the density does not require quadrature
-#' rules and is therefore exact.
+#' [dirichlet()] is \eqn{\mathrm{Dir}(\alpha)}{Dir(alpha)} over the whole
+#' simplex. With a [multinomial_family()] it induces the Dirichlet-multinomial,
+#' evaluated exactly in closed form; `alpha` may be any positive reals.
 #'
 #' @rdname dirichlet
 #' @order 2
@@ -250,23 +229,18 @@ dirichlet <- new_class(
 #' @rdname log_region_integral
 #' @usage NULL
 method(log_region_integral, dirichlet) <- function(mixing, shape) {
-  colSums(lgamma(shape)) - lgamma(colSums(shape))
+  rowSums(lgamma(shape)) - lgamma(rowSums(shape))
 }
 
 
 #' @rdname draw
 #' @usage NULL
-method(draw, dirichlet) <- function(dist, n_obs) {
-  t(dirichlet_draws(dist@alpha, n_obs))
+method(draw, dirichlet) <- function(dist, n) {
+  dirichlet_draws(dist@alpha, n)
 }
 
 
-#' @description The mode when it is interior, i.e. every concentration parameter
-#'   is above 1, and the mean otherwise. Both only seed the optimiser's starting
-#'   atom, so the fallback costs nothing but a slightly different starting
-#'   point.
-#' @rdname reference_point
-#' @usage NULL
+#' @noRd
 method(reference_point, dirichlet) <- function(x) {
   dirichlet_centre(x@alpha)
 }
@@ -274,91 +248,23 @@ method(reference_point, dirichlet) <- function(x) {
 
 # --- Gauss-Jacobi quadrature on a simplex -------------------------------------
 #
-# The integrand is a monomial, so a rule exact to its degree gives the exact
-# integral. The rule used is the collapsed-coordinate (Duffy) one: map the
-# (K-1)-cube to the reference simplex by
+# The integrand is a monomial, so a rule exact to its degree is exact. The
+# collapsed-coordinate (Duffy) map from the (K-1)-cube,
 #
-#   lambda_1 = u_1,  lambda_2 = (1 - u_1) u_2,  ...,
-#   lambda_K = prod_i (1 - u_i)
+#   lambda_1 = u_1,  lambda_2 = (1 - u_1) u_2,  ...,  lambda_K = prod_i (1 - u_i)
 #
-# whose Jacobian is prod_{i < K-1} (1 - u_i)^(K-1-i). Each factor is a Jacobi
-# weight function, so a Gauss-Jacobi rule in direction `i` absorbs it exactly
-# and the whole thing is a tensor product of one-dimensional rules. Gauss
-# weights are positive, which log space requires, and Gauss nodes are strictly
-# interior, which is what keeps `log(theta)` finite below.
+# has Jacobian prod_{i < K-1} (1 - u_i)^(K-1-i); each factor is a Jacobi weight,
+# so the rule is a tensor product of 1-D Gauss-Jacobi rules. Gauss weights are
+# positive (log space needs that) and nodes strictly interior (keeping
+# `log(theta)` finite).
 
-#' Gauss-Jacobi nodes and weights on `[0, 1]` for the weight `(1-u)^a u^b`
-#'
-#' Golub-Welsch: the nodes are the eigenvalues of the symmetric tridiagonal
-#' Jacobi matrix built from the three-term recurrence, and the weights come from
-#' the first component of each orthonormalised eigenvector, scaled by the
-#' weight function's total mass.
-#'
-#' Returned on `[0, 1]` rather than `[-1, 1]`, which is where the collapsed
-#' coordinates live; the affine change of variable rescales the weights by
-#' `2^-(a+b+1)`. Weights sum to `int_0^1 (1-u)^a u^b du`.
-#' @param n Number of nodes.
-#' @param a,b Jacobi exponents, both `>= 0`.
-#' @return `list(nodes = , weights = )`, nodes strictly inside `(0, 1)`.
-#' @keywords internal
-#' @noRd
-gauss_jacobi_01 <- function(n, a, b = 0) {
-  ab <- a + b
-  k <- seq_len(n) - 1L
-  # Monic recurrence coefficients (Gautschi). The n = 0 diagonal entry is the
-  # special case where the general formula divides by zero at a + b = 0.
-  diagonal <- ifelse(
-    k == 0L,
-    (b - a) / (ab + 2),
-    (b^2 - a^2) / ((2 * k + ab) * (2 * k + ab + 2))
-  )
-  # `mass` is beta_0, the integral of the weight function over [-1, 1].
-  mass <- exp(
-    (ab + 1) * log(2) + lgamma(a + 1) + lgamma(b + 1) - lgamma(ab + 2)
-  )
-
-  jacobi <- matrix(0, n, n)
-  jacobi[cbind(seq_len(n), seq_len(n))] <- diagonal
-  if (n > 1L) {
-    j <- seq_len(n - 1L)
-    beta_j <- ifelse(
-      j == 1L,
-      4 * (a + 1) * (b + 1) / ((ab + 2)^2 * (ab + 3)),
-      4 *
-        (j + a) *
-        (j + b) *
-        j *
-        (j + ab) /
-        ((2 * j + ab)^2 * (2 * j + ab + 1) * (2 * j + ab - 1))
-    )
-    off <- sqrt(beta_j)
-    jacobi[cbind(j, j + 1L)] <- off
-    jacobi[cbind(j + 1L, j)] <- off
-  }
-  ev <- eigen(jacobi, symmetric = TRUE)
-  ord <- order(ev$values)
-  list(
-    nodes = (1 + ev$values[ord]) / 2,
-    weights = mass * ev$vectors[1L, ord]^2 / 2^(ab + 1)
-  )
-}
-
-
-#' Points per direction for a rule exact to a given polynomial degree
-#'
-#' An `q`-point Gauss rule is exact to degree `2q - 1`.
+#' Points per direction for a rule exact to `degree` (`q` points: `2q - 1`).
 #' @keywords internal
 #' @noRd
 rule_points <- function(degree) max(1L, as.integer(ceiling((degree + 1) / 2)))
 
 
-#' A degree-exact rule on the reference `(K-1)`-simplex
-#'
-#' Barycentric nodes and log weights for
-#' \eqn{\int_T f \,\mathrm{d}\lambda}{int_T f dlambda} over the reference
-#' simplex, exact for every polynomial of total degree at most `degree`.
-#' @param k Number of barycentric coordinates.
-#' @param degree Polynomial degree the rule must integrate exactly.
+#' A rule on the reference `(k-1)`-simplex exact to total degree `degree`.
 #' @return `list(lambda = (M, k) barycentric nodes, log_w = length-M)`.
 #' @keywords internal
 #' @noRd
@@ -367,47 +273,32 @@ reference_simplex_rule <- function(k, degree) {
   q <- rule_points(degree)
   # Direction `i` carries the Jacobian factor `(1 - u)^(d - i)`; the last one
   # carries none, so it is plain Gauss-Legendre.
-  rules <- lapply(seq_len(d), function(i) gauss_jacobi_01(q, a = d - i))
+  grid <- tensor_rule(
+    lapply(seq_len(d), function(i) gauss_jacobi_01(q, a = d - i))
+  )
 
-  grid <- as.matrix(expand.grid(rep(list(seq_len(q)), d)))
-  u <- matrix(0, nrow = nrow(grid), ncol = d)
-  log_w <- numeric(nrow(grid))
-  for (i in seq_len(d)) {
-    u[, i] <- rules[[i]]$nodes[grid[, i]]
-    log_w <- log_w + log(rules[[i]]$weights[grid[, i]])
-  }
-
-  lambda <- matrix(0, nrow = nrow(grid), ncol = k)
-  remainder <- rep(1, nrow(grid))
+  u <- grid$nodes
+  lambda <- matrix(0, nrow = nrow(u), ncol = k)
+  remainder <- rep(1, nrow(u))
   for (i in seq_len(d)) {
     lambda[, i] <- remainder * u[, i]
     remainder <- remainder * (1 - u[, i])
   }
   lambda[, k] <- remainder
-  list(lambda = lambda, log_w = log_w)
+  list(lambda = lambda, log_w = grid$log_w)
 }
 
 
-#' Refuse a quadrature rule too large to build
-#'
-#' A resource limit rather than a correctness one, as [certify()]'s
-#' `max_coefficients` is: raising it costs time and memory and nothing else.
-#' The node count is `n_cells * q^(K-1)`, so it is the category count that
-#' drives it.
+#' Refuse a rule with more than `max_nodes` nodes (`n_cells * q^(K-1)`).
+#' `n_trials` is only reported.
 #' @keywords internal
 #' @noRd
-check_quadrature_size <- function(
-  n_cells,
-  q,
-  k,
-  alpha,
-  n_trials,
-  degree,
-  max_nodes
-) {
-  per_cell <- q^(k - 1L)
-  total <- n_cells * per_cell
-  if (total <= max_nodes) {
+check_quadrature_size <- function(mixing, degree, n_trials) {
+  k <- length(mixing@alpha)
+  q <- rule_points(degree)
+  n_cells <- length(mixing@cells)
+  total <- n_cells * q^(k - 1L)
+  if (total <= mixing@max_nodes) {
     return(invisible(total))
   }
   count <- function(x) format(x, big.mark = ",", scientific = FALSE)
@@ -421,12 +312,12 @@ check_quadrature_size <- function(
     "^",
     k - 1L,
     " per cell), above `max_nodes` (",
-    count(max_nodes),
+    count(mixing@max_nodes),
     ").\n",
     "The rule is exact to degree ",
     degree,
     ", for sum(alpha) = ",
-    sum(alpha),
+    sum(mixing@alpha),
     ", n_trials = ",
     n_trials,
     " and k = ",
@@ -445,31 +336,17 @@ check_quadrature_size <- function(
 # --- The truncated case -------------------------------------------------------
 
 #' @section Truncated to a region of the simplex:
-#' \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} conditioned on
-#' \eqn{\theta \in A}{theta in A} for a [region] `A` of the probability simplex.
-#' This is how a mixing measure supported strictly on the alternative may be
-#' written down: e.g. take the complement of the null region and truncate a
-#' Dirichlet prior to it.
+#' [truncated_dirichlet()] is \eqn{\mathrm{Dir}(\alpha)}{Dir(alpha)} conditioned
+#' on \eqn{\theta \in A}{theta in A} for a [region] `A` of the simplex, e.g. the
+#' complement of the null, giving a mixing measure supported on the alternative.
 #'
-#' @section The truncation region:
-#' `region` is decomposed by `cells(disjoin(region))` into disjoint simplices,
-#' which is what lets the integral be a sum over cells without double-counting
-#' an overlap for arbitrary unions. Every cell must be full-dimensional within
-#' the simplex: a cell with fewer than `K` vertices has Lebesgue measure zero,
-#' so construction refuses a region with only lower-dimension cells. A region
-#' with *some* of them keeps the rest and warns, since dropping a set of
-#' measure zero does not change the resulting integral.
+#' `region` is split into disjoint simplices by `cells(disjoin(region))`. Cells
+#' with fewer than `K` vertices have measure zero and are dropped with a
+#' warning; a region with no full-dimensional cell is refused.
 #'
-#' @section Quadrature:
-#' The integrand is a monomial of total degree `|alpha| + n - K`, the same for
-#' every outcome since counts always sum to `n`. A collapsed-coordinate
-#' Gauss-Jacobi rule of that degree on each cell therefore evaluates it exactly
-#' and agrees with [dirichlet()] over the whole simplex to floating point
-#' rounding.
-#'
-#' Non-integer concentrations are refused here, unlike in [dirichlet()]:
-#' they make the integrand singular on the boundary faces, so the quadrature
-#' rule would only be approximate.
+#' The integrand is a monomial of degree `|alpha| + n - K`, so a Gauss-Jacobi
+#' rule of that degree on each cell is exact. This needs integer `alpha`:
+#' non-integer concentrations make the integrand singular on the boundary.
 #'
 #' @rdname dirichlet
 #' @order 3
@@ -519,20 +396,21 @@ truncated_dirichlet <- new_class(
     for (cell in cells) {
       check_simplex_cell(cell, k)
     }
-    # Lower-dimensional cells integrate to zero, so they are dropped.
-    # Only a region with nothing left is an error.
     full <- vapply(cells, is_full_cell, logical(1), k = k)
     if (!any(full)) {
       stop(
         "every cell spans fewer than ",
         k,
-        " vertices, so the whole region has measure zero. A  truncated ",
+        " vertices, so the whole region has measure zero. A truncated ",
         "Dirichlet needs a full-dimensional region.",
         call. = FALSE
       )
     }
     if (!all(full)) {
       warning(degenerate_cell_warning(sum(!full), length(full)))
+      # Reset the support so containment checks ignore a dropped sliver, which
+      # may lie a rounding error outside the simplex.
+      region <- union_region(cells[full])
     }
     cells <- cells[full]
     new_object(
@@ -559,22 +437,20 @@ method(print, truncated_dirichlet) <- function(x, ...) {
 }
 
 
-#' Does a cell lie within the simplex?
+#' Stop unless a cell is a polytope within the simplex.
 #' @keywords internal
 #' @noRd
 check_simplex_cell <- function(cell, k, tol = 1e-9) {
   if (!S7_inherits(cell, polytope_region)) {
     stop(
       "every cell of `region` must be a bounded polytope; got a `",
-      attr(S7_class(cell), "name"),
+      class_name(cell),
       "`.",
       call. = FALSE
     )
   }
-  vertices <- cell@vertices
-  # Check containment
-  in_simplex <- all(vertices >= -tol) && all(abs(colSums(vertices) - 1) <= tol)
-  if (!in_simplex) {
+  outside <- simplex_departure(cell@vertices, neg_tol = tol, sum_tol = tol)
+  if (!is.null(outside)) {
     stop(
       "`region` is not a subset of the probability simplex: it has a vertex ",
       "with a negative coordinate or with coordinates not summing to 1. A ",
@@ -589,13 +465,10 @@ check_simplex_cell <- function(cell, k, tol = 1e-9) {
 #' Is a cell full-dimensional within the simplex?
 #' @keywords internal
 #' @noRd
-is_full_cell <- function(cell, k) ncol(cell@vertices) == k
+is_full_cell <- function(cell, k) nrow(cell@vertices) == k
 
 
-#' The warning a dropped cell earns
-#'
-#' Classed, as `slice_warning()` is, so a caller who already knows their region
-#' carries degenerate pieces can silence just this one.
+#' Classed so a caller expecting degenerate cells can silence just this one.
 #' @keywords internal
 #' @noRd
 degenerate_cell_warning <- function(n_dropped, n_total) {
@@ -618,49 +491,29 @@ degenerate_cell_warning <- function(n_dropped, n_total) {
 }
 
 
-#' The pooled quadrature rule over a truncated Dirichlet's cells
-#'
-#' Nodes are the reference simplex's, mapped into each cell by
-#' `theta = V lambda`; the Jacobian is the constant `abs(det(V))` per cell,
-#' which multiplies that cell's weights.
-#'
-#' The degree depends on the family's `n_trials`, which the measure meets only
-#' through a density call. The rule is a deterministic function of
-#' `(alpha, region, degree)`, so repeated calls share it and the
-#' self-normalisation identity survives across them as well as within one.
+#' The pooled rule over a truncated Dirichlet's cells: reference nodes mapped by
+#' `theta = lambda V`, weights scaled by `abs(det(V))` per cell.
 #' @return `list(log_nodes = (M, k), log_omega = length-M)`.
 #' @keywords internal
 #' @noRd
 truncated_rule <- function(mixing, degree) {
   k <- length(mixing@alpha)
-  # `degree` is the exact one, `|alpha| + n - k`, so the trial count it came
-  # from is recoverable for the error message below.
+  # Recover `n` from `degree = |alpha| + n - k`, for the error message only.
   n_trials <- degree + k - sum(mixing@alpha)
   degree <- max(0L, degree + mixing@degree_slack)
-  q <- rule_points(degree)
-  check_quadrature_size(
-    length(mixing@cells),
-    q,
-    k,
-    mixing@alpha,
-    n_trials,
-    degree,
-    mixing@max_nodes
-  )
+  check_quadrature_size(mixing, degree, n_trials)
 
   reference <- reference_simplex_rule(k, degree)
   nodes <- vector("list", length(mixing@cells))
   log_omega <- vector("list", length(mixing@cells))
   for (i in seq_along(mixing@cells)) {
     vertices <- mixing@cells[[i]]@vertices
-    nodes[[i]] <- reference$lambda %*% t(vertices)
+    nodes[[i]] <- reference$lambda %*% vertices
     log_omega[[i]] <- reference$log_w + log(abs(det(vertices)))
   }
   nodes <- do.call(rbind, nodes)
 
-  # Guaranteed by the full-dimensionality check at construction rather than
-  # assumed: a node on a face `theta_j = 0` would meet a zero exponent as
-  # `0 * -Inf` below and give `NaN`.
+  # A node on a face `theta_j = 0` would give `0 * -Inf = NaN` downstream.
   if (any(nodes <= 0)) {
     stop(
       "a quadrature node landed on the boundary of the simplex, where the ",
@@ -672,15 +525,13 @@ truncated_rule <- function(mixing, degree) {
 }
 
 
-#' @description A quadrature sum over the cells, exact because the integrand is
-#' a monomial of degree `max(colSums(shape)) - K`.
+#' @description A quadrature sum over the cells, exact to degree
+#'   `max(rowSums(shape)) - K`.
 #' @rdname log_region_integral
 #' @usage NULL
 method(log_region_integral, truncated_dirichlet) <- function(mixing, shape) {
-  rule <- truncated_rule(mixing, max(colSums(shape)) - length(mixing@alpha))
-  # `truncated_rule()` has already established that no node coordinate is zero,
-  # so no `0 * -Inf` arises.
-  col_logsumexp(rule$log_nodes %*% (shape - 1) + rule$log_omega)
+  rule <- truncated_rule(mixing, max(rowSums(shape)) - length(mixing@alpha))
+  col_logsumexp(tcrossprod(rule$log_nodes, shape - 1) + rule$log_omega)
 }
 
 
@@ -688,35 +539,34 @@ method(log_region_integral, truncated_dirichlet) <- function(mixing, shape) {
 #'   region contains.
 #' @rdname draw
 #' @usage NULL
-method(draw, truncated_dirichlet) <- function(dist, n_obs) {
+method(draw, truncated_dirichlet) <- function(dist, n) {
   mixing <- dist
-  n <- n_obs
   k <- length(mixing@alpha)
-  out <- matrix(NA_real_, nrow = k, ncol = n)
+  out <- matrix(NA_real_, nrow = n, ncol = k)
   filled <- 0L
   proposed <- 0L
   accepted <- 0L
-  # At the 1% floor below, `n` draws need about `100 n` proposals, so the cap
-  # is only reached by a region that passed the rate check and was unlucky.
   cap <- 5000 + 500 * n
 
   while (filled < n) {
     batch <- max(256L, 2L * (n - filled))
     proposal <- dirichlet_draws(mixing@alpha, batch)
-    keep <- apply(proposal, 2L, function(theta) contains(mixing@region, theta))
+    keep <- apply(proposal, 1L, function(theta) contains(mixing@region, theta))
     proposed <- proposed + batch
     accepted <- accepted + sum(keep)
 
     take <- min(sum(keep), n - filled)
     if (take > 0L) {
-      out[, filled + seq_len(take)] <- proposal[,
+      out[filled + seq_len(take), ] <- proposal[
         which(keep)[seq_len(take)],
+        ,
         drop = FALSE
       ]
       filled <- filled + take
     }
     rate <- accepted / proposed
-    if (filled < n && (rate < 0.01 || proposed >= cap)) {
+    too_rare <- proposed >= 2000L && rate < 0.01
+    if (filled < n && (too_rare || proposed >= cap)) {
       stop(
         "rejection sampling from this truncated Dirichlet accepted ",
         accepted,
@@ -732,14 +582,13 @@ method(draw, truncated_dirichlet) <- function(dist, n_obs) {
       )
     }
   }
-  t(out)
+  out
 }
 
 
-#' @description The untruncated mode or mean when the region contains it, and
-#'   otherwise its projection onto whichever cell of the region is nearest.
-#' @rdname reference_point
-#' @usage NULL
+#' @description The untruncated centre if the region contains it, else its
+#'   projection onto the nearest cell.
+#' @noRd
 method(reference_point, truncated_dirichlet) <- function(x) {
   centre <- dirichlet_centre(x@alpha)
   if (contains(x@region, centre)) {

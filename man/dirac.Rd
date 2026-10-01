@@ -2,22 +2,24 @@
 % Please edit documentation in R/mixing.R
 \name{dirac}
 \alias{dirac}
-\alias{format,ripr::dirac-method}
-\title{A point mass at a single parameter value}
+\title{A point mass at a single value}
 \usage{
-dirac(theta = integer(0))
+dirac(theta)
 }
 \arguments{
 \item{theta}{Numeric parameter vector.}
 }
 \value{
-A \code{dirac}.
+A \link{finite_dist} with one atom, at \code{theta}, of weight 1.
 }
 \description{
-The degenerate \link{distribution}: all of its mass at \code{theta}. Used as a mixing
-measure it is the case where no mixing happens at all, so \code{fam(dirac(theta))}
-is equivalent to \code{fam(theta)}.
+A degenerate mixing measure such that \code{fam(dirac(theta))} is equivalent to
+\code{fam(theta)}. It is a \link{finite_dist} with one atom, not a class of its own.
+Drawing samples from \code{\link[=dirac]{dirac()}} does not change the state of the pseudorandom
+number generator.
 }
 \examples{
-dirac(theta = c(0.4, 0.35, 0.25))
+d <- dirac(theta = c(0.4, 0.35, 0.25))
+d
+atoms(d)
 }

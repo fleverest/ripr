@@ -7,19 +7,16 @@
 discrete_dist(sample_space = space())
 }
 \arguments{
-\item{sample_space}{The \link{space} this is a law over. Inherited from
-\link{distribution}; a concrete subclass derives it rather than taking it, so
-it is never passed by a caller.}
+\item{sample_space}{The \link{space} this is a law over. Derived by concrete
+subclasses, never passed by a caller.}
 }
 \description{
-A \link{distribution} defined by finitely many atoms with probabilities
-represented by weights on them.  \code{\link[=dirac]{dirac()}} and \code{\link[=finite_dist]{finite_dist()}} are the two
-instances.
+A \link{distribution} on finitely many weighted atoms. \code{\link[=finite_dist]{finite_dist()}} is the
+standard instance, \code{\link[=dirac]{dirac()}} builds a one-atom \code{\link[=finite_dist]{finite_dist()}}.
 }
 \examples{
-S7::S7_inherits(dirac(theta = c(0.5, 0.5)), discrete_dist)
 S7::S7_inherits(
-  finite_dist(components = cbind(c(0.6, 0.4)), weights = 1),
+  finite_dist(atoms = rbind(c(0.6, 0.4)), weights = 1),
   discrete_dist
 )
 }

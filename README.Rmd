@@ -17,8 +17,9 @@ knitr::opts_chunk$set(
 ```
 
 ```{r helpers, include = FALSE}
+# One point per row of `theta` in, one (x, y) per row out.
 tri_xy <- function(theta) {
-  rbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0)) %*% as.matrix(theta)
+  as.matrix(theta) %*% cbind(c(0.5, 0, 1), c(sqrt(3) / 2, 0, 0))
 }
 
 plot_null <- function(
@@ -38,17 +39,17 @@ plot_null <- function(
   for (s in parts(null@region)) {
     xy <- tri_xy(s@vertices)
     polygon(
-      xy[1, ],
-      xy[2, ],
+      xy[, 1],
+      xy[, 2],
       col = adjustcolor(fill, 0.45),
       border = fill,
       lwd = 1.5
     )
   }
-  polygon(corners[1, ], corners[2, ], border = "grey50")
+  polygon(corners[, 1], corners[, 2], border = "grey50")
   text(
-    corners[1, ],
-    corners[2, ],
+    corners[, 1],
+    corners[, 2],
     c(1, 2, 3),
     pos = c(3, 1, 1),
     cex = 0.8,
@@ -66,8 +67,8 @@ plot_null <- function(
       w <- sizes[[min(g, length(sizes))]]
       cex <- if (is.null(w)) 1.2 else pmax(0.35, 1.7 * sqrt(w / max(all_w)))
       points(
-        xy[1, ],
-        xy[2, ],
+        xy[, 1],
+        xy[, 2],
         pch = 21,
         bg = adjustcolor(bg[[(g - 1L) %% length(bg) + 1L]], alpha),
         col = "grey15",
@@ -101,7 +102,7 @@ remotes::install_github("fleverest/ripr")
 ## The usual workflow
 
 Take a three-category multinomial distribution (`n = 20` samples) and the plurality null: candidate 1 does not win outright, `H0 = union_j {theta : theta_1 <= theta_j}`.
-This null is a union of two convex parts, so it's built with `union()`:
+This null is a union of two convex parts, so it's built with `|`:
 
 ```{r problem, message = FALSE}
 library(ripr)
@@ -113,13 +114,13 @@ family <- multinomial_family(n_trials = n, k = K)
 # Defines {theta : theta_1 <= theta_j}
 plurality_part <- function(j) {
   vertices <- diag(K)
-  vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+  vertices[1L, ] <- replace(numeric(K), c(1L, j), 0.5)
   simplex_region(vertices = vertices)
 }
 
 plurality <- null_model(
   family,
-  union(plurality_part(2), plurality_part(3))
+  plurality_part(2) | plurality_part(3)
 )
 ```
 
@@ -137,7 +138,7 @@ state <- ripr_init(Q, plurality)
 state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
-c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
+c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 ```
 
 ```{r plot-plurality-fit}
@@ -149,8 +150,8 @@ c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
 #| fig.cap: Plurality null, with the support of the alternative mixing distribution W1 and the fitted null mixture W0.
 plot_null(
   plurality,
-  points = list(atoms(fit$W0), atoms(Q@mixing)),
-  weights = list(weights(fit$W0), weights(Q@mixing) / 4)
+  points = list(atoms(fit@W0), atoms(Q@mixing)),
+  weights = list(weights(fit@W0), weights(Q@mixing) / 4)
 )
 ```
 
@@ -159,7 +160,7 @@ The fit gives a candidate e-variable: the mixture likelihood ratio `Q / P*`.
 
 ```{r ratio}
 X <- likelihood(Q, label = "Q") /
-  likelihood(fit$P_star, label = "P*")
+  likelihood(fit@P_star, label = "P*")
 
 outcomes <- rbind(
   c(10L, 10L, 0L),
@@ -172,17 +173,13 @@ X(outcomes)
 
 ```{r certify}
 cert <- certify(X, plurality, tol = 1e-9)
-c(
-  upper = cert$sup_ub,
-  attained = cert$sup_lb,
-  width = cert$sup_ub - cert$sup_lb
-)
+cert
 ```
 
-Rescaling by the upper bound turns `X` into a bona fide e-variable for the `plurality` null:
+Rescaling by the upper bound turns `X` into a bona fide e-variable for the `plurality` null, which is what `e_variable()` does with a certificate:
 
 ```{r evariable}
-E <- X / cert$sup_ub
+E <- e_variable(cert)
 print(E)
 print(E(outcomes))
 ```
@@ -190,6 +187,6 @@ print(E(outcomes))
 ## Learn more
 
 `vignette("ripr")` walks through the same example in more depth: why validity survives a deliberately bad fit, how a bound from `certify()` differs from `sup_lb()`, and what happens when no certification method exists for a family/geometry pair.
-`vignette("regions")` covers the region interface and set algebra (`union()`, `intersect()`, `setdiff()`, `disjoin()`, ...) used to build nulls out of convex pieces.
+`vignette("regions")` covers the region interface and set algebra (`|`, `&`, `-`, `==` and `disjoin()`) used to build nulls out of convex pieces.
 
 ## References

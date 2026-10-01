@@ -12,29 +12,20 @@ empty_region()
 An \code{empty_region}.
 }
 \description{
-The set algebra returns empty when nothing remains, e.g. \code{intersect()} on
-disjoint regions, \code{setdiff()} of a covered one, or \code{x[integer(0)]}.
-}
-\details{
-It behaves like a list of length zero: \code{\link[=parts]{parts()}} and \code{\link[=cells]{cells()}} are empty,
-\code{length()} is \code{0}, \code{as.list()} is \code{list()}, and there is nothing to index.
-No point returns \code{TRUE} for \code{\link[=contains]{contains()}}, \code{\link[=is_empty]{is_empty()}} is \code{TRUE}, and it is
-bounded.
-
-A null hypothesis may not be empty: \code{\link[=null_model]{null_model()}} refuses one.
+What the set algebra returns when nothing remains, e.g. \code{x & y} for disjoint
+regions or \code{x - y} when \code{y} covers \code{x}. It has no \code{\link[=parts]{parts()}} or \code{\link[=cells]{cells()}},
+contains no point, and is bounded. \code{\link[=null_model]{null_model()}} refuses one.
 }
 \examples{
 # Disjoint regions intersect in nothing:
-nothing <- intersect(
-  point_region(theta = c(1, 0, 0)),
+nothing <- point_region(theta = c(1, 0, 0)) &
   point_region(theta = c(0, 1, 0))
-)
 is_empty(nothing)
-n_parts(nothing)
+length(parts(nothing))
 
 # And the algebra keeps going from there:
 identical(
-  union(nothing, simplex_region(vertices = diag(3))),
+  nothing | simplex_region(vertices = diag(3)),
   simplex_region(vertices = diag(3))
 )
 }

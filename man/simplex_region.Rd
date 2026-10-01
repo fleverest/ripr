@@ -7,7 +7,7 @@
 simplex_region(vertices = NULL, .hv = NULL)
 }
 \arguments{
-\item{vertices}{\verb{(d, V)} numeric matrix, one vertex per column.}
+\item{vertices}{\verb{(V, d)} numeric matrix, one vertex per row.}
 
 \item{.hv}{Internal only: the underlying dual-representation record in both
 double and rational representation.}
@@ -17,29 +17,22 @@ A \code{simplex_region}, which is also a \code{\link[=polytope_region]{polytope_
 }
 \description{
 The \code{\link[=polytope_region]{polytope_region()}} whose vertices are affinely independent, so the hull
-is a simplex of dimension \code{ncol(vertices) - 1}.
+is a simplex of dimension \code{nrow(vertices) - 1}.
 }
 \details{
-Being a simplex is not on its own enough to certify. The Bernstein enclosure
-asks for two further things, both checked by \code{\link[=certify]{certify()}} rather than here:
-one vertex per coordinate, and every vertex inside the standard simplex. A
-lower-dimensional cell fails the first; the tetrahedron in the examples below
-fails the second, being a full-dimensional simplex of \code{R^3} rather than of
-\eqn{\Delta}{Delta}. Either way \code{\link[=certify]{certify()}} refuses, naming the condition.
-
-Neither is a defect in the region. Both still chart, project and fit as
-usual, and \code{sup_lb()} still searches them; they simply have no implemented
-bounding method, as a \code{\link[=gaussian_family]{gaussian_family()}} null already does not.
+\code{\link[=certify]{certify()}} additionally needs every vertex inside the standard simplex (the
+tetrahedron below fails this). Such simplices still chart, project and fit;
+they just cannot be certified.
 }
 \examples{
 # The 2-simplex in R^3, e.g. the entire multinomial parameter space:
 simplex_region(vertices = diag(3))
 
 # The plurality region `{theta : theta_1 <= theta_2}` within it:
-simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 
 # A tetrahedron in R^3, e.g. a piece of a triangulated Gaussian null:
 simplex_region(
-  vertices = cbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
+  vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
 )
 }

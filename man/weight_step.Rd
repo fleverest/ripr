@@ -11,34 +11,26 @@ weight_step(state, times = 1L, record_gap = FALSE, until = NULL)
 
 \item{times}{Steps to take.}
 
-\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the sweep
-\emph{produced}, filling the \code{gap_after} columns. Off by default, since it
-costs a full oracle sweep per row.}
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture,
+filling \code{gap_after} and caching it for \code{\link[=gap_below]{gap_below()}} and \code{\link[=fw_step]{fw_step()}}.
+Off by default: a full oracle sweep per row.}
 
-\item{until}{(Optional) A predicate, tested before each step. It is given
-the current state, and when it accepts two arguments the state the step
-would make, so that a predicate can decide whether to stop early based
-on the change between the two states. See \link{predicates}.}
+\item{until}{Optional predicate \verb{function(state, candidate)} tested before
+each step; see \link{predicates}.}
 }
 \value{
 The updated \link{ripr_state}.
 }
 \description{
 \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)} with the atoms
-held fixed: the exact M-step for the weights, guaranteed monotone in KL.
-Iterated to convergence this is the corrective half of fully-corrective
-Frank--Wolfe, so \code{fw_step(1) |> weight_step(big_num)} is one FCFW iteration.
-\code{fw_step(1, correct = TRUE)} is the same iteration taken in one verb, which
-is what to reach for when a row should price the whole of it; this verb is
-for correcting weights on its own account, with its own rows and its own
-stopping rule. Note that \code{lb_step(1) |> weight_step(big_num)} is \emph{not} one
-Li--Barron step with fully corrective weights incorporated as the inner
-optimisation.
+held fixed: the exact M-step for the weights, monotone in KL. Repeated, it
+converges only slowly to the optimal weights; to solve for optimal weights in
+one go, the current API supports only \code{fw_step(correct = TRUE)} or
+\code{ripr_finish(reoptimise = TRUE)}.
 }
 \details{
-\code{until = support_gap_below(tol)} is the natural stopping rule, and is what
-makes \code{times} a budget rather than a target. Expect to reach it: the rate
-degrades as atoms crowd together, which is what Frank--Wolfe makes them do.
+Stop with \code{until = support_gap_below(tol)}, making \code{times} a budget.
+Convergence slows as atoms crowd together.
 }
 \examples{
 set.seed(1)
@@ -46,8 +38,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))

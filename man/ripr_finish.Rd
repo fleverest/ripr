@@ -6,21 +6,19 @@
 \usage{
 ripr_finish(
   state,
-  prune = 0,
+  threshold = 0,
   reoptimise = FALSE,
   identify = FALSE,
   record_gap = FALSE,
-  tol = 1e-10,
-  max_iter = 500L,
   max_rounds = 10L
 )
 }
 \arguments{
 \item{state}{A \link{ripr_state}.}
 
-\item{prune}{Drop atoms with weight at or below this. Must be below 1.}
+\item{threshold}{Drop atoms with weight at or below this. Must be below 1.}
 
-\item{reoptimise}{Re-solve the weights before pruning. Off by default.}
+\item{reoptimise}{Re-solve the weights before dropping any. Off by default.}
 
 \item{identify}{Zero atoms whose removal does not increase KL. Off by
 default.}
@@ -28,55 +26,33 @@ default.}
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the \emph{returned} mixture,
 filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
 
-\item{tol, max_iter}{Passed to the weight solve.}
-
 \item{max_rounds}{Cap on refinement rounds.}
 }
 \value{
-A list with \code{W0} (a \link{finite_dist}), \code{P_star} (a \link{mixture}), \code{kl} of
-the returned mixture, \code{gap_fit} (the last Frank--Wolfe gap recorded during
-fitting, which may describe an earlier iterate than the returned mixture;
-\code{NA} if none was), \code{gap_final} (the Frank--Wolfe gap over the final
-mixture, \code{NA} unless \code{record_gap = TRUE}), \code{rounds}, \code{atoms}, \code{weights}
-\code{part}, \code{trace} and \code{snapshots}.
+A \link{ripr_fit}, whose \code{W0} is the mixing measure (a \link{finite_dist}),
+\code{P_star} the mixture it induces, and \code{kl}, \code{gap_fit} and \code{gap_final}
+describe it. The state it was finished from, with its trace and
+snapshots, is kept as \code{fit@state}.
 }
 \description{
-Converts a fitted state into a mixture. By default that is all it does: the
-weights come across as they stand and nothing is dropped.
+Converts a fitted state into a mixture. By default the weights come across
+as they stand and nothing is dropped.
 }
 \details{
-\emph{Experimental feature}:
+\emph{Experimental}: two optional refinements, both off by default. \code{reoptimise}
+re-solves the weights over the current atoms (to \code{fc_tol}/\code{fc_max_iter}).
+\code{identify} zeroes, lightest first, each atom whose removal does not increase
+KL. With both on they alternate until a round removes nothing. They are sound
+only because the atoms have stopped moving; \code{identify} never increases KL but
+does not \emph{certify} that a removed atom is zero at the optimum.
 
-Two optional refinements, independently switchable so their effect can be
-measured. Both are off by default, so what is returned is what was fitted.
-\code{reoptimise} re-solves the weights over the current atoms, atoms fixed.
-\code{identify} tests each atom in ascending weight order and zeroes it if
-removing it does not increase KL. With both on they alternate until a round
-removes nothing, because each makes the other work better: removing an atom
-frees mass the survivors should absorb, and the removal test renormalises
-rather than re-optimises, so it understates how good a removal is until the
-weights have caught up. Usually one or two rounds.
+Atoms with weight at or below \code{threshold} are then dropped: by default only
+those \code{identify} zeroed. A positive value may raise KL.
 
-Neither is safe earlier in a fit. Nothing can restore a zeroed atom, so run
-mid-fit \code{identify} ratchets the support down; it is sound here only because
-the atoms have stopped moving.
-
-\code{identify} never increases KL -- it compares two feasible points and keeps
-the better -- but it does not \emph{certify} that a removed atom is zero at the
-optimum. A certified rule would come from the duality gap, in the manner of
-the safe screening literature, and needs the dual of this problem deriving
-first.
-
-\code{prune} then drops atoms at or below its value. At the default of \code{0} that
-is nothing, unless \code{identify} ran, in which case it is exactly the atoms it
-zeroed. A positive value drops more, which may raise KL.
-
-Refining lowers KL and can \emph{raise} the gap: the weight solve optimises over
-the current support, which need not be where \eqn{\sup G}{sup G} is small,
-and dropping atoms leaves more of the null uncovered. Measured on a \code{K = 4}
-problem, both refinements together took KL from 0.120 to 0.096 and the gap
-from 0.43 to 1.28. Which matters depends on whether the mixture is wanted for
-its fit or for a certificate resting on the gap.
+Refining lowers KL but can \emph{raise} the gap, since the weights are optimised
+over the current support and dropping atoms leaves more of the null
+uncovered. Choose according to whether you want the fit or a certificate
+resting on the gap.
 }
 \examples{
 set.seed(1)
@@ -84,17 +60,21 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
-fit$kl
-fit$gap_fit
-fit$gap_final
+fit
+fit@kl
+fit@gap_fit
+fit@gap_final
 }
 \references{
 \insertRef{FercoqGramfortSalmon2015}{ripr}
+}
+\seealso{
+\link{ripr_fit}
 }

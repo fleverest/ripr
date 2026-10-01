@@ -25,36 +25,24 @@ matrix and returning \code{n} numbers.}
 given, since the expression is then built from the operands.}
 
 \item{op}{The operator that produced this variable, or \code{NA} for a leaf. Set
-by \link{random_variable_arithmetic}; there is rarely a reason to pass it.}
+by \link{random_variable_arithmetic}; unnecessary externally.}
 
-\item{operands}{The operands \code{op} combined, or an empty list for a leaf. Set
-alongside \code{op}, and used only for printing.}
+\item{operands}{The operands \code{op} combined, or an empty list for a leaf.
+Used only for printing.}
 
-\item{log_f}{(Optional) The same mapping in log space, for a variable that is
-non-negative everywhere: \code{log_f(x)} must equal \code{log(f(x))}. \code{NULL} when
-it may take negative values.}
+\item{log_f}{Optional: the same mapping in log space, \code{log_f(x) == log(f(x))}, for a non-negative variable. \code{NULL} otherwise.}
 }
 \value{
 A callable \code{random_variable}.
 }
 \description{
-A \code{random_variable} \code{X} takes one element of the sample space (a length-\code{d}
-vector for a \code{d}-dimensional sample space) and returns a number, or \code{n}
-elements as an \verb{(n, d)} matrix and returns \code{n} numbers. The input is checked
-by \code{\link[=validate_outcome]{validate_outcome()}} first.
+A callable \code{random_variable} maps a length-\code{d} outcome to a number, or an
+\verb{(n, d)} matrix of outcomes to \code{n} numbers, after checking they belong to
+its sample space. \code{Inf} is a legitimate value, e.g. a likelihood ratio whose
+denominator is zero.
 
 \code{format()} gives the expression alone, without the class
 banner \code{print()} adds.
-
-Needed rather than inherited: the parent is \code{class_function}, so
-\code{format.default()} reaches \code{deparse()}. \code{rv_expression()} already calls
-\code{format()} on non-\code{random_variable} operands, which is how \code{X / 4.27}
-renders its divisor, so the generic has to work on these too.
-}
-\details{
-\code{Inf} can be a legitimate value here. A likelihood ratio can be genuinely
-infinite when the denominator is not absolutely continuous with respect to
-the numerator.
 }
 \examples{
 X <- random_variable(\(x) dnorm(x, 1), sample_space = real_region(1))

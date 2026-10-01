@@ -14,7 +14,7 @@ plurality_simplex <- function(k, j) {
   })
   tie <- numeric(k)
   tie[c(1L, j)] <- 0.5
-  simplex_region(vertices = do.call(cbind, c(basis, list(tie))))
+  simplex_region(vertices = do.call(rbind, c(basis, list(tie))))
 }
 
 plurality_halfspace <- function(k, j) {
@@ -31,7 +31,7 @@ test_that("a chart round-trips points in the part", {
     ch <- chart(s)
     set.seed(1)
     for (i in 1:5) {
-      u <- ch$seed(1L)[, 1L]
+      u <- ch$seed(1L)[1L, ]
       theta <- ch$to_theta(u)
       expect_true(contains(s, theta))
       expect_equal(
@@ -47,7 +47,7 @@ test_that("the chart Jacobian matches a finite difference", {
   for (s in list(plurality_simplex(4, 2), plurality_halfspace(3, 2))) {
     ch <- chart(s)
     set.seed(3)
-    u <- ch$seed(1L)[, 1L]
+    u <- ch$seed(1L)[1L, ]
     jac <- ch$jacobian(u)
     eps <- 1e-6
     for (j in seq_len(ch$n_par)) {
@@ -99,87 +99,76 @@ test_that("the two representations agree on membership within the simplex", {
 
 test_that("a simplex part contains its own vertices", {
   s <- plurality_simplex(4, 3)
-  for (i in seq_len(ncol(s@vertices))) {
-    expect_true(contains(s, s@vertices[, i], tol = 1e-6))
+  for (i in seq_len(nrow(s@vertices))) {
+    expect_true(contains(s, s@vertices[i, ], tol = 1e-6))
   }
 })
 
-# --- The oracle ---------------------------------------------------------------
+# --- The search ---------------------------------------------------------------
+#
+# Every oracle in the package is the same multistart search over a part's
+# chart; `sup_lb()` is the one that takes an arbitrary objective, as the mean
+# of a random variable. Under the multinomial `E[x_i] = n theta_i` and
+# `E[x_i (x_i - 1)] = n (n - 1) theta_i^2`, so the variable below has mean
+# exactly `1 - ||theta - target||^2`: a concave peak placed wherever a test
+# needs it, with maximum 1.
 
-test_that("maximise_over finds a maximum interior to the chart", {
-  # The peak must be interior in *vertex-weight* coordinates, not merely inside
-  # the set: the softmax chart covers only the relative interior, so a target
-  # with a zero vertex weight is approached and never reached. Building the
-  # target as an interior convex combination guarantees the chart can attain it.
-  s <- plurality_simplex(3, 2)
-  target <- as.vector(s@vertices %*% rep(1 / 3, 3))
-  obj <- objective(
-    value = \(theta) -sum((theta - target)^2),
-    grad = \(theta) -2 * (theta - target)
+peak_at <- function(fam, target) {
+  n <- fam@n_trials
+  random_variable(
+    function(x) {
+      x <- matrix(x, ncol = length(target))
+      1 - rowSums(x * (x - 1)) / (n * (n - 1)) +
+        2 * as.vector(x %*% target) / n - sum(target^2)
+    },
+    fam@sample_space
   )
+}
+
+test_that("the search finds a maximum interior to the chart", {
+  # The peak is interior in *vertex-weight* coordinates, not merely inside the
+  # set.
+  fam <- multinomial_family(n_trials = 6L, k = 3L)
+  s <- plurality_simplex(3, 2)
+  target <- as.vector(rep(1 / 3, 3) %*% s@vertices)
   set.seed(7)
-  res <- maximise_over(s, obj, n_seeds = 50L, n_restarts = 5L)
-  expect_equal(res$theta, target, tolerance = 1e-5)
-  expect_equal(res$value, 0, tolerance = 1e-9)
-  expect_true(contains(s, res$theta, tol = 1e-6))
+  res <- sup_lb(
+    peak_at(fam, target),
+    null_model(fam, s),
+    n_seeds = 50L,
+    n_restarts = 5L
+  )
+  expect_equal(res@theta, target, tolerance = 1e-5)
+  expect_equal(res@sup_lb, 1, tolerance = 1e-9)
+  expect_true(contains(s, res@theta, tol = 1e-6))
 })
 
 test_that("a maximum at a vertex is attained exactly", {
-  # The old softmax chart covered only the relative interior, so a vertex
-  # maximum was approached and never reached. The direct chart represents the
-  # vertex and SLSQP's active constraints pin it exactly. The objective here
+  # SLSQP's active constraints pin a vertex maximum exactly. The objective here
   # is concave, so the multistart is guaranteed the right basin and the test
   # is deterministic; for a non-convex oracle the exactness holds only once
-  # the search finds the right face, and maximise_over remains a lower bound
-  # on the supremum.
+  # the search finds the right face, and the search remains a lower bound on
+  # the supremum.
+  fam <- multinomial_family(n_trials = 6L, k = 3L)
   s <- plurality_simplex(3, 2)
-  target <- s@vertices[, 1L] # vertex weight (1, 0, 0)
-  obj <- objective(
-    value = \(theta) -sum((theta - target)^2),
-    grad = \(theta) -2 * (theta - target)
-  )
+  target <- s@vertices[1L, ] # vertex weight (1, 0, 0)
   set.seed(12)
-  res <- maximise_over(s, obj, n_seeds = 50L, n_restarts = 5L)
-
-  expect_equal(res$value, 0, tolerance = rounding_tol(0))
-  expect_equal(res$theta, target, tolerance = 1e-9)
-  expect_true(contains(s, res$theta, tol = 1e-6))
-})
-
-test_that("maximise_over is at least as good as the chart image of its seeds", {
-  # The guarantee the duality gap leans on. Stated against the chart image of
-  # the seed, not the seed itself: the direct chart makes the two agree to
-  # floating point, but the guarantee is about what the search was actually
-  # given, so the statement stays in this form.
-  s <- plurality_simplex(4, 2)
-  peak <- as.vector(s@vertices %*% c(0.7, 0.1, 0.1, 0.1))
-  obj <- objective(
-    value = \(theta) -sum((theta - peak)^2),
-    grad = \(theta) -2 * (theta - peak)
+  res <- sup_lb(
+    peak_at(fam, target),
+    null_model(fam, s),
+    n_seeds = 50L,
+    n_restarts = 5L
   )
-  ch <- chart(s)
-  seed_pt <- project(s, peak)
-  seed_image <- ch$to_theta(ch$from_theta(seed_pt))
-
-  set.seed(8)
-  res <- maximise_over(
-    s,
-    obj,
-    seeds = matrix(seed_pt, ncol = 1L),
-    n_seeds = 10L,
-    n_restarts = 3L
-  )
-  expect_gte(res$value, obj$value(seed_image) - rounding_tol(1))
+  expect_equal(res@sup_lb, 1, tolerance = rounding_tol(1))
+  expect_equal(res@theta, target, tolerance = 1e-9)
+  expect_true(contains(s, res@theta, tol = 1e-6))
 })
 
 test_that("the chart round-trip is lossless in the interior and at a vertex", {
-  # The direct chart represents boundary points exactly -- there is no softmax
-  # guard losing O(eps) at a vertex, so a correctly seeded gap can no longer
-  # come out negative through the round-trip.
   s <- plurality_simplex(4, 2)
   ch <- chart(s)
 
-  interior <- as.vector(s@vertices %*% rep(0.25, 4))
+  interior <- as.vector(rep(0.25, 4) %*% s@vertices)
   expect_equal(
     ch$to_theta(ch$from_theta(interior)),
     interior,
@@ -189,7 +178,7 @@ test_that("the chart round-trip is lossless in the interior and at a vertex", {
   # Exact up to the floating point of the least-squares recovery: bit-identical
   # on some vertex matrices, an ulp or two off on others, and BLAS-dependent
   # either way -- so tested at 1e-12, not identical().
-  vertex <- s@vertices[, 1L]
+  vertex <- s@vertices[1L, ]
   expect_equal(
     ch$to_theta(ch$from_theta(vertex)),
     vertex,
@@ -197,35 +186,36 @@ test_that("the chart round-trip is lossless in the interior and at a vertex", {
   )
 })
 
-test_that("maximise_over accepts seeds lying outside the part", {
-  # Atoms live on other parts, so seeds are projected before use.
-  s <- plurality_halfspace(3, 2)
-  target <- c(0.2, 0.6, 0.2)
-  obj <- objective(
-    value = \(theta) -sum((theta - target)^2),
-    grad = \(theta) -2 * (theta - target)
-  )
-  outside <- matrix(c(0.9, 0.05, 0.05), ncol = 1L)
-  expect_false(contains(s, outside[, 1L]))
+test_that("the search accepts seeds lying outside the part", {
+  # The fit seeds every part's search with every atom, and atoms live on other
+  # parts, so seeds are projected before use. Here each part's atom lies
+  # outside the other part, so both searches start from a foreign seed.
+  fam <- multinomial_family(n_trials = 6L, k = 3L)
+  s2 <- plurality_simplex(3, 2)
+  s3 <- plurality_simplex(3, 3)
+  a2 <- c(0.2, 0.7, 0.1)
+  a3 <- c(0.2, 0.1, 0.7)
+  expect_false(contains(s3, a2))
+  expect_false(contains(s2, a3))
   set.seed(9)
-  res <- maximise_over(s, obj, seeds = outside, n_seeds = 20L, n_restarts = 3L)
-  expect_true(contains(s, res$theta, tol = 1e-6))
+  st <- ripr_init(
+    mixture(fam, dirac(c(0.2, 0.6, 0.2))),
+    null_model(fam, list(s2, s3)),
+    atoms = list(a2, a3),
+    record_gap = TRUE,
+    control = ripr_control(n_seeds = 20L, n_restarts = 3L)
+  )
+  part <- list(s2, s3)[[st@oracle$part]]
+  expect_true(contains(part, st@oracle$theta, tol = 1e-6))
+  expect_true(is.finite(st@oracle$value))
 })
 
-test_that("maximise_over on a singleton evaluates the point", {
-  s <- point_region(theta = c(0.5, 0.5))
-  obj <- objective(value = \(theta) sum(theta^2), grad = \(theta) 2 * theta)
-  res <- maximise_over(s, obj)
-  expect_equal(res$theta, c(0.5, 0.5))
-  expect_equal(res$value, 0.5)
-})
-
-test_that("objective supplies a working default batch evaluator", {
-  obj <- objective(value = \(theta) sum(theta), grad = \(theta) {
-    rep(1, length(theta))
-  })
-  m <- cbind(c(1, 2), c(3, 4), c(5, 6))
-  expect_equal(obj$value_batch(m), c(3, 7, 11))
+test_that("the search over a singleton evaluates the point", {
+  fam <- multinomial_family(n_trials = 4L, k = 2L)
+  first <- random_variable(\(x) matrix(x, ncol = 2L)[, 1L], fam@sample_space)
+  res <- sup_lb(first, null_model(fam, point_region(theta = c(0.5, 0.5))))
+  expect_equal(res@theta, c(0.5, 0.5))
+  expect_equal(res@sup_lb, 2)
 })
 
 # --- null_model ---------------------------------------------------------------
@@ -240,9 +230,12 @@ test_that("a null takes its geometry as a part, a list or a union alike", {
 
   from_list <- null_model(fam, list(s1, s2))
   from_union <- null_model(fam, union_region(s1, s2))
-  expect_equal(n_parts(from_list@region), 2L)
+  expect_length(parts(from_list@region), 2L)
   expect_identical(from_list@region, from_union@region)
-  expect_equal(in_null(from_list, theta), in_null(from_union, theta))
+  expect_equal(
+    contains(from_list@region, theta),
+    contains(from_union@region, theta)
+  )
 
   # A lone convex region is already a region, so it is stored as it came --
   # not wrapped in a one-element union.
@@ -250,8 +243,8 @@ test_that("a null takes its geometry as a part, a list or a union alike", {
   wrapped <- null_model(fam, list(s1))
   expect_identical(bare@region, s1)
   expect_identical(wrapped@region, s1)
-  expect_equal(n_parts(bare@region), 1L)
-  expect_equal(in_null(bare, theta), in_null(wrapped, theta))
+  expect_length(parts(bare@region), 1L)
+  expect_equal(contains(bare@region, theta), contains(wrapped@region, theta))
 })
 
 test_that("a null takes its decomposition once, at construction", {
@@ -264,7 +257,7 @@ test_that("a null takes its decomposition once, at construction", {
 
   # A part that is a convex hull is several cells, all filed under it.
   square <- polytope_region(
-    vertices = cbind(
+    vertices = rbind(
       c(0.5, 0.5, 0),
       c(0, 0.5, 0.5),
       c(0, 0, 1),
@@ -283,7 +276,7 @@ test_that("a null takes its decomposition once, at construction", {
 test_that("null_model()'s max_cells caps the decomposition across parts", {
   fam <- multinomial_family(n_trials = 10, k = 3)
   square <- polytope_region(
-    vertices = cbind(
+    vertices = rbind(
       c(0.5, 0.5, 0),
       c(0, 0.5, 0.5),
       c(0, 0, 1),
@@ -304,7 +297,7 @@ test_that("null_model()'s max_cells caps the decomposition across parts", {
 test_that("simplex_region rejects a malformed vertex matrix", {
   expect_error(simplex_region(vertices = c(0.5, 0.5)), "must be a matrix")
   expect_error(
-    simplex_region(vertices = matrix(numeric(0), nrow = 2L, ncol = 0L)),
+    simplex_region(vertices = matrix(numeric(0), nrow = 0L, ncol = 2L)),
     "must be a matrix"
   )
 })
@@ -315,31 +308,11 @@ test_that("halfspace_region rejects a zero normal", {
 
 # --- Dimension ----------------------------------------------------------------
 
-test_that("region_dim is the affine dimension, at most the ambient", {
-  # `space_dim` is how many coordinates a point carries; `region_dim` is what
-  # the geometry spans. Constraints separate the two.
-  expect_identical(region_dim(point_region(theta = c(0.5, 0.3, 0.2))), 0L)
-  segment <- polytope_region(vertices = cbind(c(0, 0, 0), c(1, 1, 1)))
-  expect_identical(region_dim(segment), 1L)
-  expect_identical(region_dim(simplex_region(vertices = diag(3))), 2L)
-  expect_identical(region_dim(halfspace_region(normal = c(1, -1, 0))), 3L)
-  expect_identical(region_dim(real_region(2L)), 2L)
-
-  # A union spans what its largest part spans.
-  tri <- simplex_region(
-    vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
-  )
-  expect_identical(region_dim(union_region(segment, tri)), 2L)
-
-  # The empty set sits strictly below a point.
-  expect_identical(region_dim(empty_region()), -1L)
-})
-
 test_that("a region of the wrong dimension is refused at construction", {
   # Without this the comparison inside `contains()` recycles instead of
-  # complaining, and `in_null()` returns TRUE for a parameter it never checked:
+  # complaining, and `contains()` returns TRUE for a parameter it never checked:
   #   null_model(multinomial_family(4, 3), list(halfspace_region(c(1, -1))))
-  #   in_null(null, c(0.2, 0.5, 0.3))  # TRUE, silently wrong
+  #   contains(null@region, c(0.2, 0.5, 0.3))  # TRUE, silently wrong
   fam <- multinomial_family(n_trials = 4, k = 3)
   expect_error(
     null_model(fam, list(halfspace_region(normal = c(1, -1)))),
@@ -363,9 +336,8 @@ test_that("a region of the wrong dimension is refused at construction", {
 })
 
 test_that("a family's parameter space has the family's own dimension", {
-  # `param_dim()` used to answer this; `space_dim()` on the parameter space
-  # subsumes it, and unlike a per-family method it cannot disagree with the
-  # geometry the null is checked against.
+  # Unlike a per-family method, `space_dim()` on the parameter space cannot
+  # disagree with the geometry the null is checked against.
   fam <- multinomial_family(n_trials = 7, k = 5)
   expect_equal(space_dim(fam@parameter_space), 5L)
   expect_true(contains(fam@parameter_space, rep(1 / 5, 5)))
@@ -388,28 +360,32 @@ test_that("the real region's chart is the identity", {
   theta <- c(0.4, -2, 7)
   expect_equal(ch$to_theta(ch$from_theta(theta)), theta)
   expect_equal(ch$jacobian(theta), diag(3))
-  expect_equal(dim(ch$seed(5L)), c(3L, 5L))
-  u <- cbind(c(1, 2, 3), c(-1, 0, 1))
+  expect_equal(dim(ch$seed(5L)), c(5L, 3L))
+  u <- rbind(c(1, 2, 3), c(-1, 0, 1))
   expect_equal(ch$to_theta_batch(u), u)
 })
 
-test_that("maximise_over finds an interior optimum on a real region", {
+test_that("the search finds an interior optimum on a real region", {
   # An interior optimum on an unbounded region: no constraint is active, so
-  # this exercises the plain quasi-Newton behaviour of the refinement.
-  set.seed(1)
+  # this exercises the plain quasi-Newton behaviour of the refinement. Under
+  # the unit-covariance Gaussian `E[||x - t||^2] = ||theta - t||^2 + 2`, and a
+  # three-point Gauss-Hermite rule integrates the quadratic exactly.
+  fam <- gaussian_family(d = 2L)
   target <- c(1.5, -0.5)
-  obj <- objective(
-    value = function(theta) -sum((theta - target)^2),
-    grad = function(theta) -2 * (theta - target)
+  peak <- random_variable(
+    function(x) 3 - rowSums(sweep(matrix(x, ncol = 2L), 2L, target)^2),
+    fam@sample_space
   )
-  found <- maximise_over(
-    real_region(2L),
-    obj,
+  set.seed(1)
+  found <- sup_lb(
+    peak,
+    null_model(fam, real_region(2L)),
+    engine = gh_engine(3L),
     n_seeds = 50L,
     n_restarts = 5L
   )
-  expect_equal(found$theta, target, tolerance = 1e-6)
-  expect_equal(found$value, 0, tolerance = 1e-10)
+  expect_equal(found@theta, target, tolerance = 1e-6)
+  expect_equal(found@sup_lb, 1, tolerance = 1e-10)
 })
 
 # --- Printing -----------------------------------------------------------------
@@ -430,5 +406,22 @@ test_that("a null_model prints a summary, not a property dump", {
     format(null),
     "null_model: multinomial_family over 2 parts",
     fixed = TRUE
+  )
+})
+
+
+
+test_that("ripr_init() refuses an atom outside its own part", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  part <- simplex_region(
+    vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  null <- null_model(fam, part)
+  expect_error(
+    ripr_init(fam(c(0.4, 0.35, 0.25)), null, atoms = list(c(0.6, 0.2, 0.2))),
+    "lie in its own part"
+  )
+  expect_no_error(
+    ripr_init(fam(c(0.4, 0.35, 0.25)), null, atoms = list(c(0.2, 0.5, 0.3)))
   )
 })

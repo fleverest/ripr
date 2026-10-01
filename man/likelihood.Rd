@@ -9,11 +9,9 @@ likelihood(dist, label = NULL)
 \arguments{
 \item{dist}{A \link{distribution}.}
 
-\item{label}{How to name it when printing. \code{NULL} takes how the argument was
-written, so \code{likelihood(Q)} prints as \code{Q}. This degenerates when
-the call is behind a helper or inside a loop, since it records how the
-variable was written rather than what it is. Name it yourself if that
-matters to you.}
+\item{label}{How to name it when printing. \code{NULL} describes the
+distribution, e.g. \verb{P[theta = (0.5, 0.5)]} or \verb{P[mixed over 3 atoms]};
+pass a short name such as \code{"Q"} when printing ratios.}
 }
 \value{
 A \link{random_variable}.
@@ -23,9 +21,11 @@ A \link{random_variable}.
 of these: \code{likelihood(Q) / likelihood(P_star)}.
 }
 \examples{
-fam <- gaussian_family(dim = 2)
+fam <- gaussian_family(d = 2)
 Q <- likelihood(mixture(fam, dirac(c(0.5, 0.5))))
-Q(c(2,2))
+Q
+Q(c(2, 2))
+likelihood(fam(c(0.5, 0.5)), label = "Q")
 }
 \seealso{
 \link{random_variable_arithmetic}

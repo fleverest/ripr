@@ -1,37 +1,20 @@
 #' @include ripr-package.R
 NULL
 
-# Computational knobs that control how the answer is computed, never what is
-# computed. The algorithm is defined at the call site via the step verbs,
-# not here.
-#
-# Nothing in this file depends on anything else in the package.
-
 #' Tuning for the RIPr optimiser
-#'
-#' `ripr_control` changes how well the answer is computed, never what is being
-#' computed. `alternative`, `null`, and the engine define the problem; anything
-#' in this object may be varied without changing the target. Operations
-#' that alter the returned mixture (e.g. pruning) belong to [ripr_finish()].
 #'
 #' @param n_seeds Random chart seeds per oracle call.
 #' @param n_restarts Number of top seeds to be refined by SLSQP per oracle
 #'   call.
 #' @param snapshot How often to record the fitted mixture alongside the trace.
 #'   `"none"` (default) never records the state; `"step"` records the atoms and
-#'   weights once per step call (e.g. [fw_step()]); `"all"` once per iteration
-#'   within a call, so `times` snapshots for a verb called with `times`.
-#'
-#'   Note `"step"` counts calls, not iterations, so `fw_step(times = 10)` yields
-#'   one snapshot while ten separate `fw_step()` calls yield ten. Using `"all"`
-#'   yields ten snapshots in both cases.
-#'
-#'   The trace is always recorded as it costs only a row of scalars per event.
-#'   Snapshots copy the whole mixture, so the memory cost grows with support
-#'   size, so snapshotting is `"none"` by default.
-#' @param fc_tol Convergence tolerance for a corrective weight solve, used
-#'   wherever `correct = TRUE`.
-#' @param fc_max_iter Cap on the sweeps such a solve may take.
+#'   weights once per step call (e.g. [fw_step()]), so `fw_step(times = 10)`
+#'   yields one snapshot; `"all"` records once per iteration, yielding ten.
+#'   The trace is always recorded; snapshots copy the whole mixture, so their
+#'   memory cost grows with support size.
+#' @param fc_tol Relative tolerance on the weights for a corrective weight
+#'   solve (`correct = TRUE`, or `ripr_finish(reoptimise = TRUE)`).
+#' @param fc_max_iter Cap on the objective evaluations such a solve may take.
 #' @return A list of control settings for [ripr_init()].
 #' @examples
 #' ripr_control(n_seeds = 50L, snapshot = "step")

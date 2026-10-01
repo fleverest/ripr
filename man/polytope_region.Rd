@@ -7,7 +7,7 @@
 polytope_region(vertices = NULL, .hv = NULL)
 }
 \arguments{
-\item{vertices}{\verb{(d, V)} numeric matrix, one vertex per column.}
+\item{vertices}{\verb{(V, d)} numeric matrix, one vertex per row.}
 
 \item{.hv}{Internal only: the underlying dual-representation record in both
 double and rational representation.}
@@ -17,30 +17,14 @@ A \code{polytope_region}, which is also a \code{\link[=polyhedron_region]{polyhe
 empty ray and lineality blocks.
 }
 \description{
-The bounded case: a polytope given by its vertices (a V-representation),
-parametrised by convex combinations of them.
-}
-\details{
-For instance, the plurality region in the standard simplex
-\eqn{\{\theta : \theta_1 \le \theta_j\}}{{theta : theta_1 <= theta_j}} is of
-this form.
-
-Holding vertices rather than constraints is what a certified bound needs: de
-Casteljau subdivision works on a vertex set natively. \code{\link[=certify]{certify()}} takes only
-the \code{\link[=simplex_region]{simplex_region()}} cells described below.
-
-\code{\link[=simplex_region]{simplex_region()}} is a special case of \code{\link[=polytope_region]{polytope_region()}} with affinely
-independent vertices, which is what the Bernstein enclosure in \code{\link[=certify]{certify()}}
-needs upstream.
-
-Use \code{\link[=simplex_region]{simplex_region()}} when that is what you mean, and use \code{\link[=polytope_region]{polytope_region()}}
-when it is not.
-
-\code{\link[=cells]{cells()}} bridges the two. A polytope that is not a simplex decomposes into
-simplices by a vertex fan triangulation. A square gives two triangles; a
-pentagon, three.
+A bounded polytope given by its vertices, parametrised by convex
+combinations of them; e.g. the plurality region
+\eqn{\{\theta : \theta_1 \le \theta_j\}}{{theta : theta_1 <= theta_j}}
+in the standard simplex. Use \code{\link[=simplex_region]{simplex_region()}} when the vertices are
+affinely independent. \code{\link[=cells]{cells()}} triangulates a polytope into simplices,
+which is what \code{\link[=certify]{certify()}} works on.
 }
 \examples{
 # A square in R^2
-polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+polytope_region(vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
 }

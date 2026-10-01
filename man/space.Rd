@@ -7,23 +7,14 @@
 space()
 }
 \description{
-A \code{space} is a set that a measure can live on. A \code{space} necessarily tracks
-two things: its dimension (\code{\link[=space_dim]{space_dim()}}, the length of its elements),
-and whether a given point is an element or not (\code{\link[=contains]{contains()}}).
-}
-\details{
-There are really only two types of spaces in this package. First, there are
-\code{\link[=count_space]{count_space()}}s, which are finite and can be listed (\code{\link[=enumerate_space]{enumerate_space()}}).
-Then there are \link{region}s that define subsets of the real numbers
-\eqn{\mathbb{R}^d}{R^d} carrying convex geometry, so it can be charted,
-projected onto, and composed via set algebra.
-
-There are two roles that \code{space}s fill; they may be the sample space for
-a \link{distribution}, or the parameter space of a \link{family}. Take, for example,
-the \code{\link[=simplex_region]{simplex_region()}}, which is the parameter space for the multinomial
-family states, and also the sample space for \link{dirichlet} distributions.
+A \code{space} is a measurable space, carrying a dimension (\code{\link[=space_dim]{space_dim()}}) along
+with membership tests (\code{\link[=contains]{contains()}}). It is either a finite \code{\link[=count_space]{count_space()}}
+that can be listed (\code{\link[=enumerate_space]{enumerate_space()}}), or a \link{region} of
+\eqn{\mathbb{R}^d}{R^d}. A space may serve as the sample space of a
+\link{distribution} or the parameter space of a \link{family}; \code{\link[=simplex_region]{simplex_region()}} is
+both, for the multinomial family and for \link{dirichlet}.
 }
 \examples{
-space_dim(count_space(n = 4L, k = 3L))
-contains(count_space(n = 4L, k = 3L), c(2L, 1L, 1L))
+space_dim(count_space(n_trials = 4L, k = 3L))
+contains(count_space(n_trials = 4L, k = 3L), c(2L, 1L, 1L))
 }

@@ -32,7 +32,7 @@ remotes::install_github("fleverest/ripr")
 Take a three-category multinomial distribution (`n = 20` samples) and
 the plurality null: candidate 1 does not win outright,
 `H0 = union_j {theta : theta_1 <= theta_j}`. This null is a union of two
-convex parts, so it’s built with `union()`:
+convex parts, so it’s built with `|`:
 
 ``` r
 library(ripr)
@@ -44,13 +44,13 @@ family <- multinomial_family(n_trials = n, k = K)
 # Defines {theta : theta_1 <= theta_j}
 plurality_part <- function(j) {
   vertices <- diag(K)
-  vertices[, 1L] <- replace(numeric(K), c(1L, j), 0.5)
+  vertices[1L, ] <- replace(numeric(K), c(1L, j), 0.5)
   simplex_region(vertices = vertices)
 }
 
 plurality <- null_model(
   family,
-  union(plurality_part(2), plurality_part(3))
+  plurality_part(2) | plurality_part(3)
 )
 ```
 
@@ -71,9 +71,9 @@ state <- ripr_init(Q, plurality)
 state <- fw_step(state, times = 40L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
-c(kl = fit$kl, gap = fit$gap_final, atoms = n_atoms(fit$W0))
+c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 #>           kl          gap        atoms 
-#>  0.028247494  0.000134276 30.000000000
+#> 2.822214e-02 3.347356e-05 5.000000e+00
 ```
 
 <div class="figure" style="text-align: center">
@@ -93,14 +93,14 @@ realisation:
 
 ``` r
 X <- likelihood(Q, label = "Q") /
-  likelihood(fit$P_star, label = "P*")
+  likelihood(fit@P_star, label = "P*")
 
 outcomes <- rbind(
   c(10L, 10L, 0L),
   c(8L, 7L, 5L)
 )
 X(outcomes)
-#> [1] 0.8470767 1.0779181
+#> [1] 0.8366127 1.0796031
 ```
 
 `certify()` proves an upper bound on expectation of `X` over the null,
@@ -109,25 +109,29 @@ attained:
 
 ``` r
 cert <- certify(X, plurality, tol = 1e-9)
-c(
-  upper = cert$sup_ub,
-  attained = cert$sup_lb,
-  width = cert$sup_ub - cert$sup_lb
-)
-#>        upper     attained        width 
-#> 1.000134e+00 1.000134e+00 9.437988e-10
+cert
+#> <ripr_certificate>
+#>   X = Q / P*
+#>   under null_model: multinomial_family over 2 parts
+#>   sup E[X] <= 1.000033  (certified, by bernstein)
+#>   sup E[X] >= 1.000033  (attained; gap 9.93e-10)
+#>             bound attained iterations converged
+#>   part 1 1.000000 1.000000         28      TRUE
+#>   part 2 1.000033 1.000033         30      TRUE
+#>   e_variable(): X / 1.000033
 ```
 
 Rescaling by the upper bound turns `X` into a bona fide e-variable for
-the `plurality` null:
+the `plurality` null, which is what `e_variable()` does with a
+certificate:
 
 ``` r
-E <- X / cert$sup_ub
+E <- e_variable(cert)
 print(E)
-#> <random_variable> Q / P* / 1.000134 
+#> <random_variable> Q / P* / 1.000033 
 #>   on count_space, dimension 3
 print(E(outcomes))
-#> [1] 0.846963 1.077773
+#> [1] 0.8365847 1.0795670
 ```
 
 ## Learn more
@@ -136,8 +140,8 @@ print(E(outcomes))
 validity survives a deliberately bad fit, how a bound from `certify()`
 differs from `sup_lb()`, and what happens when no certification method
 exists for a family/geometry pair. `vignette("regions")` covers the
-region interface and set algebra (`union()`, `intersect()`, `setdiff()`,
-`disjoin()`, …) used to build nulls out of convex pieces.
+region interface and set algebra (`|`, `&`, `-`, `==` and `disjoin()`)
+used to build nulls out of convex pieces.
 
 ## References
 

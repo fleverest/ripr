@@ -20,7 +20,7 @@ coincide in parameter space.
 }
 \examples{
 w <- finite_dist(
-  components = cbind(c(0.6, 0.4), c(0.2, 0.8), c(0.5, 0.5)),
+  atoms = rbind(c(0.6, 0.4), c(0.2, 0.8), c(0.5, 0.5)),
   weights = c(0.98, 0.01, 0.01)
 )
 prune(w, threshold = 0.05)

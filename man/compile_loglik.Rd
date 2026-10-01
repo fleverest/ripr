@@ -13,24 +13,18 @@ compile_loglik(family, x)
 \code{K} the dimension of the sample space.}
 }
 \value{
-A function of \code{theta_mat}, a \verb{(d, C)} matrix of parameter columns,
-returning the \verb{(M, C)} matrix of log densities at \code{x}.
+A function of \code{theta_mat}, a \verb{(C, d)} matrix with one parameter
+vector per row, returning the \verb{(M, C)} matrix of log densities at \code{x}:
+one row per outcome, one column per parameter.
 }
 \description{
-The single density method a family must implement; \code{\link[=kernel_loglik_batch]{kernel_loglik_batch()}} and
-\code{\link[=kernel_loglik]{kernel_loglik()}} are thin wrappers over it. Returns a function of \code{theta_mat}.
-}
-\details{
-Compiling lets a family precompute whatever depends on \code{x} alone, which we
-require because the our optimiser fixes the outcomes (either enumerating the
-entire sample space or fixing monte carlo draws at the start) and evaluates
-likelihoods for many different parameter values. Closing over \code{x} rather than
-taking a cache argument means precomputed constants cannot be paired with the
-wrong outcomes.
+The density method that a \link{parametric_family} implements. Compiling lets the
+family precompute whatever depends on \code{x}. For the density at one parameter,
+use \code{log_density(family(theta), x)}.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
 ll <- compile_loglik(fam, x)
-ll(cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)))
+ll(rbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)))
 }

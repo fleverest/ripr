@@ -2,23 +2,7 @@
 NULL
 
 
-# Multivariate normal helpers. `chol_l` is the lower-triangular factor L with
-# cov = L L^T; whitening solves L z = x - mean.
-
-#' Log density of `N(mean, L L^T)` at each row of `x`
-#' @keywords internal
-#' @noRd
-mvn_log_density <- function(x, mean, chol_l) {
-  z <- forwardsolve(chol_l, t(x) - mean)
-  -0.5 *
-    length(mean) *
-    log(2 * pi) -
-    sum(log(diag(chol_l))) -
-    0.5 * colSums(z^2)
-}
-
-
-#' Validate and factor a covariance matrix
+#' Validate a covariance matrix
 #' @keywords internal
 #' @noRd
 as_covariance <- function(sigma, d, what = "sigma") {
@@ -44,41 +28,39 @@ as_covariance <- function(sigma, d, what = "sigma") {
 #' Observations are single draws \eqn{X \sim N(\theta, \Sigma)}{X ~ N(theta, sigma)}
 #' with \eqn{\Sigma}{sigma} known, so the parameter is the mean.
 #'
-#' The sample space is [real_region()], which cannot be enumerated: pair this
-#' family with [mc_engine()] or [gh_engine()] rather than [exact_engine()]. It
-#' is also a family for which a certified gap bound is unavailable.
+#' The sample space [real_region()] cannot be enumerated: use [mc_engine()] or
+#' [gh_engine()], not [exact_engine()]. No certified gap bound is available at
+#' the time of writing.
 #'
-#' @param dim Integer dimension of the observation.
+#' @param d Integer dimension of the observation.
 #' @param sigma Known covariance matrix, or `NULL` for the identity.
 #' @return A `gaussian_family`.
 #' @examples
-#' gaussian_family(dim = 2L)
-#' gaussian_family(dim = 2L, sigma = diag(c(1, 4)))
+#' gaussian_family(d = 2L)
+#' gaussian_family(d = 2L, sigma = diag(c(1, 4)))
 #' @export
 gaussian_family <- new_class(
   "gaussian_family",
   parent = parametric_family,
   properties = list(
-    n_dim = class_numeric,
+    d = class_numeric,
     sigma = class_any,
-    chol_l = class_any,
     sigma_inv = class_any
   ),
-  constructor = function(dim, sigma = NULL) {
-    dim <- as.integer(dim)
+  constructor = function(d, sigma = NULL) {
+    d <- as.integer(d)
     stopifnot(
-      "`dim` must be a single positive integer" = length(dim) == 1L &&
-        !is.na(dim) &&
-        dim >= 1L
+      "`d` must be a single positive integer" = length(d) == 1L &&
+        !is.na(d) &&
+        d >= 1L
     )
-    sigma <- as_covariance(sigma, dim)
+    sigma <- as_covariance(sigma, d)
     new_object(
       at_theta,
-      sample_space = real_region(dim),
-      parameter_space = real_region(dim),
-      n_dim = dim,
+      sample_space = real_region(d),
+      parameter_space = real_region(d),
+      d = d,
       sigma = sigma,
-      chol_l = t(chol(sigma)),
       sigma_inv = chol2inv(chol(sigma))
     )
   }
@@ -86,71 +68,67 @@ gaussian_family <- new_class(
 
 
 method(compile_loglik, gaussian_family) <- function(family, x) {
-  x <- as_outcome_matrix(x)
-  # log p(x | theta) expands as
-  #   -0.5 d log(2 pi) - log|L| - 0.5 x' S^-1 x  +  x' S^-1 theta  -  0.5 theta' S^-1 theta
-  # whose first group depends only on x and whose second is one matrix multiply
-  # over all parameter columns at once, replacing C triangular solves.
+  x <- as_row_matrix(x)
+  # log p(x | theta) = [terms in x only] + x' S^-1 theta - 0.5 theta' S^-1 theta.
   x_sinv <- x %*% family@sigma_inv
   const <- -0.5 *
-    family@n_dim *
+    family@d *
     log(2 * pi) -
-    sum(log(diag(family@chol_l))) -
+    0.5 * as.numeric(determinant(family@sigma)$modulus) -
     0.5 * rowSums(x_sinv * x)
 
   function(theta_mat) {
-    theta_mat <- as.matrix(theta_mat)
-    quad <- 0.5 * colSums(theta_mat * (family@sigma_inv %*% theta_mat))
-    add_by_col(x_sinv %*% theta_mat, -quad) + const
+    theta_mat <- as_row_matrix(theta_mat)
+    quad <- 0.5 * rowSums((theta_mat %*% family@sigma_inv) * theta_mat)
+    add_by_col(tcrossprod(x_sinv, theta_mat), -quad) + const
   }
 }
 
 
 method(score, gaussian_family) <- function(family, theta, x) {
-  t(family@sigma_inv %*% (t(as_outcome_matrix(x)) - theta))
+  # Row form of `sigma_inv (x - theta)`; valid as `sigma_inv` is symmetric.
+  add_by_col(as_row_matrix(x), -theta) %*% family@sigma_inv
 }
 
 
 method(kernel_draw, gaussian_family) <- function(family, theta_mat) {
-  theta_mat <- as.matrix(theta_mat)
-  d <- as.integer(family@n_dim)
-  z <- matrix(stats::rnorm(length(theta_mat)), nrow = d, ncol = ncol(theta_mat))
-  t(family@chol_l %*% z + theta_mat)
+  theta_mat <- as_row_matrix(theta_mat)
+  theta_mat +
+    mvtnorm::rmvnorm(nrow(theta_mat), sigma = family@sigma, method = "chol")
 }
 
 
-#' Gaussian mixing measure over the mean of a Gaussian family
+#' Multivariate Gaussian distribution
 #'
-#' A prior \eqn{\mu \sim N(m, V)}{mu ~ N(m, V)} over the mean of a
-#' [gaussian_family()]. Paired with that family it induces the mixture
-#' \eqn{N(m, \Sigma + V)}{N(m, sigma + V)} in closed form, so no numerical
-#' integration is needed to evaluate it.
+#' \eqn{N(m, V)}{N(m, V)} on \eqn{\mathbb{R}^d}{R^d}. As a mixing measure over
+#' the mean of a [gaussian_family()] with covariance \eqn{\Sigma}{sigma}, it
+#' induces the mixture \eqn{N(m, \Sigma + V)}{N(m, sigma + V)} in closed form.
 #'
-#' @param prior_mean Numeric prior mean vector.
-#' @param prior_cov Prior covariance, symmetric positive definite.
+#' @param mean Numeric mean vector.
+#' @param cov Covariance matrix, symmetric positive definite.
 #' @return A `gaussian_dist`.
 #' @examples
-#' fam <- gaussian_family(dim = 2L)
-#' prior <- gaussian_dist(prior_mean = c(0, 0), prior_cov = diag(2))
+#' fam <- gaussian_family(d = 2L)
+#' prior <- gaussian_dist(mean = c(0, 0), cov = diag(2))
 #' log_density(fam(prior), c(0.5, 0.5))
 #' @export
 gaussian_dist <- new_class(
   "gaussian_dist",
   parent = continuous_dist,
   properties = list(
-    prior_mean = class_numeric,
-    prior_cov = class_any,
+    mean = class_numeric,
+    cov = class_any,
     sample_space = new_property(
       space,
-      getter = function(self) real_region(length(self@prior_mean))
+      getter = function(self) real_region(length(self@mean))
     )
   ),
-  constructor = function(prior_mean, prior_cov) {
-    prior_mean <- as.numeric(prior_mean)
+  constructor = function(mean, cov) {
+    mean <- as.numeric(mean)
     new_object(
       S7_object(),
-      prior_mean = prior_mean,
-      prior_cov = as_covariance(prior_cov, length(prior_mean), "prior_cov")
+      mean = mean,
+      cov = as_covariance(cov, length(mean), "cov")
     )
   }
 )
@@ -159,21 +137,21 @@ gaussian_dist <- new_class(
 #' @rdname gaussian_dist
 #' @usage NULL
 method(format, gaussian_dist) <- function(x, ...) {
-  sprintf("gaussian_dist: mean %s", theta_label(x@prior_mean))
+  sprintf("gaussian_dist: mean %s", theta_label(x@mean))
 }
 
 
-#' @description `print()` shows the prior mean and covariance, summarising the
+#' @description `print()` shows the mean and covariance, summarising the
 #'   covariance by its size above eight dimensions.
 #' @rdname gaussian_dist
 #' @usage NULL
 method(print, gaussian_dist) <- function(x, ...) {
-  d <- length(x@prior_mean)
+  d <- length(x@mean)
   cat("<gaussian_dist>\n")
-  cat("  mean ", theta_label(x@prior_mean), "\n", sep = "")
+  cat("  mean ", theta_label(x@mean), "\n", sep = "")
   if (d <= 8L) {
     cat("  covariance:\n")
-    print(signif(x@prior_cov, 4L))
+    print(signif(x@cov, 4L))
   } else {
     cat("  covariance ", d, " x ", d, " matrix\n", sep = "")
   }
@@ -186,10 +164,11 @@ method(mixture_log_density, list(gaussian_dist, gaussian_family)) <- function(
   family,
   x
 ) {
-  mvn_log_density(
-    as_outcome_matrix(x),
-    mixing@prior_mean,
-    t(chol(family@sigma + mixing@prior_cov))
+  mvtnorm::dmvnorm(
+    as_row_matrix(x),
+    mixing@mean,
+    family@sigma + mixing@cov,
+    log = TRUE
   )
 }
 
@@ -197,39 +176,43 @@ method(mixture_log_density, list(gaussian_dist, gaussian_family)) <- function(
 method(mixture_draw, list(gaussian_dist, gaussian_family)) <- function(
   mixing,
   family,
-  n_obs
+  n
 ) {
-  d <- length(mixing@prior_mean)
-  chol_l <- t(chol(family@sigma + mixing@prior_cov))
-  z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
-  t(chol_l %*% z + mixing@prior_mean)
+  mvtnorm::rmvnorm(n, mixing@mean, family@sigma + mixing@cov, method = "chol")
 }
 
 
 #' @rdname draw
 #' @usage NULL
-method(draw, gaussian_dist) <- function(dist, n_obs) {
-  d <- length(dist@prior_mean)
-  z <- matrix(stats::rnorm(n_obs * d), nrow = d, ncol = n_obs)
-  t(t(chol(dist@prior_cov)) %*% z + dist@prior_mean)
+method(draw, gaussian_dist) <- function(dist, n) {
+  mvtnorm::rmvnorm(n, dist@mean, dist@cov, method = "chol")
+}
+
+
+method(log_density, gaussian_dist) <- function(dist, x) {
+  mvtnorm::dmvnorm(as_row_matrix(x), dist@mean, dist@cov, log = TRUE)
 }
 
 
 # --- Mode and reference parameter for a Gaussian mixing measures --------------
 
-method(reference_point, gaussian_dist) <- function(x) x@prior_mean
+method(reference_point, gaussian_dist) <- function(x) x@mean
 
 
 # --- Moments, for Gauss-Hermite quadrature ------------------------------------
 
 method(
   mixture_gaussian_moments,
-  list(dirac, gaussian_family)
+  list(finite_dist, gaussian_family)
 ) <- function(
   mixing,
   family
 ) {
-  list(mean = mixing@theta, cov = family@sigma)
+  # Only a point mass leaves the mixture Gaussian.
+  if (nrow(mixing@atoms) != 1L) {
+    return(NULL)
+  }
+  list(mean = mixing@atoms[1L, ], cov = family@sigma)
 }
 
 
@@ -240,5 +223,5 @@ method(
   mixing,
   family
 ) {
-  list(mean = mixing@prior_mean, cov = family@sigma + mixing@prior_cov)
+  list(mean = mixing@mean, cov = family@sigma + mixing@cov)
 }

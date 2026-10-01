@@ -4,29 +4,28 @@
 \alias{gaussian_dist}
 \alias{format,ripr::gaussian_dist-method}
 \alias{print,ripr::gaussian_dist-method}
-\title{Gaussian mixing measure over the mean of a Gaussian family}
+\title{Multivariate Gaussian distribution}
 \usage{
-gaussian_dist(prior_mean, prior_cov)
+gaussian_dist(mean, cov)
 }
 \arguments{
-\item{prior_mean}{Numeric prior mean vector.}
+\item{mean}{Numeric mean vector.}
 
-\item{prior_cov}{Prior covariance, symmetric positive definite.}
+\item{cov}{Covariance matrix, symmetric positive definite.}
 }
 \value{
 A \code{gaussian_dist}.
 }
 \description{
-A prior \eqn{\mu \sim N(m, V)}{mu ~ N(m, V)} over the mean of a
-\code{\link[=gaussian_family]{gaussian_family()}}. Paired with that family it induces the mixture
-\eqn{N(m, \Sigma + V)}{N(m, sigma + V)} in closed form, so no numerical
-integration is needed to evaluate it.
+\eqn{N(m, V)}{N(m, V)} on \eqn{\mathbb{R}^d}{R^d}. As a mixing measure over
+the mean of a \code{\link[=gaussian_family]{gaussian_family()}} with covariance \eqn{\Sigma}{sigma}, it
+induces the mixture \eqn{N(m, \Sigma + V)}{N(m, sigma + V)} in closed form.
 
-\code{print()} shows the prior mean and covariance, summarising the
+\code{print()} shows the mean and covariance, summarising the
 covariance by its size above eight dimensions.
 }
 \examples{
-fam <- gaussian_family(dim = 2L)
-prior <- gaussian_dist(prior_mean = c(0, 0), prior_cov = diag(2))
+fam <- gaussian_family(d = 2L)
+prior <- gaussian_dist(mean = c(0, 0), cov = diag(2))
 log_density(fam(prior), c(0.5, 0.5))
 }

@@ -16,5 +16,5 @@ enumerate_space(space)
 Infinite spaces error.
 }
 \examples{
-enumerate_space(count_space(n = 3L, k = 2L))
+enumerate_space(count_space(n_trials = 3L, k = 2L))
 }

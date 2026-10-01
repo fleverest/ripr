@@ -7,20 +7,15 @@
 exact_engine()
 }
 \value{
-An engine spec for \code{\link[=resolve_engine]{resolve_engine()}}.
+An engine spec, to pass as the \code{engine} argument of \code{\link[=ripr_init]{ripr_init()}}.
 }
 \description{
-Nodes are the family's full sample space and the weights are the alternative's
-own probabilities, so expectations are exact. Available only for families
-with an enumerable sample space.
-}
-\details{
-Nodes carrying no mass under the alternative are screened out at resolution.
-They contribute nothing, and keeping them would put \code{-Inf} in \code{log_q}, where
-the \code{0 * -Inf} in the objective becomes \code{NaN}.
+Nodes are the family's full sample space, weighted by the alternative's
+probabilities, so expectations are exact. Needs an enumerable sample space.
+Outcomes with zero probability are dropped.
 }
 \examples{
 fam <- multinomial_family(n_trials = 3L, k = 2L)
-Q <- mixture(fam, dirac(c(0.5, 0.5)))
-resolve_engine(exact_engine(), Q, fam)
+null <- null_model(fam, simplex_region(vertices = rbind(c(0.5, 0.5), c(0, 1))))
+ripr_init(fam(c(0.6, 0.4)), null, engine = exact_engine())
 }

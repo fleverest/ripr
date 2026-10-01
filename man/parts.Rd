@@ -2,10 +2,6 @@
 % Please edit documentation in R/region.R
 \name{parts}
 \alias{parts}
-\alias{length,ripr::region-method}
-\alias{as.list,ripr::region-method}
-\alias{[[,ripr::region-method}
-\alias{[,ripr::region-method}
 \title{The convex regions a region was declared as}
 \usage{
 parts(space)
@@ -17,16 +13,8 @@ parts(space)
 A list of \link{convex_region} objects.
 }
 \description{
-What the caller asked for, unchanged. A convex region is its own only part.
-
-Subsetting with \code{[} returns a region again: the union of the
-selected parts, the lone part itself, or an \code{empty_region} for an empty
-selection.
-}
-\details{
-Contrast \code{\link[=cells]{cells()}}, which is what the algorithms decompose a region into.
-Use \code{parts()} when reporting what was declared, and \code{cells()} when feeding an
-optimiser or an enclosure, or for visualisation.
+What was originally constructed, unchanged; a convex region is its own only
+part. Use \code{\link[=cells]{cells()}} instead when feeding an optimiser or for visualisation.
 }
 \examples{
 s <- simplex_region(vertices = diag(3))

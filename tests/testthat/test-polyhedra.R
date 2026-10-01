@@ -1,18 +1,23 @@
 # Tests for the rcdd bridge in R/hrep.R.
 
-# Columns are only determined up to order, and vertex sets up to permutation.
-sorted_cols <- function(m) {
-  m[, order(apply(m, 2L, paste, collapse = ",")), drop = FALSE]
+# Rows are only determined up to order, and vertex sets up to permutation.
+sorted_rows <- function(m) {
+  m[order(apply(m, 1L, paste, collapse = ",")), , drop = FALSE]
 }
 
 # Two orthonormal bases span the same subspace iff each projects the other onto
-# itself, so compare projectors rather than the arbitrary basis choice.
+# itself, so compare projectors rather than the arbitrary basis choice. The
+# basis vectors are the rows of `b`.
 projector <- function(b) {
-  if (ncol(b) == 0L) matrix(0, nrow(b), nrow(b)) else tcrossprod(qr.Q(qr(b)))
+  if (nrow(b) == 0L) {
+    matrix(0, ncol(b), ncol(b))
+  } else {
+    tcrossprod(qr.Q(qr(t(b))))
+  }
 }
 
 plurality_cell <- function() {
-  simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+  simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 }
 
 h_to_v <- function(h) {
@@ -26,14 +31,14 @@ test_that("H and V representations round trip", {
   for (s in list(
     plurality_cell(),
     simplex_region(vertices = diag(3)),
-    polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+    polytope_region(vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
   )) {
     back <- h_to_v(h_rep(s))
-    expect_equal(ncol(back$r), 0L)
-    expect_equal(ncol(back$l), 0L)
+    expect_equal(nrow(back$r), 0L)
+    expect_equal(nrow(back$l), 0L)
     expect_identical(
-      sorted_cols(back$v),
-      sorted_cols(s@vertices)
+      sorted_rows(back$v),
+      sorted_rows(s@vertices)
     )
   }
 })
@@ -45,8 +50,8 @@ test_that("h_rep of a simplex holds its own vertices and excludes outside points
   s <- simplex_region(vertices = diag(3))
   h <- h_rep(s)
 
-  for (j in seq_len(ncol(s@vertices))) {
-    expect_true(all(h$a %*% s@vertices[, j] <= h$b + rounding_tol(1)))
+  for (j in seq_len(nrow(s@vertices))) {
+    expect_true(all(h$a %*% s@vertices[j, ] <= h$b + rounding_tol(1)))
   }
   # Reflecting the region through the origin would admit this one.
   expect_false(all(h$a %*% c(2, -1, 0) <= h$b + rounding_tol(1)))
@@ -80,9 +85,9 @@ test_that("halfspace_region's own generators agree with cddlib's", {
 
   # The point may be any point of the halfspace, so check membership, not
   # equality.
-  expect_equal(ncol(theirs$v), 1L)
-  expect_true(contains(s, ours$v[, 1L]))
-  expect_true(contains(s, theirs$v[, 1L]))
+  expect_equal(nrow(theirs$v), 1L)
+  expect_true(contains(s, ours$v[1L, ]))
+  expect_true(contains(s, theirs$v[1L, ]))
 
   expect_equal(
     projector(theirs$l),
@@ -93,8 +98,8 @@ test_that("halfspace_region's own generators agree with cddlib's", {
   # A ray is only determined modulo the lineality space, so compare the two
   # after projecting the lineality directions out.
   off <- diag(3) - projector(ours$l)
-  ray_ours <- off %*% ours$r[, 1L]
-  ray_theirs <- off %*% theirs$r[, 1L]
+  ray_ours <- off %*% ours$r[1L, ]
+  ray_theirs <- off %*% theirs$r[1L, ]
   expect_equal(
     ray_theirs / sqrt(sum(ray_theirs^2)),
     ray_ours / sqrt(sum(ray_ours^2)),
@@ -137,23 +142,23 @@ test_that("the same double always gives the same rational", {
 test_that("a double H-representation is a lossy intermediate for derived facets", {
   # The limit of the double-valued API
   set.seed(1)
-  v <- matrix(stats::runif(30), 3L, 10L)
-  h <- ripr:::v_to_h(list(
+  v <- matrix(stats::runif(30), 10L, 3L, byrow = TRUE)
+  h <- from_hmatrix(q_scdd(as_vmatrix(list(
     v = v,
-    r = ripr:::no_generators(3),
-    l = ripr:::no_generators(3)
-  ))
+    r = no_generators(3),
+    l = no_generators(3)
+  ))))
   back <- h_to_v(h)
 
   # The true answer, which staying in rationals throughout would have given.
-  expect_equal(nrow(unique(round(t(back$v), 9L))), 9L)
+  expect_equal(nrow(unique(round(back$v, 9L))), 9L)
   # What the double round trip actually returns.
-  expect_gt(ncol(back$v), 9L)
+  expect_gt(nrow(back$v), 9L)
 
   # It is a perturbation, not a wrong answer: every reported vertex is on the
   # region, and the region still holds the points that generated it.
-  expect_lt(max(h$a %*% back$v - h$b), rounding_tol(1))
-  expect_lt(max(h$a %*% v - h$b), rounding_tol(1))
+  expect_lt(max(tcrossprod(h$a, back$v) - h$b), rounding_tol(1))
+  expect_lt(max(tcrossprod(h$a, v) - h$b), rounding_tol(1))
 })
 
 
@@ -175,8 +180,8 @@ test_that("is_empty is FALSE for regions that hold something", {
 
 test_that("is_empty is TRUE for contradictory constraints", {
   # `{theta_1 <= 0}` and `{theta_1 >= 0.5}` inside the standard simplex.
-  # Built by concatenating H-rows by hand: there is no `intersect()` yet
-  # at the time of writing.
+  # Built by concatenating H-rows by hand rather than with `&`, so that the
+  # emptiness check is tested on its own.
   h <- list(
     a = rbind(
       c(1, 0, 0),
@@ -222,7 +227,7 @@ test_that("both predicates reduce over a union with all()", {
 test_that("a union has neither representation, and says so", {
   u <- union_region(
     plurality_cell(),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
   expect_error(h_rep(u), "union_region")
   expect_error(v_rep(u), "union_region")
@@ -260,7 +265,7 @@ test_that("conversions leave the global RNG stream alone", {
   # many conversions a region's construction happened to run.
   set.seed(42)
   before <- .Random.seed
-  s <- simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
+  s <- simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
   h_rep(s)
   v_rep(s)
   is_empty(s)

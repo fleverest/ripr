@@ -16,6 +16,6 @@ An integer.
 The dimension of one element of a space
 }
 \examples{
-space_dim(count_space(n = 4L, k = 3L))
+space_dim(count_space(n_trials = 4L, k = 3L))
 space_dim(simplex_region(vertices = diag(3)))
 }

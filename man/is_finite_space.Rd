@@ -13,10 +13,10 @@ is_finite_space(space)
 \code{TRUE} or \code{FALSE}.
 }
 \description{
-Use to determine whether a sample space may be enumerated.
+Whether a sample space may be enumerated.
 }
 \examples{
-is_finite_space(count_space(n = 4L, k = 3L))
+is_finite_space(count_space(n_trials = 4L, k = 3L))
 is_finite_space(real_region(1L))
 }
 \seealso{

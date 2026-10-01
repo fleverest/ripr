@@ -21,14 +21,7 @@ contains(space, theta, tol = 1e-08)
 Checks whether \code{theta} belongs to \code{space}.
 
 A count vector belongs when its entries are non-negative whole
-numbers summing to \code{n}. This is the predicate form of the checks
-\code{validate_outcome()} makes; \code{tol} is accepted for the generic's signature
-and unused, since the conditions are exact.
-}
-\details{
-Contrast \code{\link[=validate_outcome]{validate_outcome()}}, which asks the same question of a batch and
-answers by coercing and erroring rather than by returning \code{TRUE} or \code{FALSE};
-it is built on this.
+numbers summing to \code{n_trials}; \code{tol} is unused.
 }
 \examples{
 s <- simplex_region(vertices = diag(3))
@@ -36,6 +29,6 @@ contains(s, c(1 / 3, 1 / 3, 1 / 3))
 contains(s, c(2, -1, 0))
 
 # A count space is a space too, and answers the same question.
-contains(count_space(n = 4L, k = 3L), c(2L, 1L, 1L))
-contains(count_space(n = 4L, k = 3L), c(2L, 1L, 0L))
+contains(count_space(n_trials = 4L, k = 3L), c(2L, 1L, 1L))
+contains(count_space(n_trials = 4L, k = 3L), c(2L, 1L, 0L))
 }

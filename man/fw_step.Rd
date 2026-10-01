@@ -20,44 +20,37 @@ fw_step(
 \item{times}{Steps to take.}
 
 \item{variant}{Which Frank--Wolfe algorithm to run. \code{"standard"} moves only
-towards the atom the oracle found. \code{"away-step"} may instead move away from
-the worst atom the mixture already carries, taking whichever of the two the
-linear model prefers (i.e. the one that maximises \eqn{\langle -\nabla f, d\rangle}{<-grad f, d>})
-and then chooses a step length in that direction. \code{"pairwise"} moves mass
-from that worst atom to the new oracle atom directly, leaving every other
-weight untouched.}
+towards the oracle's atom. \code{"away-step"} may instead move away from the
+worst current atom, whichever maximises
+\eqn{\langle -\nabla f, d\rangle}{<-grad f, d>}. \code{"pairwise"} moves mass
+from that worst atom directly to the new one.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 
-\item{correct}{Whether to use "fully-corrective" steps that re-solve for the
-weights with the atoms held fixed, run to \code{fc_tol} and \code{fc_max_iter} from
-\code{\link[=ripr_control]{ripr_control()}}. Can be quite expensive. Note that the step size found by
-the method selected via \code{size} is only used as a seed for the
-fully-corrective solve.}
+\item{correct}{Re-solve the weights with atoms fixed after each step, to
+\code{fc_tol} and \code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Can be expensive; the
+\code{size} step only seeds the solve.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture
-after each step, filling the \code{gap_after} columns. \code{FALSE} by default. Rows
-before the last fill either way, from the next step's oracle reading the
-sweep back, so \code{TRUE} buys the final row's measurement at the cost of
-about one extra step.}
+after each step, filling \code{gap_after}. Earlier rows fill anyway from the
+next step's search, so \code{TRUE} buys the final row's gap for about one extra
+step.}
 
-\item{until}{(Optional) A predicate, tested before each step. It is given
-the current state, and when it accepts two arguments the state the step
-would make, so that a predicate can decide whether to stop early based
-on the change between the two states. See \link{predicates}.}
+\item{until}{Optional predicate \verb{function(state, candidate)} tested before
+each step; see \link{predicates}.}
 }
 \value{
 The updated \link{ripr_state}.
 }
 \description{
 Maximises \eqn{G(\theta)}{G(theta)} over the null, then moves the iterate
-towards the maximiser. See \link{oracles} for technical details.
+towards the maximiser; see \link{oracles}. The search is skipped if
+\code{state@oracle} already holds it (e.g. after \code{record_gap = TRUE}), so each
+step costs one search.
 }
 \details{
-\code{correct = TRUE} yields the fully-corrective Frank--Wolfe scheme: the step
-is taken, then every weight is re-solved with the atoms held fixed. It is
-effectively the same thing as \code{fw_step(1) |> weight_step(big_num)}, but as
-a single verb rather than two.
+\code{correct = TRUE} gives fully-corrective Frank--Wolfe: after each step every
+weight is re-solved to optimality over the current atoms.
 }
 \examples{
 set.seed(1)
@@ -65,8 +58,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))
@@ -74,7 +67,7 @@ state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
 state@trace$kl
 
 # Where each step put its atom.
-do.call(cbind, state@trace$oracle_theta[state@trace$phase == "fw"])
+do.call(rbind, state@trace$oracle_theta[state@trace$phase == "fw"])
 }
 \seealso{
 \link{oracles}, \link{predicates}

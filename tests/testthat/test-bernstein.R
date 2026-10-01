@@ -31,21 +31,24 @@ rand_lambda <- function(K) {
 
 # --- Coefficient ordering -----------------------------------------------------
 
-test_that("compositions() agrees row-for-row with enumerate_counts()", {
+test_that("the lattice tallies in the order the sample space enumerates", {
   # Load-bearing. `certify()` passes `x(enumerate_space(space))` straight in
-  # as Bernstein coefficients, so the count-space order and the lattice
-  # row order must be the same enumeration. They are computed by two unrelated
-  # routines -- recursive prefixing here, stars and bars there -- and nothing
-  # else forces them to agree.
+  # as Bernstein coefficients, so the count-space order and the lattice row
+  # order must be the same enumeration. Both come from `enumerate_counts()`,
+  # so this pins that neither side drifts to a routine of its own.
   for (k in 2:5) {
     for (n in 1:6) {
-      expect_identical(compositions(n, k), enumerate_counts(n, k))
+      expect_identical(
+        bernstein_lattice(n, k)$tally,
+        enumerate_space(count_space(n, k))
+      )
     }
   }
 })
 
-test_that("compositions() is lexicographic, integer, and the right size", {
-  tally <- compositions(4L, 3L)
+test_that("enumerate_counts() is lexicographic, integer, and the right size", {
+  # `reparametrise_to()` relies on the lexicographic order.
+  tally <- enumerate_counts(4L, 3L)
   expect_type(tally, "integer")
   expect_null(dimnames(tally))
   expect_equal(nrow(tally), bernstein_size(4L, 3L))
@@ -77,22 +80,6 @@ test_that("check_bernstein_size() admits and refuses on the stated boundary", {
   )
 })
 
-test_that("largest_batch() is the exact threshold, not an estimate", {
-  # The refusal quotes this number back to the caller, so an off-by-one here is
-  # advice to try something that will also be refused.
-  for (k in 2:5) {
-    for (budget in c(10L, 100L, 5000L)) {
-      n <- largest_batch(k, budget)
-      expect_lte(bernstein_size(n, k), budget)
-      expect_gt(bernstein_size(n + 1L, k), budget)
-    }
-  }
-})
-
-test_that("largest_batch() returns 0 when even one trial will not fit", {
-  expect_identical(largest_batch(10L, 2L), 0L)
-})
-
 # --- Lattice ------------------------------------------------------------------
 
 test_that("bernstein_lattice() locates the vertex coefficients", {
@@ -113,8 +100,8 @@ test_that("the degree ladder `up` steps by one basis vector", {
   for (m in seq_len(lat$n)) {
     # `up[[m + 1]][beta, i]` is the position of `beta + e_i` among the
     # degree-`m` multi-indices, indexed by the degree-`m - 1` row `beta`.
-    lo <- compositions(m - 1L, lat$K)
-    hi <- compositions(m, lat$K)
+    lo <- enumerate_counts(m - 1L, lat$K)
+    hi <- enumerate_counts(m, lat$K)
     for (i in seq_len(lat$K)) {
       shift <- rep(replace(integer(lat$K), i, 1L), each = nrow(lo))
       expect_identical(hi[lat$up[[m + 1L]][, i], , drop = FALSE], lo + shift)
@@ -137,7 +124,7 @@ test_that("the degree ladder `up` steps by one basis vector", {
 #          b_110   b_101
 #      b_020   b_011   b_002
 # The coefficient vector would be (b_002, b_011, b_020, b_101, b_110, b_200),
-# i.e. the order of `compositions(2, 3)`.
+# i.e. the order of `enumerate_counts(2, 3)`.
 
 # Build a coefficient vector from multi-indices written as strings, e.g.
 # `coef_by_index(lat, "200" = 0, "110" = 6, ...)`.
@@ -155,7 +142,7 @@ coef_by_index <- function(lat, ...) {
 # holds degree `n - l`, so the degree of the index picks the level out.
 pyr_at <- function(pyr, lat, index) {
   degree <- sum(as.integer(strsplit(index, "")[[1L]]))
-  keys <- apply(compositions(degree, lat$K), 1L, paste, collapse = "")
+  keys <- apply(enumerate_counts(degree, lat$K), 1L, paste, collapse = "")
   pyr[[lat$n - degree + 1L]][[match(index, keys)]]
 }
 
@@ -165,7 +152,7 @@ test_that("the univariate pyramid matches the worked example", {
   #         b_00                        2.25
   #
   # Cubic example: control points (2, 3, 1) at t = 1/2.
-  # `compositions(2, 2)` runs (0,2), (1,1), (2,0), and row (a1, a2) carries
+  # `enumerate_counts(2, 2)` runs (0,2), (1,1), (2,0), and row (a1, a2) carries
   # C(n; a) l1^a1 l2^a2, so with l = (1 - t, t) the standard index i is a2.
   lat <- bernstein_lattice(2L, 2L)
   coef <- coef_by_index(lat, "20" = 2, "11" = 3, "02" = 1)
@@ -197,12 +184,12 @@ test_that("the univariate children are the two halves of the worked example", {
   # Through `bisect()`, which fixes which half comes back first: vertex 1 is
   # t = 0, so replacing it leaves the RIGHT half, t in [1/2, 1].
   kids <- bisect(list(V = diag(2L), coef = coef), 1L, 2L, lat)
-  expect_equal(kids[[1L]]$V, matrix(c(0.5, 0.5, 0, 1), nrow = 2L))
+  expect_equal(kids[[1L]]$V, matrix(c(0.5, 0.5, 0, 1), nrow = 2L, byrow = TRUE))
   expect_equal(
     kids[[1L]]$coef,
     coef_by_index(lat, "20" = 2.25, "11" = 2, "02" = 1)
   )
-  expect_equal(kids[[2L]]$V, matrix(c(1, 0, 0.5, 0.5), nrow = 2L))
+  expect_equal(kids[[2L]]$V, matrix(c(1, 0, 0.5, 0.5), nrow = 2L, byrow = TRUE))
   expect_equal(
     kids[[2L]]$coef,
     coef_by_index(lat, "20" = 2, "11" = 2.5, "02" = 2.25)
@@ -396,7 +383,7 @@ test_that("the Bernstein form reproduces linear functions exactly", {
     for (mu in list(c(0.5, 0.25, 0.25), rep(1 / 3, 3), c(0, 1, 0))) {
       expect_equal(
         pyr_at(dc_pyramid(kid$coef, lat, mu), lat, "000"),
-        n * as.vector(kid$V %*% mu)[1L]
+        n * as.vector(mu %*% kid$V)[1L]
       )
     }
   }
@@ -454,7 +441,7 @@ test_that("a child's coefficients describe the same polynomial", {
         mu <- rand_lambda(K)
         expect_equal(
           bern_eval(kid$coef, lat, mu),
-          bern_eval(coef, lat, as.vector(kid$V %*% mu))
+          bern_eval(coef, lat, as.vector(mu %*% kid$V))
         )
       }
     }
@@ -510,7 +497,7 @@ test_that("vertex values are exact, so box_best() is attained", {
   lat <- bernstein_lattice(5L, 4L)
   coef <- stats::rnorm(lat$n_coef)
   V <- diag(4L)
-  V[, 1L] <- c(0.5, 0.5, 0, 0)
+  V[1L, ] <- c(0.5, 0.5, 0, 0)
   box <- list(V = V, coef = reparametrise_to(coef, lat, V))
 
   best <- box_best(box, lat)
@@ -531,7 +518,7 @@ test_that("boxes_best() picks the best box", {
 test_that("longest_edge() returns the longest edge", {
   lat <- bernstein_lattice(2L, 3L)
   V <- diag(3L)
-  V[, 1L] <- c(0.5, 0.5, 0) # shortens edges 1-2 and 1-3, leaving 2-3 longest
+  V[1L, ] <- c(0.5, 0.5, 0) # shortens edges 1-2 and 1-3, leaving 2-3 longest
   expect_identical(longest_edge(V, lat$edges), c(2L, 3L))
 })
 
@@ -549,13 +536,13 @@ test_that("reparametrise_to() preserves the polynomial", {
   lat <- bernstein_lattice(4L, 4L)
   coef <- stats::rnorm(lat$n_coef)
   V <- diag(4L)
-  V[, 1L] <- c(0.5, 0.5, 0, 0)
+  V[1L, ] <- c(0.5, 0.5, 0, 0)
   out <- reparametrise_to(coef, lat, V)
   for (rep in 1:5) {
     mu <- rand_lambda(4L)
     expect_equal(
       bern_eval(out, lat, mu),
-      bern_eval(coef, lat, as.vector(V %*% mu))
+      bern_eval(coef, lat, as.vector(mu %*% V))
     )
   }
 })
@@ -566,7 +553,7 @@ test_that("reparametrise_to() agrees with subdivide() on a single replacement", 
   coef <- stats::rnorm(lat$n_coef)
   lambda <- c(0.25, 0.5, 0.25)
   V <- diag(3L)
-  V[, 2L] <- lambda
+  V[2L, ] <- lambda
   kid <- subdivide(list(V = diag(3L), coef = coef), lat, lambda)[[2L]]
   expect_equal(reparametrise_to(coef, lat, V), kid$coef)
 })
@@ -575,14 +562,14 @@ test_that("reparametrise_to() does not depend on the order of the vertices", {
   # A facet is a set. The plurality facet {theta_1 <= theta_2} spanned by
   # (tie, e_2, e_3) is the same simplex as (e_2, e_3, tie), and both must
   # describe the same polynomial. This needs no special handling: the polar
-  # form is symmetric (PBP 11.2), so permuting the columns just permutes the
+  # form is symmetric (PBP 11.2), so permuting the rows just permutes the
   # coefficients correspondingly.
   set.seed(28)
   lat <- bernstein_lattice(4L, 3L)
   coef <- stats::rnorm(lat$n_coef)
   tie <- c(0.5, 0.5, 0)
-  matched <- cbind(tie, c(0, 1, 0), c(0, 0, 1))
-  permuted <- cbind(c(0, 1, 0), c(0, 0, 1), tie)
+  matched <- rbind(tie, c(0, 1, 0), c(0, 0, 1))
+  permuted <- rbind(c(0, 1, 0), c(0, 0, 1), tie)
 
   for (V in list(matched, permuted)) {
     out <- reparametrise_to(coef, lat, V)
@@ -590,7 +577,7 @@ test_that("reparametrise_to() does not depend on the order of the vertices", {
       mu <- rand_lambda(3L)
       expect_equal(
         bern_eval(out, lat, mu),
-        bern_eval(coef, lat, as.vector(V %*% mu))
+        bern_eval(coef, lat, as.vector(mu %*% V))
       )
     }
   }
@@ -610,14 +597,14 @@ test_that("reparametrise_to() reaches sub-simplices with no vertex in common", {
   set.seed(29)
   lat <- bernstein_lattice(4L, 3L)
   coef <- stats::rnorm(lat$n_coef)
-  medial <- cbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
+  medial <- rbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
 
   out <- reparametrise_to(coef, lat, medial)
   for (rep in 1:8) {
     mu <- rand_lambda(3L)
     expect_equal(
       bern_eval(out, lat, mu),
-      bern_eval(coef, lat, as.vector(medial %*% mu))
+      bern_eval(coef, lat, as.vector(mu %*% medial))
     )
   }
 
@@ -629,7 +616,7 @@ test_that("reparametrise_to() reaches sub-simplices with no vertex in common", {
       seq_len(50L),
       function(i) {
         mu <- rand_lambda(3L)
-        bern_eval(out, lat, mu) - bern_eval(coef, lat, as.vector(medial %*% mu))
+        bern_eval(out, lat, mu) - bern_eval(coef, lat, as.vector(mu %*% medial))
       },
       numeric(1L)
     ))),
@@ -645,34 +632,59 @@ test_that("reparametrise_to() preserves the enclosure on an interior sub-simplex
   for (K in 2:4) {
     lat <- bernstein_lattice(4L, as.integer(K))
     coef <- stats::rnorm(lat$n_coef)
-    V <- vapply(
+    V <- do.call(rbind, lapply(
       seq_len(K),
       function(i) {
         z <- stats::rgamma(K, shape = 2)
         z / sum(z)
-      },
-      numeric(K)
-    )
+      }
+    ))
     out <- reparametrise_to(coef, lat, V)
     for (rep in 1:40) {
       mu <- rand_lambda(K)
-      value <- bern_eval(coef, lat, as.vector(V %*% mu))
+      value <- bern_eval(coef, lat, as.vector(mu %*% V))
       expect_lte(value, max(out) + rounding_tol(max(abs(out))))
       expect_gte(value, min(out) - rounding_tol(max(abs(out))))
     }
   }
 })
 
-test_that("reparametrise_to() refuses vertices outside the simplex or degenerate", {
+test_that("reparametrise_to() refuses vertices outside the simplex", {
   # Outside means `dc_step()` extrapolates rather than interpolating, which is
   # what costs the stability and the enclosure both.
   lat <- bernstein_lattice(3L, 3L)
   coef <- rep(1, lat$n_coef)
-  outside <- cbind(c(1.5, -0.5, 0), c(0, 1, 0), c(0, 0, 1))
-  degenerate <- cbind(c(0.5, 0.5, 0), c(0.5, 0.5, 0), c(0, 0, 1))
-
+  outside <- rbind(c(1.5, -0.5, 0), c(0, 1, 0), c(0, 0, 1))
   expect_error(reparametrise_to(coef, lat, outside), "standard simplex")
-  expect_error(reparametrise_to(coef, lat, degenerate), "non-degenerate")
+})
+
+test_that("a padded lower-dimensional simplex still encloses", {
+  set.seed(4)
+  lat <- bernstein_lattice(4L, 3L)
+  coef <- rnorm(lat$n_coef)
+  V <- pad_vertices(rbind(c(0.5, 0.5, 0), c(0, 0, 1)), lat$K)
+  expect_equal(dim(V), c(3L, 3L))
+  out <- reparametrise_to(coef, lat, V)
+  for (t in seq(0, 1, by = 0.1)) {
+    value <- bern_eval(coef, lat, t * c(0.5, 0.5, 0) + (1 - t) * c(0, 0, 1))
+    expect_lte(value, max(out) + 1e-12)
+    expect_gte(value, min(out) - 1e-12)
+  }
+})
+
+test_that("simplex_departure() names the first way out of the simplex", {
+  expect_null(simplex_departure(diag(3L)))
+  expect_null(simplex_departure(rbind(c(0.5, 0.5, 0), c(0, 0, 1))))
+  expect_match(
+    simplex_departure(rbind(c(-0.5, 1.5, 0), c(0, 0, 1))),
+    "smallest coordinate is -0.5"
+  )
+  expect_match(
+    simplex_departure(rbind(c(0, 0, 0), c(0, 0, 1))),
+    "sum to 0 rather than 1"
+  )
+  # Negative before sum, whichever row is at fault.
+  expect_match(simplex_departure(rbind(c(2, 0), c(-1, 0))), "smallest")
 })
 
 # --- Branch and bound ---------------------------------------------------------
@@ -685,7 +697,7 @@ test_that("certify_sup() brackets the true supremum", {
   lat <- bernstein_lattice(6L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
   res <- certify_sup(
-    list(seed_box(lat, coef)),
+    seed_box(lat, coef),
     lat,
     tol = 1e-9,
     max_iter = 2000L
@@ -703,13 +715,13 @@ test_that("certify_sup() brackets the true supremum", {
 
 test_that("the bound is valid at every iteration, not just at convergence", {
   # The whole claim of the method: refinement buys a tighter bound, not
-  # validity. If this fails then a run that hits `max_nodes` returns an invalid
+  # validity. If this fails then a run that hits `max_splits` returns an invalid
   # certificate.
   set.seed(21)
   lat <- bernstein_lattice(6L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
   truth <- certify_sup(
-    list(seed_box(lat, coef)),
+    seed_box(lat, coef),
     lat,
     tol = 1e-12,
     max_iter = 5000L
@@ -718,7 +730,7 @@ test_that("the bound is valid at every iteration, not just at convergence", {
   bounds <- vapply(
     c(0L, 1L, 2L, 5L, 20L, 100L),
     function(m) {
-      certify_sup(list(seed_box(lat, coef)), lat, tol = 0, max_iter = m)$bound
+      certify_sup(seed_box(lat, coef), lat, tol = 0, max_iter = m)$bound
     },
     numeric(1L)
   )
@@ -734,7 +746,7 @@ test_that("the bound is non-increasing as the tolerance tightens", {
     c(1, 1e-1, 1e-3, 1e-6),
     function(tol) {
       certify_sup(
-        list(seed_box(lat, coef)),
+        seed_box(lat, coef),
         lat,
         tol = tol,
         max_iter = 5000L
@@ -751,7 +763,7 @@ test_that("certify_sup() stops within tol of the incumbent", {
   coef <- stats::rnorm(lat$n_coef, sd = 2)
   tol <- 1e-4
   res <- certify_sup(
-    list(seed_box(lat, coef)),
+    seed_box(lat, coef),
     lat,
     tol = tol,
     max_iter = 10000L
@@ -760,81 +772,12 @@ test_that("certify_sup() stops within tol of the incumbent", {
   expect_lte(res$bound - res$incumbent, tol)
 })
 
-test_that("pruning nodes via slack doesn't hurt the bound", {
-  set.seed(25)
-  lat <- bernstein_lattice(6L, 3L)
-  coef <- stats::rnorm(lat$n_coef, sd = 2)
-  truth <- certify_sup(
-    list(seed_box(lat, coef)),
-    lat,
-    tol = 1e-12,
-    max_iter = 5000L
-  )$incumbent
-  res <- certify_sup(
-    list(seed_box(lat, coef)),
-    lat,
-    tol = 1e-9,
-    max_iter = 2000L,
-    slack = 0.5
-  )
-  expect_gte(res$bound, truth)
-  expect_lte(res$bound, res$incumbent + 0.5 + 1e-9)
-})
-
-test_that("keep_argmax retains an enclosure of the maximiser", {
-  set.seed(26)
-  lat <- bernstein_lattice(6L, 3L)
-  coef <- stats::rnorm(lat$n_coef, sd = 2)
-  res <- certify_sup(
-    list(seed_box(lat, coef)),
-    lat,
-    tol = 1e-6,
-    max_iter = 2000L,
-    keep_argmax = TRUE
-  )
-  expect_gt(length(res$active), 0L)
-  # The incumbent's argmax must lie in some retained box, so some retained box
-  # must bound it from above.
-  expect_gte(
-    max(vapply(res$active, box_bound, numeric(1L))),
-    res$incumbent - rounding_tol(res$incumbent)
-  )
-})
-
-test_that("keep_argmax and slack are mutually exclusive", {
-  lat <- bernstein_lattice(3L, 3L)
-  expect_error(
-    certify_sup(
-      list(seed_box(lat, rep(1, lat$n_coef))),
-      lat,
-      slack = 0.1,
-      keep_argmax = TRUE
-    ),
-    "`slack` must be 0"
-  )
-})
-
 test_that("a constant polynomial is certified without any subdivision", {
   lat <- bernstein_lattice(4L, 3L)
-  res <- certify_sup(list(seed_box(lat, rep(2.5, lat$n_coef))), lat, tol = 1e-9)
+  res <- certify_sup(seed_box(lat, rep(2.5, lat$n_coef)), lat, tol = 1e-9)
   expect_identical(res$iterations, 0L)
   expect_equal(res$incumbent, 2.5)
   expect_equal(res$bound, 2.5)
-})
-
-test_that("several seeds are certified as their union", {
-  set.seed(27)
-  lat <- bernstein_lattice(5L, 3L)
-  coef <- stats::rnorm(lat$n_coef, sd = 2)
-  halves <- bisect(seed_box(lat, coef), 1L, 2L, lat)
-  joint <- certify_sup(halves, lat, tol = 1e-9, max_iter = 4000L)
-  separate <- vapply(
-    halves,
-    function(b) certify_sup(list(b), lat, tol = 1e-9, max_iter = 4000L)$bound,
-    numeric(1L)
-  )
-  expect_lte(joint$bound, max(separate) + 1e-9)
-  expect_gte(joint$bound, joint$incumbent)
 })
 
 test_that("a run that prunes all nodes converges rather than running out", {
@@ -846,31 +789,29 @@ test_that("a run that prunes all nodes converges rather than running out", {
   lat <- bernstein_lattice(6L, 3L)
   # Picking coefficients that are not maximised on the vertices:
   coef <- stats::rnorm(lat$n_coef, sd = 2)
-  while (max(coef) == boxes_best(list(seed_box(lat, coef)), lat)$value) {
+  while (max(coef) == box_best(seed_box(lat, coef), lat)$value) {
     coef[which.max(coef)] <- min(coef) - 1
   }
-  seeds <- list(seed_box(lat, coef))
-  res <- certify_sup(seeds, lat, tol = 0, max_iter = 500L, slack = 0.5)
+  truth <- certify_sup(seed_box(lat, coef), lat, tol = 1e-12, max_iter = 5000L)
+  # A value attained elsewhere, strictly between the supremum and the seed's
+  # bound: the run can never close the gap against it, so it can only stop by
+  # pruning every node.
+  expect_gt(max(coef), truth$bound)
+  shared <- (truth$bound + max(coef)) / 2
+  res <- certify_sup(
+    seed_box(lat, coef),
+    lat,
+    tol = 0,
+    max_iter = 500L,
+    shared_incumbent = shared
+  )
 
-  expect_length(res$active, 0L)
+  fates <- vapply(res$history, function(b) b$fate, character(1L))
+  expect_false(any(fates == "active"))
+  expect_true(any(fates == "pruned"))
   expect_true(res$converged)
   expect_false(res$budget_hit)
   expect_lt(res$iterations, 500L)
-})
-
-test_that("pruning discards nodes that only tie the incumbent", {
-  # `>` not `>=`: a node bounded by exactly the incumbent cannot improve on it.
-  # Keeping it is conservative: same bound, more work, so no test that reads
-  # the bound can tell the difference. `keep_argmax` deliberately inverts this,
-  # which is the case that must not be broken while fixing the other.
-  lat <- bernstein_lattice(2L, 3L)
-  flat <- function(u) {
-    node(list(V = diag(3L), coef = rep(u, lat$n_coef)), id = 1L)
-  }
-  nodes <- list(flat(1), flat(5), flat(9))
-
-  expect_length(prune_active(nodes, 5, 0, keep_argmax = FALSE)$keep, 1L)
-  expect_length(prune_active(nodes, 5, 0, keep_argmax = TRUE)$keep, 2L)
 })
 
 # --- Regression ---------------------------------------------------------------
@@ -882,7 +823,7 @@ test_that("certify_sup() returns the bound it has always returned", {
   lat <- bernstein_lattice(10L, 3L)
   coef <- abs(stats::rnorm(lat$n_coef, sd = 2))^2
   res <- certify_sup(
-    list(list(V = diag(3L), coef = coef)),
+    list(V = diag(3L), coef = coef),
     lat,
     tol = 1e-9,
     max_iter = 1000L

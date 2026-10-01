@@ -18,34 +18,21 @@ instance, the standard simplex for Multinomial proportions.}
 A callable \code{parametric_family}.
 }
 \description{
-A \code{parametric_family} defines the model \eqn{p_\theta(x)}{p_theta(x)}. It has
-no knowledge of null hypotheses, alternatives, or any optimisation procedure.
-Families provide a log-likelihood compiler, score functions and a sampler.
+A \code{parametric_family} is the model \eqn{p_\theta(x)}{p_theta(x)}: a
+parameter space \eqn{\Theta}{Theta} (a \link{convex_region}), a sample \link{space},
+and the map \eqn{\theta \mapsto p_\theta}{theta -> p_theta} between them.
+It provides a log-likelihood compiler, score and sampler.
 
 \code{format()} gives the two spaces on one line, without the class
 banner \code{print()} adds.
-
-Both are needed rather than inherited: the parent is \code{class_function}, so
-the defaults reach \code{deparse()} and print the shared closure plus an
-attribute dump.
 }
 \details{
-A family is the pair of a \link{convex_region} \eqn{\Theta}{Theta} and the map
-\eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
-\link{space}; the two spaces are what the family carries, and everything
-else it offers is a way of navigating that map.
+Families are callable: \code{fam(theta)} is the \link{distribution}
+\eqn{p_\theta}{p_theta}, and \code{fam(W)} for a \link{distribution} \code{W} over the
+parameter space is the \code{\link[=mixture]{mixture()}} \eqn{P_W}{P_W}.
 
-Families are callable, which is that map written down: \code{fam(theta)} is the
-\link{distribution} \eqn{p_\theta}{p_theta}. A kernel extends canonically from
-points to distributions, so \code{fam(W)} for a \link{distribution} `W`` over the
-parameter space is the same map and gives the \code{\link[=mixture]{mixture()}}
-\eqn{P_W}{P_W}.
-
-Not marked abstract, because S7 forbids that alongside a \code{class_function}
-parent -- abstract classes must have abstract parents. It is one in every
-other sense: it supplies no \code{\link[=compile_loglik]{compile_loglik()}} method, so constructing it
-directly gives a family with no kernel, which errors on first use exactly as
-any other incomplete family does.
+This is effectively an abstract class. It has no \code{\link[=compile_loglik]{compile_loglik()}} method,
+so use a concrete family instead.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -54,7 +41,7 @@ S7::S7_inherits(fam, parametric_family)
 # The map theta -> p_theta, and its extension to mixing measures.
 fam(c(0.5, 0.3, 0.2))
 fam(finite_dist(
-  components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+  atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
   weights = c(0.5, 0.5)
 ))
 

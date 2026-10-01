@@ -15,7 +15,7 @@ mixture(family, mixing)
 vector for a point mass.}
 }
 \value{
-An \code{mixture}.
+A \code{mixture}.
 }
 \description{
 The law of \code{X} when \eqn{\theta \sim W}{theta ~ W} and
@@ -27,17 +27,14 @@ The law of \code{X} when \eqn{\theta \sim W}{theta ~ W} and
 a point mass from a genuine mixture.
 }
 \details{
-A kernel extends canonically from points to measures, so the degenerate case
-is not a separate type: a bare parameter vector is taken as a point mass, and
-\code{mixture(fam, theta)} is the family at \code{theta}. Calling a family
-directly is the shorthand for both, and usually reads better:
-\code{fam(theta)} and \code{fam(W)}.
+A bare parameter vector is taken as a point mass. Calling the family,
+\code{fam(theta)} or \code{fam(W)}, is the usual shorthand.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 mixture(fam, c(0.5, 0.3, 0.2))
 mixture(fam, finite_dist(
-  components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+  atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
   weights = c(0.5, 0.5)
 ))
 }

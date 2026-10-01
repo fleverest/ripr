@@ -2,12 +2,12 @@
 % Please edit documentation in R/count_space.R
 \name{count_space}
 \alias{count_space}
-\title{The space of \code{k}-category count vectors summing to \code{n}}
+\title{The space of \code{k}-category count vectors summing to \code{n_trials}}
 \usage{
-count_space(n, k)
+count_space(n_trials, k)
 }
 \arguments{
-\item{n}{Integer total count per outcome.}
+\item{n_trials}{Integer total count per outcome (the number of trials).}
 
 \item{k}{Integer number of categories.}
 }
@@ -15,10 +15,10 @@ count_space(n, k)
 A \code{count_space}.
 }
 \description{
-This is the sample space for multinomial or multivariate hypergeometric: the
-non-negative integer lattice points of the scaled simplex.
+The sample space of a multinomial or multivariate hypergeometric: the
+non-negative integer points of the scaled simplex.
 }
 \examples{
-count_space(n = 4L, k = 3L)
-enumerate_space(count_space(n = 2L, k = 3L))
+count_space(n_trials = 4L, k = 3L)
+enumerate_space(count_space(n_trials = 2L, k = 3L))
 }

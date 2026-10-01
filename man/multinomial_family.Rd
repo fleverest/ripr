@@ -15,9 +15,8 @@ multinomial_family(n_trials, k)
 A \code{multinomial_family}.
 }
 \description{
-The \code{n}-trial, \code{K}-category multinomial over \code{\link[=count_space]{count_space()}}. Its log
-multinomial coefficients are built once at construction and stored as plain
-data rather than closures, so a serialised family carries no environment.
+The \code{n_trials}-trial, \code{k}-category multinomial over \code{\link[=count_space]{count_space()}}, with
+parameter space equal to the full probability simplex.
 }
 \examples{
 multinomial_family(n_trials = 20L, k = 3L)

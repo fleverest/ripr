@@ -5,21 +5,20 @@
 \alias{mixture_draw,ripr::distribution,ripr::parametric_family-method}
 \title{Draw from the induced mixture}
 \usage{
-mixture_draw(mixing, family, n_obs)
+mixture_draw(mixing, family, n)
 }
 \arguments{
 \item{mixing}{A \link{distribution} over the parameter space.}
 
 \item{family}{A \link{parametric_family}.}
 
-\item{n_obs}{Number of draws.}
+\item{n}{Number of draws.}
 }
 \value{
-\verb{(n_obs, K)} numeric matrix.
+\verb{(n, K)} numeric matrix.
 }
 \description{
-Sampling from a mixture can be done easily by sampling once
-from the mixing distribution, then sampling from the family at that parameter
-value.
+Draws parameters from the mixing measure, then one outcome
+from the family at each.
 }
 \keyword{internal}

@@ -2,116 +2,84 @@
 % Please edit documentation in R/region_algebra.R
 \name{region_algebra}
 \alias{region_algebra}
-\alias{union}
-\alias{union.default}
-\alias{intersect}
-\alias{intersect.default}
-\alias{setdiff}
-\alias{setdiff.default}
-\alias{setequal}
-\alias{setequal.default}
+\alias{|,ripr::region,ripr::region-method}
+\alias{&,ripr::region,ripr::region-method}
+\alias{-,ripr::region,ripr::region-method}
+\alias{==,ripr::region,ripr::region-method}
+\alias{!=,ripr::region,ripr::region-method}
 \title{Set algebra on regions}
-\usage{
-union(x, y, ...)
-
-\method{union}{default}(x, y, ...)
-
-intersect(x, y, ...)
-
-\method{intersect}{default}(x, y, ...)
-
-setdiff(x, y, ...)
-
-\method{setdiff}{default}(x, y, ...)
-
-setequal(x, y, ...)
-
-\method{setequal}{default}(x, y, ...)
-}
 \arguments{
-\item{x, y}{\link{region}s, or anything the base R namesake accepts.}
-
-\item{...}{Further regions. For \code{setdiff()}, each is subtracted along with
-\code{y}; \code{max_cells} must be passed by name.}
+\item{e1, e2}{\link{region}s.}
 }
 \value{
-A \link{region}, except from \code{setequal()}, which returns \code{TRUE} or
-\code{FALSE}. \code{union()} returns what \code{\link[=union_region]{union_region()}} would.
-\code{intersect()} returns a \link{union_region} of the surviving cells, the lone
-cell itself when a single one survives, or an \code{\link[=empty_region]{empty_region()}} when the
-intersection is empty; \code{setdiff()} likewise returns an \code{\link[=empty_region]{empty_region()}}
-when nothing remains.
+\code{==} and \code{!=} return \code{TRUE} or \code{FALSE}. The other operators return a
+\link{region}: \code{x | y} returns the same as \code{\link[=union_region]{union_region()}}; \code{x & y} returns a
+\link{union_region} of the surviving cells, a single cell alone when it is the
+only survivor, or an \code{\link[=empty_region]{empty_region()}} if the intersection is empty; and
+\code{x - y} likewise returns an \code{\link[=empty_region]{empty_region()}} when nothing remains.
 }
 \description{
-Performs set union, intersection, asymmetric difference on two \link{region}s.
+Regions combine with \code{|} (union), \code{&} (intersection), \code{-} (difference) and
+\code{==} (set equality), decided in exact rational arithmetic. Base R's
+\code{\link[=union]{union()}}, \code{\link[=intersect]{intersect()}}, \code{\link[=setdiff]{setdiff()}} and \code{\link[=setequal]{setequal()}} do not accept regions.
 }
 \details{
-Union is structural: a \code{\link[=union_region]{union_region()}} \emph{is} its parts, nothing is
-computed, and \code{union()} forwards to its constructor.
+\code{x | y} is structural: it forwards to \code{\link[=union_region]{union_region()}}. \code{x & y} intersects
+every part of \code{x} with every part of \code{y} and drops the empty ones; parts of
+the result may overlap.
 
-Intersection is computed precisely. It distributes over union, so the
-result is the union over every intersection of one part from each argument,
-where empty intersections are pruned via exact rational feasibility. Parts
-of a \link{union_region} may overlap, and so may the parts of the result; nothing
-here checks to make sure they are disjoint.
+\code{x - y} is the closed difference. A part of \code{y} that meets \code{x} only in a
+lower-dimensional slice subtracts nothing and raises a warning. To remove
+several regions, subtract their union: \code{x - (y1 | y2)}. \code{-} errors past
+\code{getOption("ripr.max_cells", 1000L)} cells; the same option sets the default
+\code{max_cells} for \code{\link[=cells]{cells()}} and \code{\link[=null_model]{null_model()}}.
 
-\code{setdiff(x, y)} is the closure of \code{x} minus \code{y}. Equivalently, the complement
-of \code{y} within \code{x}.  A part of \code{y} that never meets \code{x} subtracts nothing. A
-part \code{y} that meets \code{x} in a lower-dimensional slice (e.g. \code{x} is R^2 and
-\code{y} a line segment) also subtracts nothing, becuase we compute only a closed
-difference and closure reverses the subtraction. Doing so will raise a
-warning. The decomposition is a product across the parts of \code{y}, guarded by
-the named \code{max_cells} argument (default \code{1000L}). Further regions in \code{...}
-are subtracted too: \code{setdiff(x, y1, y2)} removes the union of the
-subtrahends.
-
-\code{setequal(x, y)} decides whether two regions are the same set, exactly.
-Containment each way is what it tests, and where the containing side is
-convex that is one exact linear program per facet of it, with nothing
-decomposed.
-
-An empty difference is not what equality means here. The difference is
-closed, so a region covered exactly by a decomposition of itself still leaves
-behind the boundaries its pieces share: \code{setdiff()} of a square and its two
-triangles is the diagonal between them, where \code{setequal()} of the same two is
-\code{TRUE}.
+\code{x == y} returns a single \code{TRUE} or \code{FALSE}, testing containment both ways
+(exactly, from generators, when the containing side is convex; by a
+difference otherwise). It compares sets, not objects (use \code{\link[=identical]{identical()}} for
+that); regions of different dimensions are unequal.
 }
 \examples{
-# The K = 3 plurality null, by verb rather than constructor:
-union(
-  simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-  simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+# The two cells of the K = 3 plurality null: the union of the regions where
+# candidate 2 beats candidate 1, and where candidate 3 beats candidate 1.
+loses_2 <- simplex_region(
+  vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+)
+loses_3 <- simplex_region(
+  vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1))
 )
 
-# Its two cells meet in the region where candidate 1 trails both others:
-intersect(
-  simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-  simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-)
+# The null itself, by operator rather than constructor:
+plurality <- loses_2 | loses_3
+plurality
+
+# Its two cells meet where candidate 1 trails both others:
+loses_2 & loses_3
 
 # Disjoint regions intersect in nothing:
-intersect(
-  point_region(theta = c(1, 0, 0)),
-  point_region(theta = c(0, 1, 0))
-)
+point_region(theta = c(1, 0, 0)) & point_region(theta = c(0, 1, 0))
 
-# The complement of the K = 3 plurality null within the simplex is the
-# region where candidate 1 wins -- the alternative, as a region:
-plurality <- union(
-  simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-  simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
-)
-setdiff(simplex_region(vertices = diag(3)), plurality)
+# The complement of the null within the simplex is the region where
+# candidate 1 wins -- the alternative, as a region:
+simplex <- simplex_region(vertices = diag(3))
+simplex - plurality
+
+# Several regions are subtracted as their union, so this is the same set:
+(simplex - (trails_2 | trails_3)) == (simplex - plurality)
 
 # A square, and the same square cut into two triangles: different objects,
 # the same set. One of those triangles alone is not.
-square <- polytope_region(vertices = cbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
-setequal(square, union_region(cells(square)))
-setequal(square, cells(square)[[1]])
+square <- polytope_region(vertices = rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1)))
+square == union_region(cells(square))
+square == cells(square)[[1]]
+square != cells(square)[[1]]
 
-# Not regions, so base R behaviour, untouched:
-union(c(1, 2), c(2, 3))
-intersect(c(1, 2), c(2, 3))
-setdiff(c(1, 2), c(2, 3))
-setequal(c(1, 2), c(2, 1))
+# The cap on a difference's decomposition is an option:
+old <- options(ripr.max_cells = 5000L)
+simplex - plurality
+options(old)
+}
+\seealso{
+\code{\link[=union_region]{union_region()}}, \code{\link[=empty_region]{empty_region()}}, and \code{\link[=disjoin]{disjoin()}}, which turns a
+union into one whose parts do not overlap.
 }

@@ -15,15 +15,8 @@ mixture_gaussian_moments(mixing, family)
 \code{list(mean = , cov = )}, or \code{NULL}.
 }
 \description{
-Note that these are the moments of \eqn{P_W}{P_W}, not of \eqn{W}{W}: for a
-Gaussian prior over a Gaussian mean the covariance is
-\eqn{\Sigma + V}{sigma + V}, where the mixing measure's own is \eqn{V}{V}.
-}
-\details{
-Deliberately not named for moments alone. Every mixture has moments, but only
-a Gaussian one can be integrated by \code{\link[=gh_engine]{gh_engine()}}, and a method supplied for
-a non-Gaussian mixture would have the engine integrate against a weight that
-does not match the measure. \code{NULL} is the correct answer for anything that is
-not Gaussian, however well defined its moments are.
+Used by \code{\link[=gh_engine]{gh_engine()}}. These are the moments of \eqn{P_W}{P_W}, not
+\eqn{W}{W} (e.g. \eqn{\Sigma + V}{sigma + V} for a Gaussian prior on a
+Gaussian mean). \code{NULL} for any non-Gaussian mixture.
 }
 \keyword{internal}

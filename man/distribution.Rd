@@ -13,17 +13,11 @@ distribution(sample_space = space())
 }
 \description{
 A \code{distribution} is a law over a \link{space}: the type the RIPr problem
-consumes as the alternative \eqn{Q}{Q}, and the type it returns as
-\eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, \code{\link[=log_density]{log_density()}}
-and \code{\link[=draw]{draw()}}, over the points its \code{sample_space} admits.
+consumes as the alternative \eqn{Q}{Q} and returns as
+\eqn{\widehat{P}^*}{P_star_hat}. It implements \code{\link[=log_density]{log_density()}} and \code{\link[=draw]{draw()}}
+over the points in its \code{sample_space}.
 
-\code{print()} and \code{format()} summarise a distribution on one line
-rather than dumping its properties; subclasses with more to show override
-\code{print()}.
-}
-\details{
-\eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
-and is usable everywhere an \code{\link[=mixture]{mixture()}} is.
+\code{print()} and \code{format()} summarise a distribution on one line.
 }
 \examples{
 # `distribution` is abstract; mixture() subclasses it, e.g.

@@ -4,14 +4,7 @@
 \alias{certify}
 \title{Certify an upper bound on the largest null expectation}
 \usage{
-certify(
-  x,
-  null,
-  tol = 1e-06,
-  max_nodes = 20000L,
-  max_coefficients = 1024^2,
-  .record = FALSE
-)
+certify(x, null, tol = 1e-06, max_splits = 20000L, max_coefficients = 1024^2)
 }
 \arguments{
 \item{x}{A \link{random_variable}.}
@@ -20,68 +13,37 @@ certify(
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
-\item{max_nodes}{Cap on subdivisions \emph{per cell} for branch-and-bound
-algorithms, so a part triangulated into several cells is allowed
-\code{max_nodes} in each. The per-part \code{iterations} reported below is the total
-actually spent, which is what to read the cap against.}
+\item{max_splits}{Cap on branch-and-bound subdivisions \emph{per cell}; a
+triangulated part gets \code{max_splits} in each of its cells.}
 
-\item{max_coefficients}{Refuse above this many Bernstein coefficients
-(for bounding multinomial expectation in simplices).}
-
-\item{.record}{Also return branch-and-bound nodes. Use \code{\link[=certify_trace]{certify_trace()}}
-rather than this directly.}
+\item{max_coefficients}{Refuse above this many Bernstein coefficients.}
 }
 \value{
-A list with \code{sup_ub}, \code{sup_lb}, the \code{random_variable} and \code{null} it
-holds for, the \code{method} names that produced it (one per distinct cell
-geometry), and per-part \code{bounds}, \code{incumbents}, \code{iterations},
-\code{converged} and \code{budget_hit}, each reduced over the part's cells: the
-largest bound and incumbent, the total iterations, converged only if every
-cell did and \code{budget_hit} if any did. \code{budget_hit} flags when a search
-stopped at \code{max_nodes} with the gap still open, so its bound is valid but
-likely loose.
+A \link{ripr_certificate}. Where \code{budget_hit} is set, the bound is valid
+but likely loose.
 }
 \description{
-An upper bound on
+A global upper bound on
 \eqn{\sup_{\theta \in \Theta_0} E_\theta[X]}{sup_theta E_theta[X]}, where
-available.
+available. For non-negative \code{X}, \code{X / bound} is then an e-variable for \code{H0}
+(or \code{X} itself if the bound is at most 1); \code{\link[=e_variable]{e_variable()}} makes that choice.
 }
 \details{
-This exists to prove that a particular random variable is an e-variable for
-\code{H0}: for any non-negative \code{X} and any scalar \code{b} at least this supremum,
-\code{X / b} has expectation at most 1 under \code{H0}. So \code{certify(X, H0)} returning
-\code{1} or less says \code{X} is already an e-variable for \code{H0}, and otherwise
-\code{X / bound} is one.
-
-Certification is refused for any (family, cell) combination with no known
-bounding method.A part that is a \code{\link[=polytope_region]{polytope_region()}} is triangulated first,
-so any bounded null will certify for a multinomial expectation. What is
-currently refused is a part that is unbounded (e.g. a \code{\link[=polyhedron_region]{polyhedron_region()}}
-with rays or lineality, of which \code{\link[=halfspace_region]{halfspace_region()}} and
-\code{\link[=real_region]{real_region()}} are instances of).
-
-Only two methods are currently implemented. A \code{\link[=point_region]{point_region()}} is certified
-by evaluation, for any family whose sample space can be enumerated (and thus
-the expectation computed precisely) the supremum over a single parameter is
-the expectation at that point, so there is nothing to enclose. Anything
-larger needs a specific bounding method, and the only one currently
-implemented is Bernstein branch-and-bound for multinomial families over
-simplices, found via a branch-and-bound algorithm that recursively subdivides
-the simplex \insertCite{Leroy2012}{ripr} and bounds each subset via the
-simplicial Bernstein range enclosure property \insertCite{Garloff1986}{ripr}.
-
-Unlike \code{\link[=sup_lb]{sup_lb()}} this is a bound on the global supremum rather than a local
-optimum.
+Two methods are implemented. A \code{\link[=point_region]{point_region()}} is certified by exact
+evaluation, for any family with an enumerable sample space. Otherwise,
+multinomial families over simplices use branch and bound
+\insertCite{Leroy2012}{ripr} on the simplicial Bernstein range enclosure
+\insertCite{Garloff1986}{ripr}, subdividing by de Casteljau's algorithm
+\insertCite{PrautzschBoehmPaluszny2002}{ripr}. Bounded polytopes are
+triangulated first, so any bounded null certifies for a multinomial.
+Anything else, including an unbounded part such as a \code{\link[=halfspace_region]{halfspace_region()}}
+or \code{\link[=real_region]{real_region()}}, is refused with a message saying why.
 \subsection{Numerical limitations}{
 
-The derived bounds are mathematically guaranteed, but evaluated in floating
-point arithmetic. The geometry underneath (triangulation, set algebra,
-emptiness) is exact via GMP rationals, so the cells genuinely tile the null
-and share facets with no gaps or overlaps. Still, the bounding arithmetic
-itself (Bernstein coefficients, point evaluation) uses ordinary IEEE double
-precision, and no accounting is made for its rounding, so a certificate here
-is a mathematical bound computed in floating point, not a formally proven
-one.
+The geometry (triangulation, set algebra) is exact in GMP rationals, so the
+cells tile the null exactly. The bounding arithmetic is IEEE double with no
+accounting for rounding, so a certificate is a mathematical bound computed in
+floating point, not a formally proven one.
 }
 }
 \examples{
@@ -89,17 +51,22 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 X <- likelihood(fam(c(0.4, 0.35, 0.25)))
 cert <- certify(X, plurality, tol = 1e-6)
-c(upper = cert$sup_ub, attained = cert$sup_lb)
+cert
+c(upper = cert@sup_ub, attained = cert@sup_lb)
+
+# The bound is below 1 here, so X comes back unchanged.
+E <- e_variable(cert)
+E
 }
 \references{
 \insertAllCited{}
 }
 \seealso{
-\code{\link[=sup_lb]{sup_lb()}}
+\code{\link[=e_variable]{e_variable()}}, \code{\link[=sup_lb]{sup_lb()}}, \code{\link[=certify_trace]{certify_trace()}}
 }

@@ -11,15 +11,15 @@ test_that("a point mixing induces the family at its own parameter", {
   theta <- c(0.75, 0.25)
   p <- mixture(fam, dirac(theta = theta))
   x <- enumerate_space(fam@sample_space)
-  expect_equal(log_density(p, x), kernel_loglik(fam, theta, x))
+  expect_equal(log_density(p, x), compile_loglik(fam, x)(rbind(theta))[, 1L])
 })
 
 test_that("an induced mixture is itself a probability distribution", {
   fam <- multinomial_family(n_trials = 9, k = 3)
-  comp <- cbind(c(0.6, 0.3, 0.1), c(0.2, 0.2, 0.6), c(1 / 3, 1 / 3, 1 / 3))
+  comp <- rbind(c(0.6, 0.3, 0.1), c(0.2, 0.2, 0.6), c(1 / 3, 1 / 3, 1 / 3))
   p <- mixture(
     fam,
-    finite_dist(components = comp, weights = c(0.2, 0.5, 0.3))
+    finite_dist(atoms = comp, weights = c(0.2, 0.5, 0.3))
   )
   expect_equal(
     sum(exp(log_density(p, enumerate_space(fam@sample_space)))),
@@ -31,14 +31,14 @@ test_that("an induced mixture is itself a probability distribution", {
 test_that("a finite mixture is the weighted sum of its components", {
   fam <- multinomial_family(n_trials = 6, k = 3)
   w <- c(0.4, 0.6)
-  comp <- cbind(c(0.5, 0.3, 0.2), c(0.1, 0.1, 0.8))
+  comp <- rbind(c(0.5, 0.3, 0.2), c(0.1, 0.1, 0.8))
   x <- enumerate_space(fam@sample_space)
-  p <- mixture(fam, finite_dist(components = comp, weights = w))
+  p <- mixture(fam, finite_dist(atoms = comp, weights = w))
 
   manual <- log(
     w[1] *
-      exp(kernel_loglik(fam, comp[, 1], x)) +
-      w[2] * exp(kernel_loglik(fam, comp[, 2], x))
+      exp(log_density(fam(comp[1, ]), x)) +
+      w[2] * exp(log_density(fam(comp[2, ]), x))
   )
   expect_equal(log_density(p, x), manual, tolerance = rounding_tol(1))
 })
@@ -50,7 +50,7 @@ test_that("a degenerate finite mixing agrees with the point mixing", {
   a <- mixture(fam, dirac(theta = theta))
   b <- mixture(
     fam,
-    finite_dist(components = matrix(theta, ncol = 1L), weights = 1)
+    finite_dist(atoms = matrix(theta, nrow = 1L), weights = 1)
   )
   expect_equal(log_density(a, x), log_density(b, x))
 })
@@ -62,11 +62,11 @@ test_that("a zero-weight atom contributes nothing", {
   with_dead <- mixture(
     fam,
     finite_dist(
-      components = cbind(live, c(0.1, 0.1, 0.8)),
+      atoms = rbind(live, c(0.1, 0.1, 0.8)),
       weights = c(1, 0)
     )
   )
-  expect_equal(log_density(with_dead, x), kernel_loglik(fam, live, x))
+  expect_equal(log_density(with_dead, x), log_density(fam(live), x))
 })
 
 test_that("a mixture carrying a boundary atom stays finite where it should", {
@@ -76,7 +76,7 @@ test_that("a mixture carrying a boundary atom stays finite where it should", {
   p <- mixture(
     fam,
     finite_dist(
-      components = cbind(c(0.5, 0.5, 0), c(1 / 3, 1 / 3, 1 / 3)),
+      atoms = rbind(c(0.5, 0.5, 0), c(1 / 3, 1 / 3, 1 / 3)),
       weights = c(0.5, 0.5)
     )
   )
@@ -92,7 +92,7 @@ test_that("draw returns the right shape and respects the trial total", {
   p <- mixture(
     fam,
     finite_dist(
-      components = cbind(c(0.6, 0.3, 0.1), c(0.1, 0.1, 0.8)),
+      atoms = rbind(c(0.6, 0.3, 0.1), c(0.1, 0.1, 0.8)),
       weights = c(0.5, 0.5)
     )
   )
@@ -108,7 +108,7 @@ test_that("draw handles a mixture where one component is never selected", {
   p <- mixture(
     fam,
     finite_dist(
-      components = cbind(c(0.5, 0.5), c(0.9, 0.1)),
+      atoms = rbind(c(0.5, 0.5), c(0.9, 0.1)),
       weights = c(1, 0)
     )
   )
@@ -126,7 +126,7 @@ test_that("draws from a mixture are consistent with its density", {
   p <- mixture(
     fam,
     finite_dist(
-      components = cbind(c(0.75, 0.25), c(0.25, 0.75)),
+      atoms = rbind(c(0.75, 0.25), c(0.25, 0.75)),
       weights = c(0.5, 0.5)
     )
   )
@@ -163,7 +163,7 @@ test_that("calling a family is the map theta -> p_theta", {
 test_that("a kernel extends from points to measures, so fam(W) is the same map", {
   fam <- multinomial_family(n_trials = 4L, k = 3L)
   w <- finite_dist(
-    components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+    atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
     weights = c(0.3, 0.7)
   )
   expect_identical(fam(w), mixture(fam, w))
@@ -185,7 +185,7 @@ test_that("the callable closure captures nothing", {
   # a size, since S7 class metadata dominates either number.
   fam <- multinomial_family(n_trials = 60L, k = 4L)
   expect_identical(environment(fam), asNamespace("ripr"))
-  expect_identical(environment(fam), environment(gaussian_family(dim = 2L)))
+  expect_identical(environment(fam), environment(gaussian_family(d = 2L)))
 })
 
 test_that("a family survives a serialisation round trip and stays callable", {
@@ -221,13 +221,18 @@ test_that("a family prints its two spaces, not its closure", {
 test_that("a distribution's print distinguishes a point mass from a mixture", {
   fam <- multinomial_family(n_trials = 4L, k = 3L)
   expect_match(
+    format(fam(dirac(c(0.5, 0.3, 0.2)))),
+    "at theta = (0.5, 0.3, 0.2)",
+    fixed = TRUE
+  )
+  expect_match(
     format(fam(c(0.5, 0.3, 0.2))),
     "at theta = (0.5, 0.3, 0.2)",
     fixed = TRUE
   )
   expect_match(
     format(fam(finite_dist(
-      components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+      atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
       weights = c(0.5, 0.5)
     ))),
     "mixed over 2 atoms",
@@ -244,7 +249,7 @@ test_that("draw samples every distribution over a parameter space", {
 
   # Weights govern how often each atom is drawn, and repeats stay in place.
   w <- finite_dist(
-    components = cbind(c(1, 0, 0), c(0, 1, 0)),
+    atoms = rbind(c(1, 0, 0), c(0, 1, 0)),
     weights = c(0.25, 0.75)
   )
   d <- draw(w, 4000L)
@@ -263,7 +268,7 @@ test_that("one mixture_draw method serves every mixing measure", {
 
   set.seed(1)
   degenerate <- finite_dist(
-    components = cbind(c(1, 0, 0), c(0, 0, 1)),
+    atoms = rbind(c(1, 0, 0), c(0, 0, 1)),
     weights = c(0.5, 0.5)
   )
   y <- draw(fam(degenerate), 2000L)
@@ -275,8 +280,8 @@ test_that("one mixture_draw method serves every mixing measure", {
 test_that("a closed-form pairing still overrides the general method", {
   # A Gaussian prior through a Gaussian kernel is N(m, Sigma + V) directly and
   # never samples a parameter, so it must beat the generic two-step method.
-  fam <- gaussian_family(dim = 1L, sigma = matrix(1))
-  prior <- gaussian_dist(prior_mean = 0, prior_cov = matrix(3))
+  fam <- gaussian_family(d = 1L, sigma = matrix(1))
+  prior <- gaussian_dist(mean = 0, cov = matrix(3))
   set.seed(1)
   x <- draw(fam(prior), 2e5)
   expect_equal(var(as.vector(x)), 4, tolerance = 0.05)
@@ -292,16 +297,15 @@ test_that("a mixture refuses a measure that lives outside the parameters", {
   expect_error(fam(dirac(theta = c(0.5, 0.5))), "over 2 dimensions")
   expect_error(
     fam(finite_dist(
-      components = cbind(c(0.5, 0.3, 0.2), c(0.5, 0.3, 0.9)),
+      atoms = rbind(c(0.5, 0.3, 0.2), c(0.5, 0.3, 0.9)),
       weights = c(0.5, 0.5)
     )),
     "outside the family's parameter space"
   )
 
-  # A Gaussian prior is over all of R^3, which is not inside the simplex. This
-  # pairing was silently accepted before, and fails at the density instead.
+  # A Gaussian prior is over all of R^3, which is not inside the simplex.
   expect_error(
-    fam(gaussian_dist(prior_mean = rep(0, 3), prior_cov = diag(3))),
+    fam(gaussian_dist(mean = rep(0, 3), cov = diag(3))),
     "outside the family's parameter space"
   )
 })
@@ -313,7 +317,7 @@ test_that("a mixture accepts every measure that does live there", {
   for (w in list(
     dirac(theta = c(0.5, 0.3, 0.2)),
     finite_dist(
-      components = cbind(c(.6, .2, .2), c(.2, .6, .2)),
+      atoms = rbind(c(.6, .2, .2), c(.2, .6, .2)),
       weights = c(.5, .5)
     ),
     dirichlet(alpha = c(2, 2, 2))
@@ -324,21 +328,25 @@ test_that("a mixture accepts every measure that does live there", {
   # And a truncated Dirichlet, whose declared space is a strict subset -- the
   # case an equality check would have rejected.
   medial <- simplex_region(
-    vertices = cbind(c(.5, .5, 0), c(.5, 0, .5), c(0, .5, .5))
+    vertices = rbind(c(.5, .5, 0), c(.5, 0, .5), c(0, .5, .5))
   )
   w <- truncated_dirichlet(alpha = c(2, 2, 2), region = medial)
-  expect_false(setequal(w@sample_space, simplex))
+  expect_false(w@sample_space == simplex)
   expect_true(S7::S7_inherits(fam(w), mixture))
 })
 
 test_that("the support check is exact for atoms, containment for the rest", {
-  simplex <- simplex_region(vertices = diag(3))
-  inside <- finite_dist(components = cbind(c(.6, .2, .2)), weights = 1)
-  outside <- finite_dist(components = cbind(c(.6, .2, .9)), weights = 1)
+  # Observed through `mixture()`, whose validator is the check's one caller.
+  # An atom list is judged atom by atom, since its declared space is all of
+  # R^d and would fail a containment test however well placed the atoms were.
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  inside <- finite_dist(atoms = rbind(c(.6, .2, .2)), weights = 1)
+  outside <- finite_dist(atoms = rbind(c(.6, .2, .9)), weights = 1)
 
-  expect_true(ripr:::supported_in(inside, simplex))
-  expect_false(ripr:::supported_in(outside, simplex))
+  expect_true(S7::S7_inherits(inside@sample_space, real_region))
+  expect_true(S7::S7_inherits(fam(inside), mixture))
+  expect_error(fam(outside), "outside the family's parameter space")
 
-  expect_true(S7::S7_inherits(outside@sample_space, real_region))
-  expect_true(ripr:::supported_in(dirichlet(alpha = c(2, 2, 2)), simplex))
+  # A continuous measure is judged by its declared space.
+  expect_true(S7::S7_inherits(fam(dirichlet(alpha = c(2, 2, 2))), mixture))
 })

@@ -6,34 +6,23 @@ NULL
 
 # --- Triangulation ------------------------------------------------------------
 #
-#  In this file we implement vertex-fan triangulation. Pick a vertex `v` of a
-# polytope `P`. Every facet `F` of `P` that does not contain `v` cones back to
-# it, and those cones tile `P`:
-#
-#   P = union over facets F with v not in F of conv({v} u F).
-#
-# `F` is itself a polytope, one dimension down, so the same construction inside
-# its affine hull triangulates it, and coning a simplex of `F` to `v` gives a
-# simplex of `P`.
-# The recursion bottoms out where the vertex count is one more than the
-# dimension, which is a simplex already.
+# Vertex-fan triangulation: for a vertex `v` of polytope `P`,
+#   P = union over facets F with v not in F of conv({v} u F),
+# recursing into each `F` until the vertex count is one more than the
+# dimension.
 
 #' Break a bounded region into simplices
 #'
-#' The vertex fan described above, returned as [simplex_region()] cells whose
-#' union is `space` and whose interiors are disjoint. A simplex triangulates to
-#' itself.
-#'
-#' @param space A bounded [convex_region].
-#' @param max_cells Give up rather than produce more simplices than this. The
-#'   fan is combinatorial in the vertex count at worst, and a decomposition
-#'   past this size is probably not something we can afford to use downstream.
-#' @param budget An existing `cell_budget()` to draw from instead of a fresh
-#'   `max_cells` one, which is how a union caps its parts' total.
-#' @return A list of [simplex_region] objects.
+#' Returns interior-disjoint [simplex_region()] cells covering `space`. Errors
+#' past `max_cells` (the fan can be combinatorial in the vertex count); pass
+#' `budget` to share one cap across a union's parts.
 #' @keywords internal
 #' @noRd
-triangulate <- function(space, max_cells = 1000L, budget = NULL) {
+triangulate <- function(
+  space,
+  max_cells = getOption("ripr.max_cells", 1000L),
+  budget = NULL
+) {
   if (!is_bounded(space)) {
     stop(
       "only a bounded region can be triangulated; this `",
@@ -52,22 +41,14 @@ triangulate <- function(space, max_cells = 1000L, budget = NULL) {
 
 #' One level of the fan, on rational V-representations
 #'
-#' Takes the vertices of a polytope and returns the vertex sets of its
-#' simplices, each a row subset of the input, so no coordinate is ever
-#' recomputed.
-#' @param qv An rcdd V-representation of a bounded polyhedron, all rows
-#'   extreme points.
-#' @param budget An environment with `left`, the simplices still allowed, and
-#'   `max_cells`, the original cap for the error message. Every base-case
-#'   emission maps one-to-one onto a final cell -- coning preserves the count
-#'   -- so decrementing there counts the finished triangulation exactly.
-#' @return A list of rcdd V-representations, one per simplex.
+#' `qv` must hold only extreme points. Each simplex is a row subset of `qv`, so
+#' no coordinate is recomputed. Coning preserves the count, so decrementing
+#' `budget$left` at the base case counts final cells exactly.
 #' @keywords internal
 #' @noRd
 fan_cells <- function(qv, budget) {
   facets <- q_facets(qv)
-  # `scdd()` states the affine hull as equality rows, the ambient dimension
-  # left over is the dimension of the hull itself.
+  # `scdd()` states the affine hull as equality rows.
   hull_dim <- (ncol(qv) - 2L) - sum(facets$h[, 1L] == "1")
   if (nrow(qv) == hull_dim + 1L) {
     budget$left <- budget$left - 1L
@@ -81,8 +62,6 @@ fan_cells <- function(qv, budget) {
     }
     return(list(qv))
   }
-  # At some point in the future we could add a rule for picking an apex
-  # but for now the first one is fine.
   apex <- q_subrows(qv, 1L)
   cells <- list()
   for (r in which(facets$h[, 1L] == "0")) {
@@ -103,30 +82,23 @@ fan_cells <- function(qv, budget) {
 }
 
 
-#' Build one simplex from an exact rational V-representation
-#'
+#' Build one simplex from an exact rational V-representation, keeping it exact
 #' @keywords internal
 #' @noRd
 simplex_from_qv <- function(qv) {
-  # As in `region_from_qh()`: the cell keeps the exact representations, so
-  # algebra or a further decomposition on it starts where this one left off
-  # rather than from the rounding.
-  simplex_region(.hv = hv_from_qv(qv))
+  simplex_region(.hv = hv_fill(qv = qv))
 }
 
 
 # --- cells() ------------------------------------------------------------------
 
-#' @description A polyhedron's cells are its triangulation: the fan of
-#'   simplices described in [polytope_region()]. Boundedness is what decides
-#'   it, not the class -- an unbounded polyhedron has no simplicial
-#'   decomposition and is its own only cell, as is one that is a simplex
-#'   already: [simplex_region()], or [point_region()], the degenerate one.
+#' @description A bounded polyhedron's cells are its triangulation; an
+#'   unbounded one, or a [simplex_region()], is its own only cell.
 #' @rdname cells
 #' @usage NULL
 method(cells, polyhedron_region) <- function(
   space,
-  max_cells = 1000L,
+  max_cells = getOption("ripr.max_cells", 1000L),
   .budget = NULL
 ) {
   if (is_bounded(space)) triangulate(space, max_cells, .budget) else list(space)
@@ -137,19 +109,9 @@ method(cells, polyhedron_region) <- function(
 #' @usage NULL
 method(cells, simplex_region) <- function(
   space,
-  max_cells = 1000L,
+  max_cells = getOption("ripr.max_cells", 1000L),
   .budget = NULL
 ) {
   list(space)
 }
 
-
-#' @rdname cells
-#' @usage NULL
-method(cells, point_region) <- function(
-  space,
-  max_cells = 1000L,
-  .budget = NULL
-) {
-  list(space)
-}

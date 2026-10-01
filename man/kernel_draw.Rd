@@ -9,31 +9,26 @@ kernel_draw(family, theta_mat)
 \arguments{
 \item{family}{A \link{parametric_family}.}
 
-\item{theta_mat}{\verb{(d, M)} matrix of parameter columns; a length-\code{d} vector is
-taken as a single column.}
+\item{theta_mat}{\verb{(M, d)} matrix with one parameter vector per row; a
+length-\code{d} vector is taken as a single row.}
 }
 \value{
-\verb{(M, k)} numeric matrix, one observation per row.
+\verb{(M, K)} numeric matrix, one observation per row, drawn from the
+parameter in the matching row of \code{theta_mat}.
 }
 \description{
-Take one draw per column of \code{theta_mat}, so the number of draws is the number
-of parameters. To take repeated draws from a single parameter value you would
-repeat the parameter value across columns, which is what
-\code{\link[=mixture]{mixture()}} does for a point mass.
-}
-\details{
-Users should sample via \code{draw(fam(theta), n)}, which does the same thing and
-routes here.
+One draw per row of \code{theta_mat}. Repeat rows for repeated draws. Usually
+reached through \code{draw(fam(theta), n)}.
 }
 \examples{
 set.seed(1)
 fam <- multinomial_family(n_trials = 4L, k = 3L)
 
-# Five draws from one parameter: repeat it across five columns.
-kernel_draw(fam, matrix(c(0.5, 0.3, 0.2), nrow = 3L, ncol = 5L))
+# Five draws from one parameter: repeat it across five rows.
+kernel_draw(fam, matrix(c(0.5, 0.3, 0.2), nrow = 5L, ncol = 3L, byrow = TRUE))
 
 # One draw from each of three different parameters.
-kernel_draw(fam, cbind(c(0.5, 0.3, 0.2), c(0.2, 0.2, 0.6), c(0.9, 0.05, 0.05)))
+kernel_draw(fam, rbind(c(0.5, 0.3, 0.2), c(0.2, 0.2, 0.6), c(0.9, 0.05, 0.05)))
 }
 \seealso{
 \code{\link[=compile_loglik]{compile_loglik()}}, the density half of the same pair.

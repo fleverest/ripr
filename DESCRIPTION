@@ -24,11 +24,14 @@ Depends:
     R (>= 4.1)
 Imports:
     matrixStats,
+    mvtnorm,
     nloptr,
+    quadprog,
     rcdd,
     Rdpack,
     rlang,
     S7,
+    statmod,
     stats,
     utils
 Suggests:
@@ -57,6 +60,7 @@ Collate:
     'ripr-package.R'
     'control.R'
     'count_space.R'
+    'gauss.R'
     'polyhedron_region.R'
     'polytope_region.R'
     'quadrature.R'
@@ -69,10 +73,10 @@ Collate:
     'gaussian.R'
     'halfspace_region.R'
     'optimise.R'
+    'simplex_region.R'
     'point_region.R'
     'real_region.R'
     'region_algebra.R'
-    'simplex_region.R'
     'triangulate.R'
     'zzz.R'
 RdMacros: Rdpack

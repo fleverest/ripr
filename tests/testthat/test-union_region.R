@@ -15,7 +15,7 @@ plurality_cell <- function(k, j) {
   })
   tie <- numeric(k)
   tie[c(1L, j)] <- 0.5
-  simplex_region(vertices = do.call(cbind, c(basis, list(tie))))
+  simplex_region(vertices = do.call(rbind, c(basis, list(tie))))
 }
 
 # --- Construction -------------------------------------------------------------
@@ -33,7 +33,7 @@ test_that("cells, lists, unions and any nesting of them all flatten alike", {
     union_region(list(list(a), list(list(b))))
   )
   for (r in built) {
-    expect_equal(n_parts(r), 2L)
+    expect_equal(length(parts(r)), 2L)
     expect_identical(parts(r), list(a, b))
   }
 })
@@ -66,7 +66,7 @@ test_that("cells of differing shape and codimension are welcome", {
     point_region(theta = c(1, 0, 0)),
     halfspace_region(normal = c(1, -1, 0), offset = 0)
   )
-  expect_equal(n_parts(u), 3L)
+  expect_equal(length(parts(u)), 3L)
   expect_equal(space_dim(u), 3L)
   expect_true(contains(u, rep(1 / 3, 3)))
   expect_true(contains(u, c(1, 0, 0)))
@@ -121,12 +121,12 @@ test_that("overlapping cells survive construction untouched", {
   # This test is just a reminder that we don't necessarily want the parts to be
   # disjoint.
   s <- simplex_region(vertices = diag(3))
-  expect_equal(n_parts(union_region(s, s)), 2L)
+  expect_equal(length(parts(union_region(s, s))), 2L)
   expect_identical(parts(union_region(s, s)), list(s, s))
 
   # Genuinely overlapping, distinct cells are equally untouched.
   r <- union_region(plurality_cell(3, 2), plurality_cell(3, 3))
-  expect_equal(n_parts(r), 2L)
+  expect_equal(length(parts(r)), 2L)
   expect_true(contains(parts(r)[[1L]], rep(1 / 3, 3)))
   expect_true(contains(parts(r)[[2L]], rep(1 / 3, 3)))
 })
@@ -148,39 +148,22 @@ test_that("print() and format() describe the union", {
   # Beyond a handful the cells are tallied rather than listed one by one: a
   # triangulated null can hold hundreds, and the list would say nothing extra.
   many <- union_region(lapply(2:8, \(j) plurality_cell(8, j)))
-  expect_equal(n_parts(many), 7L)
+  expect_equal(length(parts(many)), 7L)
   expect_output(print(many), "7 parts")
   expect_output(print(many), "7 x simplex_region")
 })
 
 
-# --- The list interface -------------------------------------------------------
+# --- Parts --------------------------------------------------------------------
 
-test_that("every region is list-like over its parts", {
+test_that("parts() lists a region's parts, a convex region being its own", {
   s <- simplex_region(vertices = diag(3))
   h <- halfspace_region(normal = c(1, -1, 0))
   u <- union_region(s, h)
 
-  expect_identical(length(u), 2L)
-  expect_identical(u[[1L]], s)
-  expect_identical(u[[2L]], h)
-  expect_identical(as.list(u), list(s, h))
-
-  # A convex region is its own single part, so results of the algebra read
-  # uniformly whether or not they were unions.
-  expect_identical(length(s), 1L)
-  expect_identical(s[[1L]], s)
-
-  # `[` stays a region: a union, the lone part, or an empty region when
-  # nothing is left.
-  expect_identical(u[1L], s)
-  expect_identical(length(u[c(1L, 2L)]), 2L)
-  expect_true(S7_inherits(u[integer(0)], empty_region))
-  expect_identical(length(u[integer(0)]), 0L)
-
-  # And lapply() reaches the parts through as.list().
-  expect_identical(
-    lapply(u, space_dim),
-    list(3L, 3L)
-  )
+  expect_identical(parts(u), list(s, h))
+  expect_identical(parts(s), list(s))
+  # A region is not itself a list: its parts are reached through parts().
+  expect_identical(length(u), 1L)
+  expect_identical(union_region(parts(u)[1L]), s)
 })

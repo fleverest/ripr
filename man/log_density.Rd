@@ -15,10 +15,8 @@ log_density(dist, x)
 Length-\code{M} numeric vector.
 }
 \description{
-The density/mass of a distribution at a point in the sample space. Contrast
-\code{\link[=compile_loglik]{compile_loglik()}}, which takes a family and varies \eqn{\theta}{theta} at
-fixed outcomes: that is the shape the optimiser needs, and this is the shape
-a reader needs.
+The density or mass of a distribution at points of its sample space. See
+\code{\link[=compile_loglik]{compile_loglik()}} to vary \eqn{\theta}{theta} at fixed outcomes instead.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

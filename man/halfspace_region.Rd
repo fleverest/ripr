@@ -25,9 +25,8 @@ The unbounded case:
 Coordinates are \verb{(z, c)}: \code{z} positions a point on the bounding hyperplane
 in an orthonormal basis, and \code{c >= 0} is the distance inward.
 
-Having no vertices, a halfspace admits no certified gap bound. That is a
-property of the representation rather than a missing feature -- see
-\code{\link[=polytope_region]{polytope_region()}} for the bounded alternative.
+A halfspace cannot yet be certified; see \code{\link[=polytope_region]{polytope_region()}} for the bounded
+alternative.
 }
 \examples{
 # `{theta : theta_1 <= theta_2}`

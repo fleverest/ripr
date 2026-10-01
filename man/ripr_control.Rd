@@ -18,32 +18,23 @@ ripr_control(
 \item{n_restarts}{Number of top seeds to be refined by SLSQP per oracle
 call.}
 
-\item{fc_tol}{Convergence tolerance for a corrective weight solve, used
-wherever \code{correct = TRUE}.}
+\item{fc_tol}{Relative tolerance on the weights for a corrective weight
+solve (\code{correct = TRUE}, or \code{ripr_finish(reoptimise = TRUE)}).}
 
-\item{fc_max_iter}{Cap on the sweeps such a solve may take.}
+\item{fc_max_iter}{Cap on the objective evaluations such a solve may take.}
 
 \item{snapshot}{How often to record the fitted mixture alongside the trace.
 \code{"none"} (default) never records the state; \code{"step"} records the atoms and
-weights once per step call (e.g. \code{\link[=fw_step]{fw_step()}}); \code{"all"} once per iteration
-within a call, so \code{times} snapshots for a verb called with \code{times}.
-
-Note \code{"step"} counts calls, not iterations, so \code{fw_step(times = 10)} yields
-one snapshot while ten separate \code{fw_step()} calls yield ten. Using \code{"all"}
-yields ten snapshots in both cases.
-
-The trace is always recorded as it costs only a row of scalars per event.
-Snapshots copy the whole mixture, so the memory cost grows with support
-size, so snapshotting is \code{"none"} by default.}
+weights once per step call (e.g. \code{\link[=fw_step]{fw_step()}}), so \code{fw_step(times = 10)}
+yields one snapshot; \code{"all"} records once per iteration, yielding ten.
+The trace is always recorded; snapshots copy the whole mixture, so their
+memory cost grows with support size.}
 }
 \value{
 A list of control settings for \code{\link[=ripr_init]{ripr_init()}}.
 }
 \description{
-\code{ripr_control} changes how well the answer is computed, never what is being
-computed. \code{alternative}, \code{null}, and the engine define the problem; anything
-in this object may be varied without changing the target. Operations
-that alter the returned mixture (e.g. pruning) belong to \code{\link[=ripr_finish]{ripr_finish()}}.
+Tuning for the RIPr optimiser
 }
 \examples{
 ripr_control(n_seeds = 50L, snapshot = "step")

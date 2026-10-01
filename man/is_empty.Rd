@@ -13,19 +13,12 @@ is_empty(space)
 \code{TRUE} or \code{FALSE}.
 }
 \description{
-\code{rcdd} solves a linear feasibility program (a zero objective over the region's
-half-space description) in exact rational arithmetic. A region is empty if
-its constraints have no common solution, which will probably happen for cells
-produced by intersections or complements rather than by declaring an empty
-set.
-}
-\details{
-A \link{union_region} is empty when every one of its \code{parts()} is, so this is
-defined on \link{region} rather than on \link{convex_region}.
+Decided by an exact rational LP feasibility check (\code{rcdd}). A \link{union_region}
+is empty when all its \code{parts()} are.
 }
 \examples{
 # The K = 3 plurality cell `{theta_1 <= theta_2}` is not empty:
-is_empty(simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))))
+is_empty(simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))))
 
 # Nor is a single point, or the whole space:
 is_empty(point_region(theta = c(0.5, 0.3, 0.2)))

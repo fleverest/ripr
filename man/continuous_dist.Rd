@@ -11,9 +11,8 @@ continuous_dist(sample_space = space())
 \link{distribution}.}
 }
 \description{
-A \link{distribution} that is continuous rather than discrete, so it has a
-density whereas \link{finite_dist}s have atoms and weights. See \code{\link[=gaussian_dist]{gaussian_dist()}},
-\code{\link[=dirichlet]{dirichlet()}} and \code{\link[=truncated_dirichlet]{truncated_dirichlet()}}.
+A \link{distribution} with a density rather than atoms and weights. See for
+instance \code{\link[=gaussian_dist]{gaussian_dist()}}, \code{\link[=dirichlet]{dirichlet()}} and \code{\link[=truncated_dirichlet]{truncated_dirichlet()}}.
 }
 \examples{
 # `continuous_dist` is abstract; dirichlet() subclasses it, e.g.

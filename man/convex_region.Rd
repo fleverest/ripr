@@ -7,22 +7,11 @@
 convex_region()
 }
 \description{
-A \code{convex_region} is a convex subset of a family's parameter space. The same
-type serves two roles. A family's own \eqn{\Theta}{Theta} is one, and so is
-each convex piece \eqn{\Theta_{0i}}{Theta_0i} of a null hypothesis
-\eqn{\Theta_0 = \bigcup_i \Theta_{0i}}{Theta_0 = union_i Theta_0i}. A
-null's pieces may overlap.
-}
-\details{
-A \code{convex_region} object encodes the geometry: it encodes dimension,
-membership checking, projection, and a \code{\link[=chart]{chart()}} that maps constrained
-generator coordinates to the region.
-
-What separates a \code{convex_region} from a bare \link{space} is the \code{\link[=chart]{chart()}}.
-Membership is enough to say what a set is, but an optimiser needs
-coordinates to search over, and a projection needs somewhere to land. There
-may be null geometries that do not permit a \code{\link[=chart]{chart()}}, but these are
-currently beyond the scope of this package.
+A convex subset of a parameter space: a family's own \eqn{\Theta}{Theta},
+or one (possibly overlapping) piece \eqn{\Theta_{0i}}{Theta_0i} of a null
+\eqn{\Theta_0 = \bigcup_i \Theta_{0i}}{Theta_0 = union_i Theta_0i}. It
+provides dimension, membership, projection and a \code{\link[=chart]{chart()}} of constrained
+coordinates for optimisers.
 }
 \examples{
 # `convex_region` is abstract; polytope_region(), simplex_region(),

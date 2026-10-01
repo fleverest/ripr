@@ -9,13 +9,14 @@
 polyhedron_region(vertices = NULL, rays = NULL, lines = NULL, .hv = NULL)
 }
 \arguments{
-\item{vertices}{\verb{(d, nv)} numeric matrix, one vertex per column, or \code{NULL}
+\item{vertices}{\verb{(nv, d)} numeric matrix, one vertex per row, or \code{NULL}
 for a cone anchored at the origin.}
 
-\item{rays}{\verb{(d, nr)} numeric matrix of recession directions, or \code{NULL}.}
+\item{rays}{\verb{(nr, d)} numeric matrix of recession directions, one per row,
+or \code{NULL}.}
 
-\item{lines}{\verb{(d, nl)} numeric matrix spanning the lineality space, or
-\code{NULL}.}
+\item{lines}{\verb{(nl, d)} numeric matrix whose rows span the lineality space,
+or \code{NULL}.}
 
 \item{.hv}{Internal use only.}
 }
@@ -23,59 +24,44 @@ for a cone anchored at the origin.}
 A \code{polyhedron_region}.
 }
 \description{
-The concrete base of every convex region in the package: the Minkowski--Weul
-form \eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone(R) + span(L)}.
+The Minkowski--Weyl form
+\eqn{\mathrm{conv}(V) + \mathrm{cone}(R) + \mathrm{span}(L)}{conv(V) + cone(R) + span(L)}
+(Ziegler 1995, Theorem 1.2), base of every convex region in the package.
 \code{\link[=polytope_region]{polytope_region()}}, \code{\link[=simplex_region]{simplex_region()}}, \code{\link[=halfspace_region]{halfspace_region()}},
-\code{\link[=point_region]{point_region()}} and \code{\link[=real_region]{real_region()}} are all special cases that
-have friendlier constructors and do extra validation; use this one when
-you know the generators themselves, or \code{\link[=h_region]{h_region()}} if you have the
-H-representation.
+\code{\link[=point_region]{point_region()}} and \code{\link[=real_region]{real_region()}} are friendlier special cases; use
+\code{\link[=h_region]{h_region()}} to start from a half-space description.
 
-\code{print()} summarises the geometry -- the generator blocks, the
-facet counts, and for a small polytope the vertices themselves -- rather
-than dumping the properties.
+\code{print()} summarises generator and facet counts, and lists the
+vertices of a small polytope.
 }
 \details{
-The \code{\link[=chart]{chart()}} defines the generator map:
-\deqn{\theta(u) = V a + L z + R c}{theta(u) = V a + L z + R c}
-with coordinates \verb{u = (a, z, c)} ordered vertex weights, then lineality,
-then rays, and the constraints \code{a >= 0}, \code{sum(a) = 1} and \code{c >= 0} declared
-to the optimiser rather than substituted away. A lone vertex contributes no
+The \code{\link[=chart]{chart()}} is \eqn{\theta(u) = a V + z L + c R}{theta(u) = a V + z L + c R}
+with \verb{u = (a, z, c)} (vertex weights, lineality, rays), subject to
+\code{a >= 0}, \code{sum(a) = 1} and \code{c >= 0}. A lone vertex contributes no
 coordinate, so \code{n_par = nv + nl + nr} when \code{nv > 1} and \code{nl + nr}
-otherwise. That every polyhedron admits such a generator form, dually to
-its H-representation, is the Minkowski--Weyl theorem (Ziegler 1995,
-Theorem 1.2).
+otherwise.
 }
 \section{Properties}{
 
 \describe{
 \item{\code{generators}}{\code{list(v, r, l)} of numeric matrices, one generator
-per column. Read-only: derived from the static underlying record.}
+per row. Read-only: derived from the static underlying record.}
 \item{\code{facets}}{The half-space description \verb{(A, B, eq)}, read as
 \code{a \%*\% theta <= b} for each row, with \code{eq} flagging when equality
-should hold rather than inequality for each row. \code{facets} may be \code{NULL}
-if it has not yet been derived. Read-only.}
-\item{\code{hv}}{The internal dual-representation record the views above
-read from, holding both descriptions in both double and rational forms.
-This is computed once at construction so that downstream computations
-don't start from a rounding.}
+should hold rather than inequality for each row. Read-only.}
+\item{\code{hv}}{Internal record of both descriptions in double and exact
+rational form, computed once at construction.}
 }
 }
 
 \examples{
 # The halfspace `{theta_1 <= 0}` in R^2, by hand:
 polyhedron_region(
-  vertices = matrix(c(0, 0), ncol = 1),
-  rays = matrix(c(-1, 0), ncol = 1),
-  lines = matrix(c(0, 1), ncol = 1)
+  vertices = matrix(c(0, 0), nrow = 1),
+  rays = matrix(c(-1, 0), nrow = 1),
+  lines = matrix(c(0, 1), nrow = 1)
 )
 }
 \references{
 \insertRef{Ziegler1995}{ripr}
-
-\insertRef{BeckTeboulle2009}{ripr}
-
-\insertRef{DuchiShalevShwartz2008}{ripr}
-
-\insertRef{ODonoghueCandes2015}{ripr}
 }

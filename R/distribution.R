@@ -4,12 +4,9 @@ NULL
 #' Distributions over a space
 #'
 #' A `distribution` is a law over a [space]: the type the RIPr problem
-#' consumes as the alternative \eqn{Q}{Q}, and the type it returns as
-#' \eqn{\widehat{P}^*}{P_star_hat}. It answers two questions, [log_density()]
-#' and [draw()], over the points its `sample_space` admits.
-#'
-#' \eqn{Q}{Q} is fixed a priori and need not have come from a family at all: a
-#' and is usable everywhere an [mixture()] is.
+#' consumes as the alternative \eqn{Q}{Q} and returns as
+#' \eqn{\widehat{P}^*}{P_star_hat}. It implements [log_density()] and [draw()]
+#' over the points in its `sample_space`.
 #' @param sample_space The [space] this is a law over.
 #' @examples
 #' # `distribution` is abstract; mixture() subclasses it, e.g.
@@ -26,10 +23,8 @@ distribution <- new_class(
 
 #' Log density of a distribution
 #'
-#' The density/mass of a distribution at a point in the sample space. Contrast
-#' [compile_loglik()], which takes a family and varies \eqn{\theta}{theta} at
-#' fixed outcomes: that is the shape the optimiser needs, and this is the shape
-#' a reader needs.
+#' The density or mass of a distribution at points of its sample space. See
+#' [compile_loglik()] to vary \eqn{\theta}{theta} at fixed outcomes instead.
 #' @param dist A [distribution].
 #' @param x `(M, K)` matrix of outcomes, or a length-`K` vector for one outcome.
 #' @return Length-`M` numeric vector.
@@ -44,22 +39,21 @@ log_density <- new_generic("log_density", "dist", function(dist, x) {
 
 #' Draw outcomes from a distribution
 #' @param dist A [distribution].
-#' @param n_obs Number of draws.
-#' @return `(n_obs, K)` numeric matrix.
+#' @param n Number of draws.
+#' @return `(n, K)` numeric matrix.
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' draw(fam(c(0.5, 0.3, 0.2)), n_obs = 3L)
+#' draw(fam(c(0.5, 0.3, 0.2)), n = 3L)
 #' @export
-draw <- new_generic("draw", "dist", function(dist, n_obs) {
+draw <- new_generic("draw", "dist", function(dist, n) {
   S7::S7_dispatch()
 })
 
 
 #' The family a distribution was induced from, if any
 #'
-#' Returns `NULL` when there is none. \eqn{Q}{Q} is fixed a priori and need not
-#' be induced from a family at all, so a family cannot always be recovered.
+#' Returns `NULL` for a distribution not induced from a family.
 #' @param object A [distribution].
 #' @param ... Ignored.
 #' @return A [parametric_family], or `NULL`.
@@ -80,21 +74,18 @@ method(family, distribution) <- function(object, ...) NULL
 #' \eqn{Q = P_{W_1}}{Q = P_W1} and the fitted
 #' \eqn{\widehat{P}^* = P_{\widehat{W}_0}}{P_star_hat} are of this form.
 #'
-#' A kernel extends canonically from points to measures, so the degenerate case
-#' is not a separate type: a bare parameter vector is taken as a point mass, and
-#' `mixture(fam, theta)` is the family at `theta`. Calling a family
-#' directly is the shorthand for both, and usually reads better:
-#' `fam(theta)` and `fam(W)`.
+#' A bare parameter vector is taken as a point mass. Calling the family,
+#' `fam(theta)` or `fam(W)`, is the usual shorthand.
 #'
 #' @param family The [parametric_family] whose kernel is pushed forward.
 #' @param mixing A [distribution] over its parameter space, or a parameter
 #'   vector for a point mass.
-#' @return An `mixture`.
+#' @return A `mixture`.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' mixture(fam, c(0.5, 0.3, 0.2))
 #' mixture(fam, finite_dist(
-#'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+#'   atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
 #'   weights = c(0.5, 0.5)
 #' ))
 #' @export
@@ -127,9 +118,7 @@ theta_label <- function(theta) {
 }
 
 
-#' @description `print()` and `format()` summarise a distribution on one line
-#'   rather than dumping its properties; subclasses with more to show override
-#'   `print()`.
+#' @description `print()` and `format()` summarise a distribution on one line.
 #' @rdname distribution
 #' @usage NULL
 method(print, distribution) <- function(x, ...) {
@@ -143,7 +132,7 @@ method(print, distribution) <- function(x, ...) {
 method(format, distribution) <- function(x, ...) {
   sprintf(
     "%s over %s",
-    attr(S7_class(x), "name"),
+    class_name(x),
     space_label(x@sample_space)
   )
 }
@@ -167,18 +156,14 @@ method(supported_in, distribution) <- function(dist, space) {
 }
 
 
-#' What is wrong with mixing this measure over these parameters, if anything
-#'
-#' Returns a message for [mixture()]'s validator, or `NULL` when the pairing is
-#' sound.
+#' [mixture()]'s validator: a message, or `NULL` when the pairing is sound.
 #' @keywords internal
 #' @noRd
 mixes_over_problem <- function(mixing, parameter_space) {
   if (isTRUE(supported_in(mixing, parameter_space))) {
     return(NULL)
   }
-  # Figure out the measure's own space.
-  # This runs purely to say what precisely went wrong.
+  # Only to make the error message precise.
   mixing_dim <- tryCatch(
     space_dim(mixing@sample_space),
     error = function(e) NA_integer_
@@ -207,8 +192,8 @@ method(log_density, mixture) <- function(dist, x) {
 }
 
 
-method(draw, mixture) <- function(dist, n_obs) {
-  mixture_draw(dist@mixing, dist@family, n_obs)
+method(draw, mixture) <- function(dist, n) {
+  mixture_draw(dist@mixing, dist@family, n)
 }
 
 
@@ -225,12 +210,12 @@ method(print, mixture) <- function(x, ...) {
 #' @rdname mixture
 #' @usage NULL
 method(format, mixture) <- function(x, ...) {
-  name <- attr(S7_class(x@family), "name")
+  name <- class_name(x@family)
   n <- n_atoms(x@mixing)
-  detail <- if (S7_inherits(x@mixing, dirac)) {
-    paste0("at theta = ", theta_label(x@mixing@theta))
+  detail <- if (identical(n, 1L)) {
+    paste0("at theta = ", theta_label(atoms(x@mixing)[1L, ]))
   } else if (is.na(n)) {
-    paste0("mixed over ", attr(S7_class(x@mixing), "name"))
+    paste0("mixed over ", class_name(x@mixing))
   } else {
     paste0("mixed over ", n, " atoms")
   }
@@ -256,26 +241,24 @@ mixture_log_density <- new_generic(
 #' Draw from the induced mixture
 #' @param mixing A [distribution] over the parameter space.
 #' @param family A [parametric_family].
-#' @param n_obs Number of draws.
-#' @return `(n_obs, K)` numeric matrix.
+#' @param n Number of draws.
+#' @return `(n, K)` numeric matrix.
 #' @keywords internal
 mixture_draw <- new_generic(
   "mixture_draw",
   c("mixing", "family"),
-  function(mixing, family, n_obs) S7::S7_dispatch()
+  function(mixing, family, n) S7::S7_dispatch()
 )
 
 
-#' @description Sampling from a mixture can be done easily by sampling once
-#' from the mixing distribution, then sampling from the family at that parameter
-#' value.
+#' @description Draws parameters from the mixing measure, then one outcome
+#'   from the family at each.
 #' @rdname mixture_draw
 #' @usage NULL
 method(mixture_draw, list(distribution, parametric_family)) <- function(
   mixing,
   family,
-  n_obs
+  n
 ) {
-  # `draw()` returns rows, so we transpose
-  kernel_draw(family, t(draw(mixing, n_obs)))
+  kernel_draw(family, draw(mixing, n))
 }

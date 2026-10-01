@@ -3,26 +3,17 @@ NULL
 
 #' Parametric families
 #'
-#' A `parametric_family` defines the model \eqn{p_\theta(x)}{p_theta(x)}. It has
-#' no knowledge of null hypotheses, alternatives, or any optimisation procedure.
-#' Families provide a log-likelihood compiler, score functions and a sampler.
+#' A `parametric_family` is the model \eqn{p_\theta(x)}{p_theta(x)}: a
+#' parameter space \eqn{\Theta}{Theta} (a [convex_region]), a sample [space],
+#' and the map \eqn{\theta \mapsto p_\theta}{theta -> p_theta} between them.
+#' It provides a log-likelihood compiler, score and sampler.
 #'
-#' A family is the pair of a [convex_region] \eqn{\Theta}{Theta} and the map
-#' \eqn{\theta \mapsto p_\theta}{theta -> p_theta} into laws on a
-#' [space]; the two spaces are what the family carries, and everything
-#' else it offers is a way of navigating that map.
+#' Families are callable: `fam(theta)` is the [distribution]
+#' \eqn{p_\theta}{p_theta}, and `fam(W)` for a [distribution] `W` over the
+#' parameter space is the [mixture()] \eqn{P_W}{P_W}.
 #'
-#' Families are callable, which is that map written down: `fam(theta)` is the
-#' [distribution] \eqn{p_\theta}{p_theta}. A kernel extends canonically from
-#' points to distributions, so `fam(W)` for a [distribution] `W`` over the
-#' parameter space is the same map and gives the [mixture()]
-#' \eqn{P_W}{P_W}.
-#'
-#' Not marked abstract, because S7 forbids that alongside a `class_function`
-#' parent -- abstract classes must have abstract parents. It is one in every
-#' other sense: it supplies no [compile_loglik()] method, so constructing it
-#' directly gives a family with no kernel, which errors on first use exactly as
-#' any other incomplete family does.
+#' This is effectively an abstract class. It has no [compile_loglik()] method,
+#' so use a concrete family instead.
 #'
 #' @param sample_space The [space] that outcomes belong to.
 #' @param parameter_space The [convex_region] that parameter lives in. For
@@ -35,7 +26,7 @@ NULL
 #' # The map theta -> p_theta, and its extension to mixing measures.
 #' fam(c(0.5, 0.3, 0.2))
 #' fam(finite_dist(
-#'   components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+#'   atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
 #'   weights = c(0.5, 0.5)
 #' ))
 #'
@@ -59,15 +50,9 @@ parametric_family <- new_class(
 )
 
 
-#' The map `theta -> p_theta`, shared by every family
-#'
-#' Defined once at namespace level and never inside a constructor. A closure
-#' built per family would capture that constructor's frame, and the family's
-#' own properties with it: on a family with a 20k-row property that is roughly
-#' twice the serialised size, for a copy nothing reads.
-#'
-#' `sys.function()` recovers the family being called, with its S7 attributes
-#' intact, so the closure captures nothing at all.
+#' The map `theta -> p_theta`, shared by every family. Defined at namespace
+#' level, not in a constructor, so a family does not serialise a copy of the
+#' constructor's frame; `sys.function()` recovers the family being called.
 #' @keywords internal
 #' @noRd
 at_theta <- function(at) {
@@ -78,7 +63,7 @@ at_theta <- function(at) {
 #' @rdname parametric_family
 #' @usage NULL
 method(print, parametric_family) <- function(x, ...) {
-  cat("<", attr(S7_class(x), "name"), ">\n", sep = "")
+  cat("<", class_name(x), ">\n", sep = "")
   cat("  parameters ", space_label(x@parameter_space), "\n", sep = "")
   cat("  outcomes   ", space_label(x@sample_space), "\n", sep = "")
   invisible(x)
@@ -87,88 +72,52 @@ method(print, parametric_family) <- function(x, ...) {
 
 #' @description `format()` gives the two spaces on one line, without the class
 #'   banner `print()` adds.
-#'
-#' Both are needed rather than inherited: the parent is `class_function`, so
-#' the defaults reach `deparse()` and print the shared closure plus an
-#' attribute dump.
 #' @rdname parametric_family
 #' @usage NULL
 method(format, parametric_family) <- function(x, ...) {
   sprintf(
     "%s: %s -> %s",
-    attr(S7_class(x), "name"),
-    attr(S7_class(x@parameter_space), "name"),
-    attr(S7_class(x@sample_space), "name")
+    class_name(x),
+    class_name(x@parameter_space),
+    class_name(x@sample_space)
   )
 }
 
 
 #' Compile the log-likelihood function for a fixed set of outcomes
 #'
-#' The single density method a family must implement; [kernel_loglik_batch()] and
-#' [kernel_loglik()] are thin wrappers over it. Returns a function of `theta_mat`.
-#'
-#' Compiling lets a family precompute whatever depends on `x` alone, which we
-#' require because the our optimiser fixes the outcomes (either enumerating the
-#' entire sample space or fixing monte carlo draws at the start) and evaluates
-#' likelihoods for many different parameter values. Closing over `x` rather than
-#' taking a cache argument means precomputed constants cannot be paired with the
-#' wrong outcomes.
+#' The density method that a [parametric_family] implements. Compiling lets the
+#' family precompute whatever depends on `x`. For the density at one parameter,
+#' use `log_density(family(theta), x)`.
 #' @param family A [parametric_family].
 #' @param x `(M, K)` matrix of outcomes, where `M` is the number of outcomes and
 #'   `K` the dimension of the sample space.
-#' @return A function of `theta_mat`, a `(d, C)` matrix of parameter columns,
-#'   returning the `(M, C)` matrix of log densities at `x`.
+#' @return A function of `theta_mat`, a `(C, d)` matrix with one parameter
+#'   vector per row, returning the `(M, C)` matrix of log densities at `x`:
+#'   one row per outcome, one column per parameter.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
 #' ll <- compile_loglik(fam, x)
-#' ll(cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)))
+#' ll(rbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)))
 #' @export
 compile_loglik <- new_generic("compile_loglik", "family", function(family, x) {
   S7::S7_dispatch()
 })
 
-#' Batched log density over parameter columns
-#'
-#' Recompiles on every call, so in a loop over many `theta` at fixed `x`,
-#' use [compile_loglik()] once and call its result instead.
-#'
-#' @param family A [parametric_family].
-#' @param theta_mat `(d, C)` matrix of parameter columns, where `d` is the
-#'   dimension of the parameter and `C` the number of columns. The same `x` is
-#'   used for every column.
-#' @param x `(M, K)` matrix of outcomes.
-#' @return `(M, C)` matrix of log densities.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' x <- rbind(c(2L, 1L, 1L), c(4L, 0L, 0L))
-#' kernel_loglik_batch(fam, cbind(c(0.5, 0.3, 0.2), c(0.25, 0.25, 0.5)), x)
-#' @export
+#' `(M, C)` log densities at `x` for each row of `theta_mat`. Recompiles on
+#' every call; in a loop, call [compile_loglik()] once instead.
+#' @keywords internal
+#' @noRd
 kernel_loglik_batch <- function(family, theta_mat, x) {
   compile_loglik(family, x)(theta_mat)
-}
-
-
-#' Log density `log p_theta(x)`
-#' @param family A [parametric_family].
-#' @param theta Parameter vector of length `space_dim(family@parameter_space)`.
-#' @param x `(M, K)` matrix of outcomes, or a length-`K` vector for one outcome.
-#' @return Length-`M` numeric vector.
-#' @examples
-#' fam <- multinomial_family(n_trials = 4L, k = 3L)
-#' kernel_loglik(fam, c(0.5, 0.3, 0.2), c(2L, 1L, 1L))
-#' @export
-kernel_loglik <- function(family, theta, x) {
-  as.vector(kernel_loglik_batch(family, matrix(theta, ncol = 1L), x))
 }
 
 
 #' Score `d log P_theta(x) / d theta`
 #'
 #' Per-outcome contributions in the family's own parameter coordinates, with no
-#' constraint projection applied. Applying the Jacobian of a parametrisation
-#' belongs to whatever owns that parametrisation.
+#' constraint projection applied.
 #' @param family A [parametric_family].
 #' @param theta Parameter vector.
 #' @param x `(M, K)` matrix of outcomes.
@@ -184,26 +133,22 @@ score <- new_generic("score", "family", function(family, theta, x) {
 
 #' Draw one observation from `P_theta` per parameter
 #'
-#' Take one draw per column of `theta_mat`, so the number of draws is the number
-#' of parameters. To take repeated draws from a single parameter value you would
-#' repeat the parameter value across columns, which is what
-#' [mixture()] does for a point mass.
-#'
-#' Users should sample via `draw(fam(theta), n)`, which does the same thing and
-#' routes here.
+#' One draw per row of `theta_mat`. Repeat rows for repeated draws. Usually
+#' reached through `draw(fam(theta), n)`.
 #' @param family A [parametric_family].
-#' @param theta_mat `(d, M)` matrix of parameter columns; a length-`d` vector is
-#'   taken as a single column.
-#' @return `(M, k)` numeric matrix, one observation per row.
+#' @param theta_mat `(M, d)` matrix with one parameter vector per row; a
+#'   length-`d` vector is taken as a single row.
+#' @return `(M, K)` numeric matrix, one observation per row, drawn from the
+#'   parameter in the matching row of `theta_mat`.
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #'
-#' # Five draws from one parameter: repeat it across five columns.
-#' kernel_draw(fam, matrix(c(0.5, 0.3, 0.2), nrow = 3L, ncol = 5L))
+#' # Five draws from one parameter: repeat it across five rows.
+#' kernel_draw(fam, matrix(c(0.5, 0.3, 0.2), nrow = 5L, ncol = 3L, byrow = TRUE))
 #'
 #' # One draw from each of three different parameters.
-#' kernel_draw(fam, cbind(c(0.5, 0.3, 0.2), c(0.2, 0.2, 0.6), c(0.9, 0.05, 0.05)))
+#' kernel_draw(fam, rbind(c(0.5, 0.3, 0.2), c(0.2, 0.2, 0.6), c(0.9, 0.05, 0.05)))
 #' @seealso [compile_loglik()], the density half of the same pair.
 #' @export
 kernel_draw <- new_generic(

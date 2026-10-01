@@ -13,13 +13,9 @@ real_region(d)
 A \code{real_region}.
 }
 \description{
-All of \eqn{\mathbb{R}^d}{R^d}: \eqn{\Theta = \mathbb{R}^d}{Theta = R^d}, with the
-identity chart. This is the parameter space of a \code{\link[=gaussian_family]{gaussian_family()}}, and the
-way to say that a null places no constraint at all.
-}
-\details{
-Being unbounded it has no vertices, so like \code{\link[=halfspace_region]{halfspace_region()}} it admits no
-certified gap bound.
+\eqn{\Theta = \mathbb{R}^d}{Theta = R^d} with the identity chart: the
+parameter space of a \code{\link[=gaussian_family]{gaussian_family()}}, or an unconstrained null. Being
+unbounded, it cannot be certified.
 }
 \examples{
 real_region(2L)

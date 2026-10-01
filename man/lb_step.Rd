@@ -20,27 +20,24 @@ lb_step(
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 
-\item{correct}{Whether to use "fully-corrective" steps that re-solve for the
-weights with the atoms held fixed, run to \code{fc_tol} and \code{fc_max_iter} from
-\code{\link[=ripr_control]{ripr_control()}}. Can be quite expensive. Note that the step size found by
-the method selected via \code{size} is only used as a seed for the
-fully-corrective solve.}
+\item{correct}{Re-solve the weights with atoms fixed after each step, to
+\code{fc_tol} and \code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Can be expensive; the
+\code{size} step only seeds the solve.}
 
-\item{record_gap}{Sweep the Frank--Wolfe oracle over the mixture the step
-\emph{produced}, filling the \code{gap_after} columns. \code{FALSE} by default.}
+\item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture,
+filling \code{gap_after} and caching it for \code{\link[=gap_below]{gap_below()}} and \code{\link[=fw_step]{fw_step()}}.
+\code{FALSE} by default.}
 
-\item{until}{(Optional) A predicate, tested before each step. It is given
-the current state, and when it accepts two arguments the state the step
-would make, so that a predicate can decide whether to stop early based
-on the change between the two states. See \link{predicates}.}
+\item{until}{Optional predicate \verb{function(state, candidate)} tested before
+each step; see \link{predicates}.}
 }
 \value{
 The updated \link{ripr_state}.
 }
 \description{
-Scores each candidate by the KL it yields \emph{after} the new weights are
-chosen, so the step rule runs as an inner optimisation. Considerably more
-expensive than \code{\link[=fw_step]{fw_step()}}; see \link{oracles}.
+Scores each candidate by the KL left \emph{after} its weight is chosen, so the
+step rule is an inner optimisation. Considerably more expensive than
+\code{\link[=fw_step]{fw_step()}}; see \link{oracles}.
 }
 \examples{
 set.seed(1)
@@ -48,8 +45,8 @@ fam <- multinomial_family(n_trials = 4L, k = 3L)
 plurality <- null_model(
   fam,
   list(
-    simplex_region(vertices = cbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
-    simplex_region(vertices = cbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+    simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+    simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
   )
 )
 Q <- fam(c(0.4, 0.35, 0.25))

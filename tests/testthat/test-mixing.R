@@ -6,24 +6,24 @@
 # --- Construction and validation ----------------------------------------------
 
 test_that("finite_dist rejects weights that are not a probability vector", {
-  comp <- cbind(c(0.5, 0.5), c(0.2, 0.8))
+  comp <- rbind(c(0.5, 0.5), c(0.2, 0.8))
   expect_error(
-    finite_dist(components = comp, weights = c(0.5, 0.6)),
+    finite_dist(atoms = comp, weights = c(0.5, 0.6)),
     "sum to 1"
   )
   expect_error(
-    finite_dist(components = comp, weights = c(1.2, -0.2)),
+    finite_dist(atoms = comp, weights = c(1.2, -0.2)),
     "non-negative"
   )
   expect_error(
-    finite_dist(components = comp, weights = 1),
-    "one entry per column"
+    finite_dist(atoms = comp, weights = 1),
+    "one entry per row"
   )
 })
 
-test_that("finite_dist rejects components that are not a matrix", {
+test_that("finite_dist rejects atoms that are not a matrix", {
   expect_error(
-    finite_dist(components = c(0.5, 0.5), weights = 1),
+    finite_dist(atoms = c(0.5, 0.5), weights = 1),
     "must be a matrix"
   )
 })
@@ -32,7 +32,7 @@ test_that("finite_dist accepts a zero weight on a live atom", {
   # Frank-Wolfe drives weights to zero without removing atoms, so this state is
   # reachable mid-fit and must not error.
   m <- finite_dist(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9)),
+    atoms = rbind(c(0.5, 0.5), c(0.1, 0.9)),
     weights = c(1, 0)
   )
   expect_equal(n_atoms(m), 2L)
@@ -41,16 +41,37 @@ test_that("finite_dist accepts a zero weight on a live atom", {
 # --- Accessors ----------------------------------------------------------------
 
 test_that("atoms always returns a matrix, including for a point mass", {
-  # Callers index atoms by column unconditionally; a dropped dimension here
+  # Callers index atoms by row unconditionally; a dropped dimension here
   # would surface much later as a confusing subscript error.
   p <- dirac(theta = c(0.25, 0.75))
   expect_true(is.matrix(atoms(p)))
-  expect_equal(atoms(p)[, 1L], c(0.25, 0.75))
+  expect_equal(atoms(p)[1L, ], c(0.25, 0.75))
+})
+
+test_that("dirac() is a one-atom finite_dist, not a class of its own", {
+  p <- dirac(theta = c(0.25, 0.75))
+  expect_true(S7::S7_inherits(p, finite_dist))
+  expect_identical(attr(S7::S7_class(p), "name"), "finite_dist")
+  expect_equal(n_atoms(p), 1L)
+  expect_identical(
+    p,
+    finite_dist(atoms = rbind(c(0.25, 0.75)), weights = 1)
+  )
+  expect_error(dirac("a"), "numeric")
+  expect_error(dirac(numeric()), "non-empty")
+})
+
+test_that("a single atom is drawn without consuming the random stream", {
+  set.seed(1)
+  before <- .Random.seed
+  d <- draw(dirac(theta = c(0.5, 0.3, 0.2)), 3L)
+  expect_identical(.Random.seed, before)
+  expect_equal(d, matrix(c(0.5, 0.3, 0.2), 3L, 3L, byrow = TRUE))
 })
 
 test_that("weights dispatches on mixing measures without breaking stats", {
   f <- finite_dist(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9)),
+    atoms = rbind(c(0.5, 0.5), c(0.1, 0.9)),
     weights = c(0.3, 0.7)
   )
   expect_identical(weights(f), stats::weights(f))
@@ -63,18 +84,18 @@ test_that("weights dispatches on mixing measures without breaking stats", {
 
 test_that("prune drops small atoms and renormalises", {
   m <- finite_dist(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9), c(0.2, 0.8)),
+    atoms = rbind(c(0.5, 0.5), c(0.1, 0.9), c(0.2, 0.8)),
     weights = c(0.6, 1e-9, 0.4 - 1e-9)
   )
   p <- prune(m, threshold = 1e-6)
   expect_equal(n_atoms(p), 2L)
   expect_equal(sum(weights(p)), 1)
-  expect_equal(p@components[, 1], c(0.5, 0.5))
+  expect_equal(p@atoms[1, ], c(0.5, 0.5))
 })
 
 test_that("prune keeps everything when nothing is below the threshold", {
   m <- finite_dist(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9)),
+    atoms = rbind(c(0.5, 0.5), c(0.1, 0.9)),
     weights = c(0.4, 0.6)
   )
   expect_equal(prune(m, threshold = 1e-6), m)
@@ -82,7 +103,7 @@ test_that("prune keeps everything when nothing is below the threshold", {
 
 test_that("prune errors rather than returning an empty mixing measure", {
   m <- finite_dist(
-    components = cbind(c(0.5, 0.5), c(0.1, 0.9)),
+    atoms = rbind(c(0.5, 0.5), c(0.1, 0.9)),
     weights = c(0.5, 0.5)
   )
   expect_error(prune(m, threshold = 0.9), "no atom has weight above")
@@ -93,23 +114,35 @@ test_that("prune never merges coincident atoms", {
   # which matters because Frank-Wolfe can add an atom where one already sits.
   theta <- c(0.5, 0.5)
   m <- finite_dist(
-    components = cbind(theta, theta),
+    atoms = rbind(theta, theta),
     weights = c(0.5, 0.5)
   )
   expect_equal(n_atoms(prune(m, threshold = 1e-6)), 2L)
 })
 
-# --- reference_point ----------------------------------------------------------
+# --- The reference point ------------------------------------------------------
+#
+# `ripr_init()` starts each part at the projection of a reference point: the
+# mixing measure's own when the alternative is a mixture, the family's
+# otherwise. Over a null that is the whole simplex the projection moves
+# nothing, so the starting atom is the reference point itself.
 
-test_that("reference_point lands inside the support, mode or not", {
+start_from <- function(alternative, fam) {
+  whole <- null_model(fam, simplex_region(vertices = diag(3)))
+  atoms(ripr_init(alternative, whole)@mixing)[1L, ]
+}
+
+test_that("the reference point lands inside the support, mode or not", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
   simplex <- simplex_region(vertices = diag(3))
+  ref <- function(W) start_from(mixture(fam, W), fam)
 
   # Concentrations above 1: the interior mode.
-  expect_equal(reference_point(dirichlet(alpha = c(4, 3, 2))), c(3, 2, 1) / 6)
+  expect_equal(ref(dirichlet(alpha = c(4, 3, 2))), c(3, 2, 1) / 6)
   # Below 1 the mode is on the boundary or undefined, so it falls back to
   # the mean.
   expect_equal(
-    reference_point(dirichlet(alpha = c(0.5, 0.5, 0.5))),
+    ref(dirichlet(alpha = c(0.5, 0.5, 0.5))),
     c(0.5, 0.5, 0.5) / 1.5
   )
 
@@ -118,28 +151,36 @@ test_that("reference_point lands inside the support, mode or not", {
     dirichlet(alpha = c(1, 1, 1)),
     dirichlet(alpha = c(1, 5, 1))
   )) {
-    expect_true(contains(simplex, reference_point(w)))
+    expect_true(contains(simplex, ref(w)))
   }
 
-  # A finite_dist returns one of its atoms.
+  # A finite_dist offers its heaviest atom.
   w <- finite_dist(
-    components = cbind(c(0.6, 0.4), c(0.2, 0.8)),
+    atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.2, 0.6)),
     weights = c(0.3, 0.7)
   )
-  expect_true(any(apply(atoms(w), 2L, identical, reference_point(w))))
-  expect_equal(reference_point(dirac(theta = c(0.5, 0.5))), c(0.5, 0.5))
+  expect_equal(ref(w), atoms(w)[2L, ], tolerance = rounding_tol(1))
+  expect_equal(ref(dirac(theta = c(0.5, 0.3, 0.2))), c(0.5, 0.3, 0.2))
 })
 
-test_that("reference_point works for a family too, so ripr_init always has one", {
+test_that("a family has a reference point too, so ripr_init always has one", {
   # When the alternative is not a mixture there is no measure to take a point
-  # from, and the family's own space answers instead.
+  # from, and the family's own space answers instead, with its centroid. No
+  # distribution the package ships over counts is anything but a mixture, so
+  # the alternative here is one a user might write: uniform over the outcomes.
   fam <- multinomial_family(n_trials = 4L, k = 3L)
-  p <- reference_point(fam)
+  flat <- S7::new_class(
+    "flat_counts",
+    parent = distribution,
+    package = NULL
+  )
+  n_outcomes <- nrow(enumerate_space(fam@sample_space))
+  S7::method(log_density, flat) <- function(dist, x) {
+    rep(-log(n_outcomes), NROW(x))
+  }
+  p <- start_from(flat(sample_space = fam@sample_space), fam)
   expect_true(contains(fam@parameter_space, p))
   expect_equal(p, rep(1 / 3, 3))
-
-  g <- gaussian_family(dim = 2L)
-  expect_true(contains(g@parameter_space, reference_point(g)))
 })
 
 
@@ -154,14 +195,14 @@ test_that("discretise turns any distribution into equally weighted atoms", {
   expect_equal(n_atoms(a), 500L)
   expect_equal(weights(a), rep(1 / 500, 500L))
   # Atoms are draws from W, so they lie in its support.
-  expect_equal(colSums(atoms(a)), rep(1, 500L))
+  expect_equal(rowSums(atoms(a)), rep(1, 500L))
 })
 
 test_that("discretise unblocks a pairing that has no induced density", {
   # A Dirichlet over a Gaussian family: the spaces are compatible (the simplex
   # sits inside R^3), so the mixture builds
   set.seed(1)
-  fam <- gaussian_family(dim = 3L)
+  fam <- gaussian_family(d = 3L)
   W <- dirichlet(alpha = c(4, 3, 2))
 
   expect_error(log_density(fam(W), c(0, 0, 0)), "no induced density")
@@ -201,17 +242,17 @@ test_that("a discretised mixture approaches the exact one, and is not it", {
 test_that("a mixing measure prints a summary, not a property dump", {
   expect_equal(
     format(dirac(theta = c(0.5, 0.3, 0.2))),
-    "dirac: point mass at (0.5, 0.3, 0.2)"
+    "finite_dist: 1 atom in R^3"
   )
   out <- paste(
     capture.output(print(dirac(theta = c(0.5, 0.3, 0.2)))),
     collapse = "\n"
   )
-  expect_match(out, "point mass at (0.5, 0.3, 0.2)", fixed = TRUE)
+  expect_match(out, "1 atom in R^3", fixed = TRUE)
   expect_no_match(out, "@")
 
   small <- finite_dist(
-    components = cbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
+    atoms = rbind(c(0.6, 0.2, 0.2), c(0.2, 0.6, 0.2)),
     weights = c(0.3, 0.7)
   )
   expect_equal(format(small), "finite_dist: 2 atoms in R^3")
@@ -226,7 +267,7 @@ test_that("a mixing measure prints a summary, not a property dump", {
 
 test_that("a large finite_dist prints its heaviest atom instead of a table", {
   big <- finite_dist(
-    components = matrix(rep(c(0.6, 0.4), 12L), nrow = 2L),
+    atoms = matrix(rep(c(0.6, 0.4), 12L), ncol = 2L, byrow = TRUE),
     weights = c(0.23, rep(0.07, 11L))
   )
   out <- paste(capture.output(print(big)), collapse = "\n")

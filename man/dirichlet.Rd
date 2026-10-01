@@ -16,17 +16,15 @@ truncated_dirichlet(alpha, region, degree_slack = 0L, max_nodes = 1e+06)
 dirichlet_dist(alpha = integer(0))
 }
 \arguments{
-\item{alpha}{Length-\code{K} vector of positive concentrations, \code{K >= 2}. The
-property both subclasses share; \code{dirichlet_dist} is abstract and is
-not constructed directly. \code{\link[=truncated_dirichlet]{truncated_dirichlet()}} narrows this to whole
-numbers; \code{\link[=dirichlet]{dirichlet()}} does not.}
+\item{alpha}{Length-\code{K} vector of positive concentrations, \code{K >= 2}.
+\code{\link[=truncated_dirichlet]{truncated_dirichlet()}} requires whole numbers.}
 
 \item{region}{A \link{region} of the probability simplex in \code{R^K}, bounded and
 full-dimensional. \code{\link[=truncated_dirichlet]{truncated_dirichlet()}} only.}
 
-\item{degree_slack}{Internal: Raise the rule's degree by this much. The
-default of \code{0} is already exact, so this is only useful for testing that it
-is working as expected. \code{\link[=truncated_dirichlet]{truncated_dirichlet()}} only.}
+\item{degree_slack}{Raise the quadrature rule's degree by this much. The
+default of \code{0} is already exact; this exists for testing.
+\code{\link[=truncated_dirichlet]{truncated_dirichlet()}} only.}
 
 \item{max_nodes}{Refuse a rule with more nodes than this.
 \code{\link[=truncated_dirichlet]{truncated_dirichlet()}} only.}
@@ -36,61 +34,34 @@ A \code{dirichlet} or a \code{truncated_dirichlet}; both are
 \code{dirichlet_dist} objects.
 }
 \description{
-The abstract parent of \code{\link[=dirichlet]{dirichlet()}} and \code{\link[=truncated_dirichlet]{truncated_dirichlet()}}:
-a Dirichlet law \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the
-probability simplex, possibly truncated to a particular \link{region}. Paired with
-a \code{\link[=multinomial_family]{multinomial_family()}} it induces a continuous mixture.
+A Dirichlet law \eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the
+probability simplex, possibly truncated to a \link{region}. Paired with a
+\code{\link[=multinomial_family]{multinomial_family()}} it induces a continuous mixture. \code{dirichlet_dist} is
+the abstract parent of \code{\link[=dirichlet]{dirichlet()}} and \code{\link[=truncated_dirichlet]{truncated_dirichlet()}}.
 
 \code{print()} on a truncated Dirichlet shows the concentration and
 the region it is truncated to.
 }
-\details{
-Concentrations must be positive. \code{\link[=truncated_dirichlet]{truncated_dirichlet()}} narrows that to
-positive \strong{integers}, because the exactness of Gauss-Jacobi quadrature
-requires it; \code{\link[=dirichlet]{dirichlet()}} evaluates a closed form and takes any
-positive reals.
-}
 \section{Over the full probability simplex}{
 
-\eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} over the whole simplex. Paired
-with a \code{\link[=multinomial_family]{multinomial_family()}} it induces a Dirichlet-multinomial distribution
-over count data.
-
-It has a closed form, so evaluating the density does not require quadrature
-rules and is therefore exact.
+\code{\link[=dirichlet]{dirichlet()}} is \eqn{\mathrm{Dir}(\alpha)}{Dir(alpha)} over the whole
+simplex. With a \code{\link[=multinomial_family]{multinomial_family()}} it induces the Dirichlet-multinomial,
+evaluated exactly in closed form; \code{alpha} may be any positive reals.
 }
 
 \section{Truncated to a region of the simplex}{
 
-\eqn{W = \mathrm{Dir}(\alpha)}{W = Dir(alpha)} conditioned on
-\eqn{\theta \in A}{theta in A} for a \link{region} \code{A} of the probability simplex.
-This is how a mixing measure supported strictly on the alternative may be
-written down: e.g. take the complement of the null region and truncate a
-Dirichlet prior to it.
-}
+\code{\link[=truncated_dirichlet]{truncated_dirichlet()}} is \eqn{\mathrm{Dir}(\alpha)}{Dir(alpha)} conditioned
+on \eqn{\theta \in A}{theta in A} for a \link{region} \code{A} of the simplex, e.g. the
+complement of the null, giving a mixing measure supported on the alternative.
 
-\section{The truncation region}{
+\code{region} is split into disjoint simplices by \code{cells(disjoin(region))}. Cells
+with fewer than \code{K} vertices have measure zero and are dropped with a
+warning; a region with no full-dimensional cell is refused.
 
-\code{region} is decomposed by \code{cells(disjoin(region))} into disjoint simplices,
-which is what lets the integral be a sum over cells without double-counting
-an overlap for arbitrary unions. Every cell must be full-dimensional within
-the simplex: a cell with fewer than \code{K} vertices has Lebesgue measure zero,
-so construction refuses a region with only lower-dimension cells. A region
-with \emph{some} of them keeps the rest and warns, since dropping a set of
-measure zero does not change the resulting integral.
-}
-
-\section{Quadrature}{
-
-The integrand is a monomial of total degree \verb{|alpha| + n - K}, the same for
-every outcome since counts always sum to \code{n}. A collapsed-coordinate
-Gauss-Jacobi rule of that degree on each cell therefore evaluates it exactly
-and agrees with \code{\link[=dirichlet]{dirichlet()}} over the whole simplex to floating point
-rounding.
-
-Non-integer concentrations are refused here, unlike in \code{\link[=dirichlet]{dirichlet()}}:
-they make the integrand singular on the boundary faces, so the quadrature
-rule would only be approximate.
+The integrand is a monomial of degree \verb{|alpha| + n - K}, so a Gauss-Jacobi
+rule of that degree on each cell is exact. This needs integer \code{alpha}:
+non-integer concentrations make the integrand singular on the boundary.
 }
 
 \examples{
@@ -101,19 +72,20 @@ fam <- multinomial_family(n_trials = 6L, k = 3L)
 Q <- fam(dirichlet(alpha = c(4, 3, 2)))
 sum(exp(log_density(Q, enumerate_space(fam@sample_space))))
 
-# A uniform prior gives every outcome the same mass -- the Bose-Einstein
-# count, `choose(n + K - 1, K - 1)` outcomes each of equal probability.
+# A uniform prior gives each of the `choose(n + K - 1, K - 1)` outcomes
+# equal mass.
 flat <- fam(dirichlet(alpha = c(1, 1, 1)))
 unique(round(exp(log_density(flat, enumerate_space(fam@sample_space))), 12))
 1 / choose(6 + 3 - 1, 3 - 1)
 
-# The plurality null, and the region where candidate 1 wins outright.
-plurality <- union(simplex_region(vertices = cbind(
+# The plurality null
+plurality <- simplex_region(vertices = rbind(
   c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)
-)), simplex_region(vertices = cbind(
+)) | simplex_region(vertices = rbind(
   c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)
-)))
-alt <- setdiff(fam@parameter_space, plurality)
+))
+# and the region where candidate 1 wins outright
+alt <- fam@parameter_space - plurality
 
 W1 <- truncated_dirichlet(alpha = c(4, 3, 2), region = alt)
 

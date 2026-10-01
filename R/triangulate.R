@@ -114,4 +114,3 @@ method(cells, simplex_region) <- function(
 ) {
   list(space)
 }
-

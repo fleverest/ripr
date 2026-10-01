@@ -1,5 +1,5 @@
-# Gauss quadrature rules: 1D rules quadrature rules from statmod, multivariate
-# rules via tensor products of those.
+# Gauss quadrature rules: 1D quadrature rules from statmod, multivariate rules
+# via tensor products of those.
 
 #' Gauss-Hermite rule for the weight `exp(-t^2)`; weights sum to `sqrt(pi)`
 #' @keywords internal

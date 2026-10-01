@@ -27,9 +27,9 @@ checked <- function(space, x) {
 # --- Dimension ----------------------------------------------------------------
 
 test_that("spaces refuse nonsensical shapes at construction", {
-  expect_error(count_space(n_trials = -1L, k = 3L), "non-negative integer")
-  expect_error(count_space(n_trials = 4L, k = 0L), ">= 1")
-  expect_error(count_space(n_trials = c(1L, 2L), k = 3L), "single")
+  expect_error(count_space(n_trials = -1L, k = 3L), "larger than or equal to 0")
+  expect_error(count_space(n_trials = 4L, k = 0L), "larger than or equal to 1")
+  expect_error(count_space(n_trials = c(1L, 2L), k = 3L), "vector")
   expect_error(real_region(0L), "positive integer")
   expect_error(real_region(c(1L, 2L)), "single")
 })
@@ -114,7 +114,10 @@ test_that("spaces built separately from the same description are identical", {
   # What makes a random variable from one family combinable with one from
   # another over the same space: the check that operands share a space compares
   # by value.
-  expect_identical(count_space(n_trials = 20L, k = 3L), count_space(n_trials = 20L, k = 3L))
+  expect_identical(
+    count_space(n_trials = 20L, k = 3L),
+    count_space(n_trials = 20L, k = 3L)
+  )
   expect_identical(count_space(20, 3), count_space(n_trials = 20L, k = 3L))
   expect_identical(real_region(2L), real_region(2))
   expect_false(identical(count_space(20, 3), count_space(20, 4)))

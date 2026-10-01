@@ -10,9 +10,9 @@ NULL
 #
 # Oracles and steps work on `(ld_all, w)`: the log density of every atom at the
 # quadrature nodes, and the weights. Atoms do not move, so the caller builds
-# builds `ld_all`; `log_p` is rebuilt after each weight update. The candidate
-# atom is always the last column of `ld_all`, entering with weight zero, which
-# is where `add_atom()` puts it.
+# `ld_all`; `log_p` is rebuilt after each weight update. The candidate atom is
+# always the last column of `ld_all`, entering with weight zero, which is where
+# `add_atom()` puts it.
 
 # --- Oracles ------------------------------------------------------------------
 

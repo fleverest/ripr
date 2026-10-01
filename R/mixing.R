@@ -227,7 +227,7 @@ method(atoms, continuous_dist) <- function(x) refuse_continuous(x, "atoms")
 
 #' @description A finite distribution draws its atoms with probability equal to
 #'   their weights; a [dirac()] does so without changing the state of the
-#'    pseudorandom number generator.
+#'   pseudorandom number generator.
 #' @rdname draw
 #' @usage NULL
 method(draw, finite_dist) <- function(dist, n) {

@@ -40,17 +40,10 @@ count_space <- new_class(
     outcomes = class_any
   ),
   constructor = function(n_trials, k) {
+    rlang::check_number_whole(n_trials, min = 0)
+    rlang::check_number_whole(k, min = 1)
     n_trials <- as.integer(n_trials)
     k <- as.integer(k)
-    stopifnot(
-      "`n_trials` must be a single non-negative integer" = length(n_trials) ==
-        1L &&
-        !is.na(n_trials) &&
-        n_trials >= 0L,
-      "`k` must be a single integer >= 1" = length(k) == 1L &&
-        !is.na(k) &&
-        k >= 1L
-    )
     new_object(
       S7_object(),
       n_trials = n_trials,

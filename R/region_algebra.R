@@ -272,7 +272,7 @@ method(print, union_region) <- function(x, ...) {
 }
 
 
-#' List parts a print banner
+#' List parts under a print banner
 #'
 #' One line per part, or a tally by class beyond six.
 #' @keywords internal

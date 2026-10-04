@@ -359,7 +359,7 @@ method(print, ripr_certificate) <- function(x, ...) {
   cat(
     "  sup E[X] <= ",
     format(x@sup_ub, digits = 7L),
-    "  (certified, by ",
+    "  (certified via ",
     paste(x@method, collapse = " and "),
     ")\n",
     sep = ""
@@ -367,7 +367,7 @@ method(print, ripr_certificate) <- function(x, ...) {
   cat(
     "  sup E[X] >= ",
     format(x@sup_lb, digits = 7L),
-    "  (attained; gap ",
+    "  (interval width: ",
     format(x@sup_ub - x@sup_lb, digits = 3L),
     ")\n",
     sep = ""

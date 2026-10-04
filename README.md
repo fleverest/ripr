@@ -113,8 +113,8 @@ cert
 #> <ripr_certificate>
 #>   X = Q / P*
 #>   under null_model: multinomial_family over 2 parts
-#>   sup E[X] <= 1.000033  (certified, by bernstein)
-#>   sup E[X] >= 1.000033  (attained; gap 9.93e-10)
+#>   sup E[X] <= 1.000033  (certified via bernstein)
+#>   sup E[X] >= 1.000033  (interval width: 9.93e-10)
 #>             bound attained iterations converged
 #>   part 1 1.000000 1.000000         28      TRUE
 #>   part 2 1.000033 1.000033         30      TRUE

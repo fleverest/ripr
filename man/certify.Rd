@@ -4,7 +4,14 @@
 \alias{certify}
 \title{Certify an upper bound on the largest null expectation}
 \usage{
-certify(x, null, tol = 1e-06, max_splits = 20000L, max_coefficients = 1024^2)
+certify(
+  x,
+  null,
+  tol = 1e-06,
+  max_splits = 20000L,
+  max_coefficients = 1024^2,
+  incumbent_at = NULL
+)
 }
 \arguments{
 \item{x}{A \link{random_variable}.}
@@ -17,6 +24,11 @@ certify(x, null, tol = 1e-06, max_splits = 20000L, max_coefficients = 1024^2)
 triangulated part gets \code{max_splits} in each of its cells.}
 
 \item{max_coefficients}{Refuse above this many Bernstein coefficients.}
+
+\item{incumbent_at}{(Optional) Points in the null at which to evaluate
+\eqn{E_\theta[X]} before the search, to seed it with the largest value:
+a parameter vector, or a matrix of them with one per row. Each point must
+lie in the null (checked via \code{\link[=contains]{contains()}}). See "Speeding things up" above.}
 }
 \value{
 A \link{ripr_certificate}. Where \code{budget_hit} is set, the bound is valid
@@ -38,6 +50,27 @@ multinomial families over simplices use branch and bound
 triangulated first, so any bounded null certifies for a multinomial.
 Anything else, including an unbounded part such as a \code{\link[=halfspace_region]{halfspace_region()}}
 or \code{\link[=real_region]{real_region()}}, is refused with a message saying why.
+\subsection{Speeding things up: seeding the incumbent}{
+
+Branch and bound algorithms prune nodes once their bounds cannot beat the
+best value attained so far (the incumbent). So seeding with an incumbent
+that is close to the supremum early can save a lot of unnecessary branching.
+
+A good value to seed from is the Frank--Wolfe oracle value; it is a direct
+result of a local optimisation that seeks the supremum. However, to guarantee
+that the incumbent is attained at a point in the null that is actively being
+certified, we accept incumbents (via \code{incumbent_at}) only by the location
+that attains it. So rather than passing the incumbent value directly, you
+would pass a point \eqn{\theta}{theta} in the null for which
+\eqn{E_\theta[X]}{E_theta[X]} is the incumbent; i.e. the argmax instead of
+the max.
+
+A fit's Frank--Wolfe oracle measured its gap (the \code{gap_after_theta} of
+the fit's last trace row), pass it to certify via \code{incumbent_at}:
+\eqn{E_\theta[X]}{E_theta[X]} is evaluated there exactly before the search
+starts, and is effective as a principled starting point for the incumbent.
+}
+
 \subsection{Numerical limitations}{
 
 The geometry (triangulation, set algebra) is exact in GMP rationals, so the
@@ -63,6 +96,12 @@ c(upper = cert@sup_ub, attained = cert@sup_lb)
 # The bound is below 1 here, so X comes back unchanged.
 E <- e_variable(cert)
 E
+
+# Seeding the search with the approximate supremum from `sup_lb`.
+found <- sup_lb(X, plurality, n_seeds = 20L)
+seeded <- certify(X, plurality, tol = 1e-6, incumbent_at = found@theta)
+c(cert@sup_ub, seeded@sup_ub)
+c(sum(cert@iterations), sum(seeded@iterations))
 }
 \references{
 \insertAllCited{}

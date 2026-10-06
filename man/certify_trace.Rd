@@ -9,7 +9,8 @@ certify_trace(
   null,
   tol = 1e-06,
   max_splits = 20000L,
-  max_coefficients = 1024^2
+  max_coefficients = 1024^2,
+  incumbent_at = NULL
 )
 }
 \arguments{
@@ -23,6 +24,11 @@ certify_trace(
 triangulated part gets \code{max_splits} in each of its cells.}
 
 \item{max_coefficients}{Refuse above this many Bernstein coefficients.}
+
+\item{incumbent_at}{(Optional) Points in the null at which to evaluate
+\eqn{E_\theta[X]} before the search, to seed it with the largest value:
+a parameter vector, or a matrix of them with one per row. Each point must
+lie in the null (checked via \code{\link[=contains]{contains()}}). See "Speeding things up" above.}
 }
 \value{
 A data frame with \code{part}, \code{cell}, \code{id}, \code{parent}, \code{depth}, \code{born},

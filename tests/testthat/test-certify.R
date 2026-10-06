@@ -428,10 +428,14 @@ test_that("lower-dimensional nulls fit and certify", {
   cert <- certify(X, null, tol = 1e-9)
   values <- evaluate_on_space(X, fam)
   outcomes <- as.matrix(enumerate_space(fam@sample_space))
-  along <- vapply(seq(0, 1, length.out = 2001L), function(s) {
-    theta <- s * c(0.5, 0.5, 0) + (1 - s) * c(0, 0, 1)
-    sum(values * apply(outcomes, 1L, stats::dmultinom, prob = theta))
-  }, numeric(1))
+  along <- vapply(
+    seq(0, 1, length.out = 2001L),
+    function(s) {
+      theta <- s * c(0.5, 0.5, 0) + (1 - s) * c(0, 0, 1)
+      sum(values * apply(outcomes, 1L, stats::dmultinom, prob = theta))
+    },
+    numeric(1)
+  )
   expect_gte(cert@sup_ub, max(along) - 1e-9)
   expect_lte(cert@sup_ub, max(along) + 1e-6)
 })
@@ -1063,6 +1067,77 @@ test_that("the incumbent carries from the point cells to the Bernstein runs", {
 })
 
 
+test_that("a point handed in as `incumbent_at` prunes from the start", {
+  set.seed(3)
+  null <- plurality_null(12L, 3L)
+  family <- null@family
+  x <- tabulated_rv(
+    family,
+    stats::runif(nrow(enumerate_space(family@sample_space)), 0, 10)
+  )
+  plain <- certify(x, null, tol = 1e-9)
+  found <- sup_lb(x, null, n_seeds = 20L)
+  seeded <- certify(x, null, tol = 1e-9, incumbent_at = found@theta)
+
+  expect_lt(sum(seeded@iterations), sum(plain@iterations))
+  expect_equal(seeded@sup_ub, plain@sup_ub, tolerance = 1e-9)
+  # The seed's value was attained, so it counts towards the part holding it.
+  expect_gte(
+    seeded@incumbents[[found@part]],
+    found@sup_lb - rounding_tol(found@sup_lb)
+  )
+  expect_gte(seeded@sup_ub, seeded@sup_lb)
+
+  # certify_trace() takes the seed too, and certifies alike.
+  nodes <- certify_trace(x, null, tol = 1e-9, incumbent_at = found@theta)
+  expect_identical(attr(nodes, "certificate")@iterations, seeded@iterations)
+})
+
+
+test_that("`incumbent_at` credits each seed to the parts that hold it", {
+  set.seed(4)
+  null <- plurality_null(8L, 3L)
+  family <- null@family
+  x <- tabulated_rv(
+    family,
+    stats::runif(nrow(enumerate_space(family@sample_space)), 0, 10)
+  )
+  # One point strictly inside each part: theta_1 <= theta_2 only, and
+  # theta_1 <= theta_3 only.
+  at <- rbind(c(0.3, 0.5, 0.2), c(0.3, 0.2, 0.5))
+  value <- function(theta) {
+    certify(x, null_model(family, list(point_region(theta = theta))))@sup_ub
+  }
+  res <- certify(x, null, tol = 1e-9, incumbent_at = at)
+  expect_gte(
+    res@incumbents[[1L]],
+    value(at[1L, ]) - rounding_tol(value(at[1L, ]))
+  )
+  expect_gte(
+    res@incumbents[[2L]],
+    value(at[2L, ]) - rounding_tol(value(at[2L, ]))
+  )
+  expect_gte(res@sup_ub, max(value(at[1L, ]), value(at[2L, ])))
+})
+
+
+test_that("`incumbent_at` refuses a point off the null or of the wrong length", {
+  null <- plurality_null(6L, 3L)
+  x <- likelihood(null@family(c(0.5, 0.3, 0.2)))
+  # Candidate 1 strictly ahead: in the alternative, so in no part of the null.
+  expect_error(
+    certify(x, null, incumbent_at = c(0.8, 0.1, 0.1)),
+    "lies in no part"
+  )
+  expect_error(
+    certify(x, null, incumbent_at = rbind(c(0.2, 0.5, 0.3), c(0.8, 0.1, 0.1))),
+    "row 2 lies in no part"
+  )
+  expect_error(certify(x, null, incumbent_at = c(0.5, 0.5)), "length 3")
+  expect_error(certify(x, null, incumbent_at = "a"), "length 3")
+})
+
+
 # --- Result objects and e_variable() ------------------------------------------
 
 test_that("certify() and sup_lb() return classed results that print", {
@@ -1083,7 +1158,7 @@ test_that("certify() and sup_lb() return classed results that print", {
   )
   out <- paste(capture.output(print(cert)), collapse = "\n")
   expect_match(out, "<ripr_certificate>", fixed = TRUE)
-  expect_match(out, "(certified, by bernstein)", fixed = TRUE)
+  expect_match(out, "(certified via bernstein)", fixed = TRUE)
   expect_match(out, "part 2", fixed = TRUE)
   expect_match(out, "e_variable(): X / ", fixed = TRUE)
   expect_no_match(out, "@")

@@ -239,6 +239,67 @@ point_bound <- function(x, family, cells) {
 }
 
 
+#' The value(s) that `certify()`'s `incumbent_at` seeds the search with
+#' @keywords internal
+#' @noRd
+seed_incumbents <- function(x, null, at) {
+  regions <- parts(null@region)
+  if (is.null(at)) {
+    return(rep(-Inf, length(regions)))
+  }
+  if (is.numeric(at) && is.null(dim(at))) {
+    at <- matrix(at, nrow = 1L)
+  }
+  d <- space_dim(null@region)
+  if (!is.matrix(at) || !is.numeric(at) || ncol(at) != d || anyNA(at)) {
+    stop(
+      "`incumbent_at` must be a parameter vector of length ",
+      d,
+      ", or a matrix of them with one per row.",
+      call. = FALSE
+    )
+  }
+  points <- lapply(seq_len(nrow(at)), function(i) at[i, ])
+  inside <- vapply(
+    points,
+    function(theta) vapply(regions, contains, logical(1L), theta = theta),
+    logical(length(regions))
+  )
+  inside <- matrix(inside, nrow = length(regions))
+  outside <- which(colSums(inside) == 0L)
+  if (length(outside)) {
+    stop(
+      "`incumbent_at` must lie in the null, but row ",
+      paste(outside, collapse = ", "),
+      " lies in no part of it.",
+      call. = FALSE
+    )
+  }
+  values <- vapply(
+    point_bound(
+      x,
+      null@family,
+      lapply(points, \(theta) point_region(theta = theta))
+    ),
+    function(r) r$incumbent,
+    numeric(1L)
+  )
+  if (any(!is.finite(values))) {
+    stop(
+      "`incumbent_at` row ",
+      paste(which(!is.finite(values)), collapse = ", "),
+      " gives a non-finite expectation, so it cannot seed the search.",
+      call. = FALSE
+    )
+  }
+  vapply(
+    seq_along(regions),
+    function(p) max(values[inside[p, ]], -Inf),
+    numeric(1L)
+  )
+}
+
+
 #' `E_theta[X]` and its gradient as an [objective()], under the rule `spec`
 #' resolves to at `P_theta`; on log scale when `x` has a log form.
 #' @keywords internal
@@ -725,7 +786,8 @@ certify_trace <- function(
   null,
   tol = 1e-6,
   max_splits = 20000L,
-  max_coefficients = 1024^2
+  max_coefficients = 1024^2,
+  incumbent_at = NULL
 ) {
   run <- certify_run(
     x,
@@ -733,6 +795,7 @@ certify_trace <- function(
     tol = tol,
     max_splits = max_splits,
     max_coefficients = max_coefficients,
+    incumbent_at = incumbent_at,
     record = TRUE
   )
   nodes <- run$record
@@ -760,6 +823,26 @@ certify_trace <- function(
 #' Anything else, including an unbounded part such as a [halfspace_region()]
 #' or [real_region()], is refused with a message saying why.
 #'
+#' ## Speeding things up: seeding the incumbent
+#'
+#' Branch and bound algorithms prune nodes once their bounds cannot beat the
+#' best value attained so far (the incumbent). So seeding with an incumbent
+#' that is close to the supremum early can save a lot of unnecessary branching.
+#'
+#' A good value to seed from is the Frank--Wolfe oracle value; it is a direct
+#' result of a local optimisation that seeks the supremum. However, to guarantee
+#' that the incumbent is attained at a point in the null that is actively being
+#' certified, we accept incumbents (via `incumbent_at`) only by the location
+#' that attains it. So rather than passing the incumbent value directly, you
+#' would pass a point \eqn{\theta}{theta} in the null for which
+#' \eqn{E_\theta[X]}{E_theta[X]} is the incumbent; i.e. the argmax instead of
+#' the max.
+#'
+#' A fit's Frank--Wolfe oracle measured its gap (the `gap_after_theta` of
+#' the fit's last trace row), pass it to certify via `incumbent_at`:
+#' \eqn{E_\theta[X]}{E_theta[X]} is evaluated there exactly before the search
+#' starts, and is effective as a principled starting point for the incumbent.
+#'
 #' ## Numerical limitations
 #'
 #' The geometry (triangulation, set algebra) is exact in GMP rationals, so the
@@ -772,6 +855,10 @@ certify_trace <- function(
 #' @param max_splits Cap on branch-and-bound subdivisions *per cell*; a
 #'   triangulated part gets `max_splits` in each of its cells.
 #' @param max_coefficients Refuse above this many Bernstein coefficients.
+#' @param incumbent_at (Optional) Points in the null at which to evaluate
+#'   \eqn{E_\theta[X]} before the search, to seed it with the largest value:
+#'   a parameter vector, or a matrix of them with one per row. Each point must
+#'   lie in the null (checked via [contains()]). See "Speeding things up" above.
 #' @return A [ripr_certificate]. Where `budget_hit` is set, the bound is valid
 #'   but likely loose.
 #' @seealso [e_variable()], [sup_lb()], [certify_trace()]
@@ -794,20 +881,28 @@ certify_trace <- function(
 #' # The bound is below 1 here, so X comes back unchanged.
 #' E <- e_variable(cert)
 #' E
+#'
+#' # Seeding the search with the approximate supremum from `sup_lb`.
+#' found <- sup_lb(X, plurality, n_seeds = 20L)
+#' seeded <- certify(X, plurality, tol = 1e-6, incumbent_at = found@theta)
+#' c(cert@sup_ub, seeded@sup_ub)
+#' c(sum(cert@iterations), sum(seeded@iterations))
 #' @export
 certify <- function(
   x,
   null,
   tol = 1e-6,
   max_splits = 20000L,
-  max_coefficients = 1024^2
+  max_coefficients = 1024^2,
+  incumbent_at = NULL
 ) {
   certify_run(
     x,
     null,
     tol = tol,
     max_splits = max_splits,
-    max_coefficients = max_coefficients
+    max_coefficients = max_coefficients,
+    incumbent_at = incumbent_at
   )$certificate
 }
 
@@ -822,6 +917,7 @@ certify_run <- function(
   tol,
   max_splits,
   max_coefficients,
+  incumbent_at = NULL,
   record = FALSE
 ) {
   if (!S7_inherits(x, random_variable)) {
@@ -853,6 +949,9 @@ certify_run <- function(
     per_cell[is_point] <- point_bound(x, family, cells[is_point])
     incumbent <- max(vapply(per_cell[is_point], function(r) r$incumbent, 0))
   }
+  # Then the caller's seeds, by the same exact evaluation.
+  seeded <- seed_incumbents(x, null, incumbent_at)
+  incumbent <- max(incumbent, seeded)
   if (!all(is_point)) {
     per_cell[!is_point] <- bernstein_bound(
       x,
@@ -876,7 +975,7 @@ certify_run <- function(
     unname(vapply(by_part, function(i) combine(per[i]), template))
   }
   bounds <- reduce("bound", max, numeric(1L))
-  incumbents <- reduce("incumbent", max, numeric(1L))
+  incumbents <- pmax(reduce("incumbent", max, numeric(1L)), seeded)
   out <- list(
     certificate = ripr_certificate(
       sup_ub = max(bounds),

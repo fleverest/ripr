@@ -1,0 +1,80 @@
+FROM rocker/r-ver:4.6.1
+
+ARG USERNAME=ripr
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
+ARG NODE_MAJOR=22
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates gnupg git wget unzip less openssh-client \
+    # toolchain
+    build-essential gfortran cmake pkg-config \
+    # fs (async file watching) - fixes: libuv.so.1: cannot open shared object
+    libuv1-dev \
+    # curl/openssl/xml2/git-backed packages (httr, curl, xml2, gert, usethis, devtools)
+    libcurl4-openssl-dev libssl-dev libxml2-dev libgit2-dev \
+    zlib1g-dev libbz2-dev liblzma-dev libpcre2-dev \
+    # text shaping / fonts / image I/O (ragg, systemfonts, textshaping, svglite, Cairo, magick)
+    libfreetype6-dev libfontconfig1-dev libpng-dev libtiff5-dev libjpeg-dev \
+    libharfbuzz-dev libfribidi-dev libcairo2-dev libxt-dev libmagick++-dev \
+    # unicode (stringi)
+    libicu-dev \
+    # numerics (gmp, Rmpfr, nloptr, GSL-based packages) - plausibly relevant to ripr's
+    # quadrature/optimisation routines
+    libgmp-dev libmpfr-dev libnlopt-dev libgsl-dev \
+    # document rendering: knitr/rmarkdown (pandoc), R CMD check PDF manuals (texlive),
+    pandoc qpdf \
+    texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+    texlive-fonts-recommended texlive-plain-generic lmodern
+
+# Quarto CLI (bundles its own pandoc/deno; rmarkdown/knitr just need the `quarto` binary
+# on PATH). Pin the version so the image is reproducible; bump deliberately.
+ARG QUARTO_VERSION=1.10.18
+RUN curl -fsSL -o /tmp/quarto.deb \
+    "https://github.com/quarto-dev/quarto-cli/releases/download/v${QUARTO_VERSION}/quarto-${QUARTO_VERSION}-linux-amd64.deb" \
+    && apt-get update && apt-get install -y --no-install-recommends /tmp/quarto.deb \
+    # Clean up, clear apt lists
+    && rm /tmp/quarto.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node from NodeSource; Ubuntu's own node package is too old for Claude Code.
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid ${USER_GID} ${USERNAME} \
+    && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME}
+
+# renv installed system-wide so experiments/.Rprofile can activate the project
+# without bootstrapping a download first.
+RUN R -q -e 'install.packages("renv")'
+
+# Create the volume mount points before they are mounted, so the named volumes
+# inherit this ownership instead of being created root-owned.
+# npm-global keeps global installs (e.g. Claude Code) out of /usr/lib.
+ENV RENV_PATHS_CACHE=/home/${USERNAME}/.cache/R/renv
+RUN mkdir -p /home/${USERNAME}/.claude /home/${USERNAME}/.npm-global ${RENV_PATHS_CACHE} \
+    && chown -R ${USER_UID}:${USER_GID} /home/${USERNAME}
+
+
+# Prepare ~/.ssh
+RUN mkdir -p /home/${USERNAME}/.ssh \
+    && curl -fsSL https://api.github.com/meta \
+       | python3 -c 'import sys,json; [print("github.com", k) for k in json.load(sys.stdin)["ssh_keys"]]' \
+       > /home/${USERNAME}/.ssh/known_hosts \
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.ssh \
+    && chmod 700 /home/${USERNAME}/.ssh && chmod 600 /home/${USERNAME}/.ssh/known_hosts
+
+# Install claude code (as the user, so the auto-updater can write to it)
+ENV NPM_CONFIG_PREFIX=/home/${USERNAME}/.npm-global
+ENV PATH=/home/${USERNAME}/.npm-global/bin:${PATH}
+
+USER ${USERNAME}
+RUN npm i -g @anthropic-ai/claude-code && npm cache clean --force
+
+WORKDIR /workspaces

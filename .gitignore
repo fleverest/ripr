@@ -1,5 +1,5 @@
 .Rproj.user
 *.Rcheck
 *.tar.gz
-.devcontainer
 docs
+*.log

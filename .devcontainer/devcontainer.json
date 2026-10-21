@@ -1,0 +1,35 @@
+{
+    "name": "ripr",
+    "build": {
+        "dockerfile": "Containerfile",
+        "context": "."
+    },
+    // Rootless podman args
+    "runArgs": [
+        "--userns=keep-id:uid=1000,gid=1000",
+        "--name=ripr",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges"
+    ],
+    // Dev Containers' own UID-matching assumes docker
+    "updateRemoteUserUID": false,
+    // Other config
+    "containerUser": "ripr",
+    "remoteUser": "ripr",
+    "mounts": [
+        "source=ripr-claude-config,target=/home/ripr/.claude,type=volume",
+        "source=ripr-renv-cache,target=/home/ripr/.cache/R/renv,type=volume",
+        // Read-only directories
+        "source=${localWorkspaceFolder}/.devcontainer,target=${containerWorkspaceFolder}/.devcontainer,type=bind,readonly",
+        "source=${localWorkspaceFolder}/.claude,target=${containerWorkspaceFolder}/.claude,type=bind,readonly",
+        "source=${localWorkspaceFolder}/.git/hooks,target=${containerWorkspaceFolder}/.git/hooks,type=bind,readonly",
+        "source=${localWorkspaceFolder}/.git/config,target=${containerWorkspaceFolder}/.git/config,type=bind,readonly",
+        // SSH agent
+        "source=${localEnv:XDG_RUNTIME_DIR}/devcontainer-agent-${localWorkspaceFolderBasename},target=/ssh-agent-dir,type=bind,readonly"
+    ],
+    "containerEnv": {
+        "SSH_AUTH_SOCK": "/ssh-agent-dir/agent.sock"
+    },
+    "initializeCommand": "sh .devcontainer/host-init.sh",
+    "postStartCommand": "sh .devcontainer/setup.sh"
+}

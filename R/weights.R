@@ -18,13 +18,23 @@ weight_sweep <- function(ld_all, w, log_p, engine) {
 #' Re-optimise every weight over the current atoms
 #'
 #' Minimises `KL(Q || P_w)` over the simplex with the atoms fixed, a smooth
-#' convex problem, by SLSQP. Each row of the likelihoods is scaled by its
-#' maximum, which shifts the objective by a constant, so nothing overflows.
-#' `tol` is SLSQP's relative tolerance on the weights and `max_iter` its cap on
-#' evaluations.
+#' convex problem, from `w`, with the solver settings in `control`
+#' ([ripr_control()]).
 #' @keywords internal
 #' @noRd
-solve_weights <- function(ld_all, w, engine, tol, max_iter) {
+solve_weights <- function(ld_all, w, engine, control) {
+  slsqp_weights(ld_all, w, engine, control$fc_tol, control$fc_max_iter)
+}
+
+
+#' Solve for weights via SLSQP
+#'
+#' Each row of the likelihoods is scaled by its maximum, which shifts the
+#' objective by a constant, so nothing overflows. `tol` is SLSQP's relative
+#' tolerance on the weights and `max_iter` its cap on evaluations.
+#' @keywords internal
+#' @noRd
+slsqp_weights <- function(ld_all, w, engine, tol, max_iter) {
   row_max <- matrixStats::rowMaxs(ld_all)
   a <- exp(ld_all - ifelse(is.finite(row_max), row_max, 0))
   q <- exp(engine@log_w)

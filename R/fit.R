@@ -811,13 +811,7 @@ ripr_finish <- function(
     for (round in seq_len(if (reoptimise && identify) max_rounds else 1L)) {
       rounds <- round
       if (reoptimise) {
-        w <- solve_weights(
-          ld_all,
-          w,
-          engine,
-          tol = ctl$fc_tol,
-          max_iter = ctl$fc_max_iter
-        )
+        w <- solve_weights(ld_all, w, engine, ctl)
       }
       if (!identify) {
         break

@@ -151,13 +151,7 @@ plan_step <- function(
       gamma_fixed = gamma_fixed
     )
     if (correct) {
-      res$weights <- solve_weights(
-        ld_all,
-        res$weights,
-        engine,
-        tol = ctl$fc_tol,
-        max_iter = ctl$fc_max_iter
-      )
+      res$weights <- solve_weights(ld_all, res$weights, engine, ctl)
       res$log_p <- mixture_log_p(ld_all, res$weights)
       res$kl <- kl_at(engine, res$log_p)
       res$uses_candidate <- res$weights[length(res$weights)] > 0

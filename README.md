@@ -6,9 +6,10 @@
 `ripr` computes reverse information projections onto nulls that take the
 form of a union of convex parts, and then proves an upper bound on the
 expectation over the null of whatever random variable you get. The
-projection is fitted via Frank–Wolfe ([Jaggi 2013](#ref-Jaggi2013))
-and/or EM; bounds are proved by a branch-and-bound algorithm (currently
-for multinomial families, via the Bernstein enclosure of Garloff
+projection is fitted via variants of Frank–Wolfe ([Jaggi
+2013](#ref-Jaggi2013)) and/or expectation-maximisation; bounds are
+proved by a branch-and-bound algorithm (currently for multinomial
+families, via the Bernstein enclosure of Garloff
 ([1985](#ref-Garloff1986)) and Leroy ([2012](#ref-Leroy2012))). At the
 end, you get a random variable that is genuinely an e-variable for the
 null.

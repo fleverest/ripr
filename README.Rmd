@@ -87,7 +87,7 @@ plot_null <- function(
 # ripr
 
 `ripr` computes reverse information projections onto nulls that take the form of a union of convex parts, and then proves an upper bound on the expectation over the null of whatever random variable you get.
-The projection is fitted via Frank--Wolfe [@Jaggi2013] and/or EM; bounds are proved by a branch-and-bound algorithm (currently for multinomial families, via the Bernstein enclosure of @Garloff1986 and @Leroy2012).
+The projection is fitted via variants of Frank--Wolfe [@Jaggi2013] and/or expectation-maximisation; bounds are proved by a branch-and-bound algorithm (currently for multinomial families, via the Bernstein enclosure of @Garloff1986 and @Leroy2012).
 At the end, you get a random variable that is genuinely an e-variable for the null.
 
 Fitting and certification are deliberately separate: **any** approximate projection can be rescaled (by an upper bound on the expectation over the null) to get a valid e-variable. This way, a very difficult, non-convex optimisation problem splits into two easier problems: approximate a distribution, then compute a bound. The better the fit, the higher the e-power, and validity is guaranteed.

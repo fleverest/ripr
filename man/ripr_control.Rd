@@ -25,16 +25,16 @@ call.}
 \item{weight_solver}{How a corrective weight solve (\code{correct = TRUE},
 \code{\link[=weight_step]{weight_step()}}, or \code{ripr_finish(reoptimise = TRUE)}) finds the optimal
 weights for fixed atoms. \code{"sqp"} (default) is an exact-Hessian sequential
-quadratic programming method, cf. mix-SQP \insertCite{Kim2020}{ripr}, which
-stops once the Frank--Wolfe gap over the current support is below \code{kkt_tol}
-and falls back on \code{"slsqp"} if it doesn't converge. \code{"slsqp"} is nloptr's
-quasi-Newton SLSQP, which stops when the KL stops changing (much) in
-floating point, typically the gap is larger than the change in KL at that
-point.}
+quadratic programming method \insertCite{NocedalWright2006}{ripr}, cf.
+mix-SQP \insertCite{Kim2020}{ripr}, which stops once the Frank--Wolfe gap
+over the current support is below \code{kkt_tol} and falls back on \code{"slsqp"} if
+it doesn't converge. \code{"slsqp"} is nloptr's quasi-Newton SLSQP, which stops
+once the KL stops changing in floating point, which can leave the gap over
+the support much larger than \code{kkt_tol}.}
 
 \item{kkt_tol}{For \code{weight_solver = "sqp"}: the target KKT residual, the
-largest of \eqn{|G_c - 1|}{|G_c - 1|} over atoms with weight and
-\eqn{G_c - 1}{G_c - 1} over atoms without.}
+largest of \eqn{|G_c - 1|}{|G_c - 1|} over atoms with weight and the
+positive part of \eqn{G_c - 1}{G_c - 1} over atoms without.}
 
 \item{fc_tol}{For \code{"slsqp"}, and the fallback: its relative tolerance on the
 weights.}

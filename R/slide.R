@@ -3,7 +3,7 @@
 
 #' One sliding descent: every weight and every atom position at once
 #'
-#' The sliding step of \insertCite{DenoyelleDuvalPeyreSoubies2020}{ripr}:
+#' The sliding step of \insertCite{Denoyelle2020}{ripr}:
 #' minimise KL jointly over all weights and all atom positions, from the
 #' current mixture, each atom in its own part's chart coordinates. SLSQP
 #' handles the constraints directly: weights nonnegative and summing to one,
@@ -57,7 +57,7 @@ slide_sweep <- function(state, ld, dg, max_eval) {
   heq <- function(x) {
     c(
       sum(x[seq_len(n)]) - 1,
-      unlist(lapply(with_heq, \(c_i) charts[[c_i]]$heq(x[idx[[c_i]]]))) #
+      unlist(lapply(with_heq, \(c_i) charts[[c_i]]$heq(x[idx[[c_i]]])))
     )
   }
   heqjac <- function(x) {

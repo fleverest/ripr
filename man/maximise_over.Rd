@@ -29,8 +29,9 @@ from, one per row.}
 }
 \value{
 \code{list(theta = , value = )} with \code{theta} in the space, and with
-\code{keep_maxima = TRUE}, an additional \code{maxima} element that is itself a list
-of \code{theta} and \code{value} pairs, one for each distinct local maxima found.
+\code{keep_maxima = TRUE}, an additional \code{maxima} element: a list of \code{theta}
+(one row per refined restart) and \code{value}. Restarts that reach the same
+local maximum appear once each, so rows can repeat a maximum.
 }
 \description{
 Multi-start SLSQP in the space's own \code{\link[=chart]{chart()}}: seeds are scored in batch,

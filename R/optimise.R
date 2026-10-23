@@ -62,8 +62,9 @@ memoise_last <- function(f) {
 #' @param n_restarts How many of the best seeds to refine.
 #' @param keep_maxima Also return every refined restart's end point and value.
 #' @return `list(theta = , value = )` with `theta` in the space, and with
-#'   `keep_maxima = TRUE`, an additional `maxima` element that is itself a list
-#'   of `theta` and `value` pairs, one for each distinct local maxima found.
+#'   `keep_maxima = TRUE`, an additional `maxima` element: a list of `theta`
+#'   (one row per refined restart) and `value`. Restarts that reach the same
+#'   local maximum appear once each, so rows can repeat a maximum.
 #' @keywords internal
 maximise_over <- function(
   space,

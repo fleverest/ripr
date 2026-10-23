@@ -1,6 +1,6 @@
 {
   "R": {
-    "Version": "4.4.1",
+    "Version": "4.6.1",
     "Repositories": [
       {
         "Name": "P3M",
@@ -1855,7 +1855,7 @@
       "Config/Needs/memcheck": "devtools, rcmdcheck",
       "Author": "Georgi N. Boshnakov [aut, cre] (ORCID: <https://orcid.org/0000-0003-2839-346X>, R port, R code, new C code and modifications to bibutils' C code, conversion to Bibentry (R and C code)), Chris Putman [aut] (src/*, author of the bibutils libraries, https://sourceforge.net/projects/bibutils/), Richard Mathar [ctb] (src/addsout.c), Johannes Wilm [ctb] (src/biblatexin.c, src/bltypes.c), R Core Team [ctb] (base R's bibentry and bibstyle implementation)",
       "Maintainer": "Georgi N. Boshnakov <georgi.boshnakov@manchester.ac.uk>",
-      "Repository": "RSPM"
+      "Repository": "P3M"
     },
     "rcdd": {
       "Package": "rcdd",

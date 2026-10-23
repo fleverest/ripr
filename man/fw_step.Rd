@@ -10,6 +10,7 @@ fw_step(
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
+  insert = c("single", "multi"),
   record_gap = FALSE,
   until = NULL
 )
@@ -30,6 +31,12 @@ from that worst atom directly to the new one.}
 \item{correct}{Re-solve the weights with atoms fixed after each step, to
 \code{fc_tol} and \code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Can be expensive; the
 \code{size} step only seeds the solve.}
+
+\item{insert}{\code{"single"} adds the oracle's atom. \code{"multi"} also adds every
+other distinct local maximiser of \eqn{G}{G} with \eqn{G > 1}{G > 1} that
+the oracle's multi-start found. This is the multi-point insertion of PDAP
+\insertCite{PieperWalter2021}{ripr}. Needs \code{correct = TRUE}, since only
+the weight solve can give the extra atoms mass.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture
 after each step, filling \code{gap_after}. Earlier rows fill anyway from the
@@ -68,6 +75,9 @@ state@trace$kl
 
 # Where each step put its atom.
 do.call(rbind, state@trace$oracle_theta[state@trace$phase == "fw"])
+}
+\references{
+\insertAllCited{}
 }
 \seealso{
 \link{oracles}, \link{predicates}

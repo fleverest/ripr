@@ -60,21 +60,30 @@ memoise_last <- function(f) {
 #'   from, one per row.
 #' @param n_seeds Random seeds drawn from the chart.
 #' @param n_restarts How many of the best seeds to refine.
-#' @return `list(theta = , value = )` with `theta` in the space.
+#' @param keep_maxima Also return every refined restart's end point and value.
+#' @return `list(theta = , value = )` with `theta` in the space, and with
+#'   `keep_maxima = TRUE`, an additional `maxima` element that is itself a list
+#'   of `theta` and `value` pairs, one for each distinct local maxima found.
 #' @keywords internal
 maximise_over <- function(
   space,
   obj,
   seeds = NULL,
   n_seeds = 200L,
-  n_restarts = 25L
+  n_restarts = 25L,
+  keep_maxima = FALSE
 ) {
   ch <- chart(space)
 
   # A zero-dimensional chart has nothing to search: the space is a point.
   if (ch$n_par == 0L) {
     theta <- ch$to_theta(numeric(0))
-    return(list(theta = theta, value = obj$value(theta)))
+    value <- obj$value(theta)
+    out <- list(theta = theta, value = value)
+    if (keep_maxima) {
+      out$maxima <- list(theta = matrix(theta, nrow = 1L), value = value)
+    }
+    return(out)
   }
 
   # slsqp() calls fn and gr separately at the same point, so cache the pair.
@@ -122,9 +131,12 @@ maximise_over <- function(
   ))]
 
   best <- list(par = starts[top[1L], ], value = Inf)
-  for (i in top) {
+  refined <- vector("list", length(top))
+  for (k in seq_along(top)) {
+    i <- top[[k]]
     fallback <- if (is.finite(scores[i])) -scores[i] else Inf
     res <- refine(starts[i, ], fallback = fallback)
+    refined[[k]] <- res$par
     if (is.finite(res$value) && res$value < best$value) best <- res
   }
   # SLSQP constraints hold only to tolerance, so project back into the space
@@ -139,5 +151,15 @@ maximise_over <- function(
     theta <- seed_theta
     value <- seed_value
   }
-  list(theta = theta, value = value)
+  out <- list(theta = theta, value = value)
+  if (keep_maxima) {
+    # Every restart's end point, projected and re-evaluated likewise: the
+    # local maxima the search found.
+    maxima <- do.call(
+      rbind,
+      lapply(refined, \(u) project(space, ch$to_theta(u)))
+    )
+    out$maxima <- list(theta = maxima, value = obj$value_batch(maxima))
+  }
+  out
 }

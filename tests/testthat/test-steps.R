@@ -675,3 +675,51 @@ test_that("an atom whose M-step finds nothing finite stays where it is", {
   moved <- em_atom_step(st, bottomless, wt)
   expect_identical(atoms(moved@mixing), atoms(st@mixing))
 })
+
+test_that("multi-point insertion needs a corrective weight solve", {
+  expect_error(fw_step(plurality(), insert = "multi"), "correct = TRUE")
+})
+
+test_that("the oracle keeps every restart's local maximum", {
+  set.seed(1)
+  st <- fw_step(plurality(), times = 2L, correct = TRUE, record_gap = TRUE)
+  maxima <- st@oracle$maxima
+  expect_identical(nrow(maxima$theta), length(maxima$value))
+  expect_identical(length(maxima$part), length(maxima$value))
+  expect_equal(max(maxima$value), st@oracle$value, tolerance = 1e-12)
+  # Each value is G at that point.
+  expect_equal(maxima$value, exact_g(st, maxima$theta), tolerance = 1e-10)
+})
+
+test_that("insert_candidates puts the oracle first and keeps distinct maxima above one", {
+  set.seed(1)
+  st <- fw_step(plurality(), times = 2L, correct = TRUE, record_gap = TRUE)
+  cands <- ripr:::insert_candidates(st, st@oracle)
+  expect_equal(cands[[1L]]$theta, as.vector(st@oracle$theta))
+  for (cd in cands[-1L]) {
+    expect_gt(exact_g(st, matrix(cd$theta, nrow = 1L)), 1)
+    expect_false(any(apply(atoms(st@mixing), 1L, \(a) {
+      max(abs(a - cd$theta)) <= 1e-6
+    })))
+    expect_true(contains(parts(st@null@region)[[cd$part]], cd$theta))
+  }
+  thetas <- do.call(rbind, lapply(cands, `[[`, "theta"))
+  if (nrow(thetas) > 1L) {
+    gaps <- as.matrix(stats::dist(thetas, method = "maximum"))
+    expect_gt(min(gaps[upper.tri(gaps)]), 1e-6)
+  }
+})
+
+test_that("fw_step's multi-point insertion keeps atoms in their parts and reaches a small gap", {
+  set.seed(1)
+  fw <- fw_step(
+    plurality(),
+    times = 25L,
+    correct = TRUE,
+    insert = "multi",
+    until = gap_below(1e-6)
+  )
+  expect_lt(fw@oracle$value - 1, 1e-6)
+  expect_true(in_own_part(fw))
+  expect_equal(utils::tail(fw@trace$kl, 1L), exact_kl(fw), tolerance = 1e-10)
+})

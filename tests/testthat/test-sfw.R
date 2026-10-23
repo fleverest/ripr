@@ -36,7 +36,10 @@ test_that("the slide never leaves KL above the corrective step alone", {
   fw <- fw_step(st, correct = TRUE)
   set.seed(2)
   sfw <- sfw_step(st)
-  expect_lte(utils::tail(sfw@trace$kl, 1L), utils::tail(fw@trace$kl, 1L) + 1e-12)
+  expect_lte(
+    utils::tail(sfw@trace$kl, 1L),
+    utils::tail(fw@trace$kl, 1L) + 1e-12
+  )
 })
 
 test_that("sfw_step reaches a small gap in few steps", {
@@ -56,9 +59,38 @@ test_that("sfw_step honours until and checks max_eval", {
 })
 
 test_that("merge_coincident folds same-part duplicates only", {
-  atoms <- rbind(c(0.2, 0.3, 0.5), c(0.2, 0.3, 0.5), c(0.2, 0.3, 0.5), c(0.6, 0.2, 0.2))
-  m <- ripr:::merge_coincident(atoms, c(0.1, 0.2, 0.3, 0.4), part = c(1L, 1L, 2L, 1L))
+  atoms <- rbind(
+    c(0.2, 0.3, 0.5),
+    c(0.2, 0.3, 0.5),
+    c(0.2, 0.3, 0.5),
+    c(0.6, 0.2, 0.2)
+  )
+  m <- ripr:::merge_coincident(
+    atoms,
+    c(0.1, 0.2, 0.3, 0.4),
+    part = c(1L, 1L, 2L, 1L)
+  )
   expect_identical(nrow(m$atoms), 3L)
   expect_equal(m$weights, c(0.3, 0.3, 0.4))
   expect_identical(m$part, c(1L, 2L, 1L))
+})
+
+
+test_that("sfw_step slides a state that came from another verb before inserting", {
+  set.seed(1)
+  st <- fw_step(sfw_fixture(), times = 2L)
+  slides <- 0L
+  slide <- ripr:::slide_state
+  local_mocked_bindings(
+    slide_state = function(...) {
+      slides <<- slides + 1L
+      slide(...)
+    },
+    .package = "ripr"
+  )
+  stepped <- sfw_step(st)
+  expect_identical(slides, 2L) # once before inserting, once after
+  slides <- 0L
+  sfw_step(stepped)
+  expect_identical(slides, 1L) # a state from sfw_step() is not slid first
 })

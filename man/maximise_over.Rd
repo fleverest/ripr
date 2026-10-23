@@ -4,7 +4,14 @@
 \alias{maximise_over}
 \title{Maximise an objective over a parameter space}
 \usage{
-maximise_over(space, obj, seeds = NULL, n_seeds = 200L, n_restarts = 25L)
+maximise_over(
+  space,
+  obj,
+  seeds = NULL,
+  n_seeds = 200L,
+  n_restarts = 25L,
+  keep_maxima = FALSE
+)
 }
 \arguments{
 \item{space}{A \link{convex_region}.}
@@ -17,9 +24,13 @@ from, one per row.}
 \item{n_seeds}{Random seeds drawn from the chart.}
 
 \item{n_restarts}{How many of the best seeds to refine.}
+
+\item{keep_maxima}{Also return every refined restart's end point and value.}
 }
 \value{
-\code{list(theta = , value = )} with \code{theta} in the space.
+\code{list(theta = , value = )} with \code{theta} in the space, and with
+\code{keep_maxima = TRUE}, an additional \code{maxima} element that is itself a list
+of \code{theta} and \code{value} pairs, one for each distinct local maxima found.
 }
 \description{
 Multi-start SLSQP in the space's own \code{\link[=chart]{chart()}}: seeds are scored in batch,

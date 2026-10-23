@@ -298,14 +298,21 @@ check_until <- function(until) {
 #' @noRd
 search_gap <- function(state, log_p, ld) {
   clock <- stopwatch()
-  found <- search_null(state, linear_oracle(state, log_p, ld))
+  # The linear oracle is cheap to evaluate, so keep every restart's maximum
+  # for multi-point insertion.
+  found <- search_null(
+    state,
+    linear_oracle(state, log_p, ld),
+    keep_maxima = TRUE
+  )
   elapsed <- clock()
   state <- fill_gap(state, found$value - 1, found$theta, found$part, elapsed)
   state@oracle <- list(
     value = found$value,
     theta = found$theta,
     part = found$part,
-    elapsed = elapsed
+    elapsed = elapsed,
+    maxima = found$maxima
   )
   state
 }
@@ -353,6 +360,11 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
 #' @param correct Re-solve the weights with atoms fixed after each step, to
 #'   `fc_tol` and `fc_max_iter` from [ripr_control()]. Can be expensive; the
 #'   `size` step only seeds the solve.
+#' @param insert `"single"` adds the oracle's atom. `"multi"` also adds every
+#'   other distinct local maximiser of \eqn{G}{G} with \eqn{G > 1}{G > 1} that
+#'   the oracle's multi-start found. This is the multi-point insertion of PDAP
+#'   \insertCite{PieperWalter2021}{ripr}. Needs `correct = TRUE`, since only
+#'   the weight solve can give the extra atoms mass.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture
 #'   after each step, filling `gap_after`. Earlier rows fill anyway from the
 #'   next step's search, so `TRUE` buys the final row's gap for about one extra
@@ -360,6 +372,8 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
 #' @param until Optional predicate `function(state, candidate)` tested before
 #'   each step; see [predicates].
 #' @return The updated [ripr_state].
+#' @references
+#'   \insertAllCited{}
 #' @seealso [oracles], [predicates]
 #' @examples
 #' set.seed(1)
@@ -384,11 +398,20 @@ fw_step <- function(
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
   correct = FALSE,
+  insert = c("single", "multi"),
   record_gap = FALSE,
   until = NULL
 ) {
   directions <- variant_directions(rlang::arg_match(variant))
   size <- rlang::arg_match(size)
+  insert <- rlang::arg_match(insert)
+  if (insert == "multi" && !isTRUE(correct)) {
+    stop(
+      "`insert = \"multi\"` needs `correct = TRUE`: only the weight solve ",
+      "can give the extra atoms mass.",
+      call. = FALSE
+    )
+  }
 
   run_steps(
     state,
@@ -398,18 +421,31 @@ fw_step <- function(
     record_gap = record_gap,
     uses_oracle = TRUE,
     advance = function(state, ld) {
-      step_towards(
-        state,
-        state@oracle,
-        # Already recorded as the previous row's `1 + gap_after`.
-        oracle_value = NA_real_,
-        log_p_at_nodes(state, ld),
-        ld,
-        directions = directions,
-        size = size,
-        gamma_fixed = schedule_gamma(state),
-        correct = correct
-      )
+      log_p <- log_p_at_nodes(state, ld)
+      if (insert == "multi") {
+        step_towards_all(
+          state,
+          insert_candidates(state, state@oracle),
+          log_p,
+          ld,
+          directions = directions,
+          size = size,
+          gamma_fixed = schedule_gamma(state)
+        )
+      } else {
+        step_towards(
+          state,
+          state@oracle,
+          # Already recorded as the previous row's `1 + gap_after`.
+          oracle_value = NA_real_,
+          log_p,
+          ld,
+          directions = directions,
+          size = size,
+          gamma_fixed = schedule_gamma(state),
+          correct = correct
+        )
+      }
     }
   )
 }

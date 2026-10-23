@@ -130,13 +130,13 @@ We nominate a discrete mixture-multinomial alternative (here a single dirac at `
 Q <- family(c(0.40, 0.35, 0.25))
 ```
 
-Fitting is a sequence of step verbs: `fw_step()` for Frank--Wolfe, `em_step()` for EM. Here we run Frank--Wolfe for 40 iterations, then `ripr_finish()` solves the weights and drops any low-mass atoms:
+Fitting is a sequence of step verbs: e.g. `sfw_step()` for sliding Frank--Wolfe, `em_step()` for EM. Here we run sliding Frank--Wolfe for (at most) 10 iterations, then `ripr_finish()` extracts the fit:
 
 ```{r fit}
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(state, times = 40L, until = gap_below(1e-10))
-fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+state <- sfw_step(state, times = 10L, until = gap_below(1e-10))
+fit <- ripr_finish(state, reoptimise = TRUE, record_gap = TRUE)
 
 c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 ```

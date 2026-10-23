@@ -283,16 +283,9 @@ fitting or certification needs to know it came from a recursive construction
 rather than being typed out by hand as two parts:
 
 ```{r sierpinski-fit}
-hybrid_step <- function(state, times) {
-  for (iter in seq_len(times)) {
-    state <- state |> fw_step() |> em_step()
-  }
-  state
-}
-
 set.seed(3)
 fit <- ripr_init(Q_alt, sierpinski) |>
-  hybrid_step(times = 40L) |>
+  sfw_step(times = 40L, until = gap_below(1e-10)) |>
   ripr_finish(reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit@kl, atoms = n_atoms(fit@W0))

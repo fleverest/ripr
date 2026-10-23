@@ -99,7 +99,7 @@ The idea it rests on is simpler than the projection itself. For any non-negative
 **This means the projection need not be fit exactly:**
 any approximation can be used, so long as the resulting likelihood ratio is corrected against a *proven* bound to yield a valid e-variable.
 The quality of the approximation determines only how much e-power survives the correction.
-That splits a hard, non-convex optimisation problem into an easy one (approximate) and a proof (bound), and this split is what `ripr` facilitates: fitting is handled by a Frank--Wolfe [@Jaggi2013] and EM hybrid over mixing measures, and certification by a branch-and-bound algorithm (currently implemented for multinomial families via the Bernstein enclosure).
+That splits a hard, non-convex optimisation problem into an easy one (approximate) and a proof (bound), and this split is what `ripr` facilitates: fitting is handled by sliding Frank--Wolfe, and certification by Bernstein branch-and-bound.
 
 This vignette walks through both halves on a worked example, then shows what happens when the fit is deliberately bad, and finally contrasts a proven bound against an uncertified search.
 
@@ -148,14 +148,14 @@ The two parts overlap, and the alternative sits in the cap above them, where can
 
 ## Fitting the projection
 
-The fitting procedure is a sequence of steps: `fw_step()` for Frank--Wolfe updates and `em_step()` for EM (also `lb_step()` for Li--Barron [@LiBarron1999], though it is not generally recommended: see `?oracles`).
+The fitting procedure is a sequence of steps: e.g. `sfw_step()` for sliding Frank--Wolfe updates and `em_step()` for EM (also `fw_step` for standard Frank--Wolfe variants, and `lb_step()` for Li--Barron [@LiBarron1999], though Li--Barron is not generally recommended: see `?oracles`).
 There is no fixed pipeline; which algorithm runs is decided by which verbs are called, and in what order.
 Here we run 40 steps of Frank--Wolfe, then use `ripr_finish()` to solve the weights and drop any low-mass atoms.
 
 ```{r fit}
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(state, times = 40L, until = gap_below(1e-10))
+state <- sfw_step(state, times = 10L, until = gap_below(1e-10))
 fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
 
 c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
@@ -272,7 +272,7 @@ c(
 
 ## A second worked example: composing step verbs
 
-Because `fw_step()`, `lb_step()`, `em_step()`, `weight_step()` and `ct_step()` are independent verbs rather than a fixed pipeline, they compose freely.
+Because `fw_step()`, `sfw_step()`, `lb_step()`, `em_step()`, `weight_step()` and `ct_step()` are independent verbs rather than a fixed pipeline, they compose freely.
 Here we demonstrate a null where candidate 1, 2 and 3 all fail to reach a majority (`H0: theta_1, theta_2, theta_3 <= 1/2`, the medial triangle), fit with a loop that interleaves Frank--Wolfe and EM steps, and nominate an alternative with one dirac per section, equally weighted.
 
 ```{r medial}
@@ -304,17 +304,10 @@ plot_null(
 ```
 
 ```{r medial-alternative}
-hybrid_step <- function(state, times) {
-  for (iter in seq_len(times)) {
-    state <- state |> fw_step() |> em_step()
-  }
-  state
-}
-
 set.seed(2)
 fit_medial <- ripr_init(Q_maj, medial) |>
-  hybrid_step(times = 40L) |>
-  ripr_finish(reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+  sfw_step(times = 40L, until = gap_below(1e-10)) |>
+  ripr_finish(record_gap = TRUE)
 X_medial <- likelihood(Q_maj, label = "Q") /
   likelihood(fit_medial@P_star, label = "P*")
 
@@ -384,7 +377,7 @@ than just using the package:
 - `?quadrature`, `?exact_engine`, `?mc_engine` and `?gh_engine` describe how
   expectations under the alternative are approximated, and how to add a new
   rule.
-- `?oracles` explains the Frank--Wolfe and Li--Barron oracles that
+- `?oracles` explains the Frank--Wolfe and Li--Barron oracles that `sfw_step()`,
   `fw_step()` and `lb_step()` are built on, and when to prefer one over the
   other.
 

@@ -61,19 +61,19 @@ dirac at `q = (0.40, 0.35, 0.25)`), so `Q` is just `Multinomial(20, q)`:
 Q <- family(c(0.40, 0.35, 0.25))
 ```
 
-Fitting is a sequence of step verbs: `fw_step()` for Frank–Wolfe,
-`em_step()` for EM. Here we run Frank–Wolfe for 40 iterations, then
-`ripr_finish()` solves the weights and drops any low-mass atoms:
+Fitting is a sequence of step verbs: e.g. `sfw_step()` for sliding
+Frank–Wolfe, `em_step()` for EM. Here we run sliding Frank–Wolfe for (at
+most) 10 iterations, then `ripr_finish()` extracts the fit:
 
 ``` r
 set.seed(1)
 state <- ripr_init(Q, plurality)
-state <- fw_step(state, times = 40L, until = gap_below(1e-10))
-fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+state <- sfw_step(state, times = 10L, until = gap_below(1e-10))
+fit <- ripr_finish(state, reoptimise = TRUE, record_gap = TRUE)
 
 c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 #>           kl          gap        atoms 
-#> 2.822214e-02 3.347356e-05 5.000000e+00
+#> 2.822068e-02 1.776357e-15 2.000000e+00
 ```
 
 <div class="figure" style="text-align: center">
@@ -100,7 +100,7 @@ outcomes <- rbind(
   c(8L, 7L, 5L)
 )
 X(outcomes)
-#> [1] 0.8366127 1.0796031
+#> [1] 0.8372139 1.0794622
 ```
 
 `certify()` proves an upper bound on expectation of `X` over the null,
@@ -113,12 +113,12 @@ cert
 #> <ripr_certificate>
 #>   X = Q / P*
 #>   under null_model: multinomial_family over 2 parts
-#>   sup E[X] <= 1.000033  (certified via bernstein)
-#>   sup E[X] >= 1.000033  (interval width: 9.93e-10)
-#>             bound attained iterations converged
-#>   part 1 1.000000 1.000000         28      TRUE
-#>   part 2 1.000033 1.000033         30      TRUE
-#>   e_variable(): X / 1.000033
+#>   sup E[X] <= 1  (certified via bernstein)
+#>   sup E[X] >= 1  (interval width: 9.48e-10)
+#>          bound attained iterations converged
+#>   part 1     1        1         26      TRUE
+#>   part 2     1        1         28      TRUE
+#>   e_variable(): X / 1
 ```
 
 Rescaling by the upper bound turns `X` into a bona fide e-variable for
@@ -128,10 +128,10 @@ certificate:
 ``` r
 E <- e_variable(cert)
 print(E)
-#> <random_variable> Q / P* / 1.000033 
+#> <random_variable> Q / P* / 1 
 #>   on count_space, dimension 3
 print(E(outcomes))
-#> [1] 0.8365847 1.0795670
+#> [1] 0.8372139 1.0794622
 ```
 
 ## Learn more

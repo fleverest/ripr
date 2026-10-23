@@ -592,6 +592,93 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 }
 
 
+#' Sliding Frank--Wolfe step
+#'
+#' One iteration of sliding Frank--Wolfe \insertCite{Denoyelle2020}{ripr}: a
+#' fully-corrective Frank--Wolfe step towards the linear oracle's atom (as
+#' `fw_step(correct = TRUE)`), then a *slide*: a local descent of the KL over
+#' every weight and atom position jointly, each atom kept in its own part.
+#' Where [fw_step()] only adds atoms and [em_step()] moves them one at a
+#' time with the weights fixed, the slide moves them all together, so the
+#' support may settle in far fewer oracle calls.
+#'
+#' The slide never increases KL. Atoms of the same part that slide onto the
+#' same point are merged, and atoms whose weight reaches zero are dropped.
+#' Since each step consumes one linear-oracle search, [gap_below()] works as
+#' `until`, as for [fw_step()].
+#'
+#' A state that did not come from `sfw_step()` (fresh from [ripr_init()], or
+#' last advanced by another verb) has its atoms slid once before the first
+#' insertion, and the oracle is searched again for the slid mixture. Without
+#' this the first Frank--Wolfe step can move all the mass onto the oracle's
+#' atom and leave a single atom whose oracle points barely lower the KL; with
+#' it, the incoming atoms are positioned before any is dropped.
+#'
+#' @inheritParams fw_step
+#' @param max_eval Cap on objective evaluations per slide.
+#' @return The updated [ripr_state].
+#' @references
+#'   \insertAllCited{}
+#' @seealso [fw_step()], [em_step()], [oracles], [predicates]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- fam(c(0.4, 0.35, 0.25))
+#' state <- ripr_init(Q, plurality) |>
+#'   sfw_step(times = 10L, until = gap_below(1e-8))
+#' state@trace[c("phase", "kl", "gap_after", "support_size")]
+#' @export
+sfw_step <- function(
+  state,
+  times = 1L,
+  max_eval = 2000L,
+  record_gap = FALSE,
+  until = NULL
+) {
+  rlang::check_number_whole(max_eval, min = 1)
+  dg <- compile_engine_grad(state@engine)
+
+  run_steps(
+    state,
+    times,
+    until,
+    "sfw",
+    record_gap = record_gap,
+    uses_oracle = TRUE,
+    advance = function(state, ld) {
+      found <- state@oracle
+      log_p <- log_p_at_nodes(state, ld)
+      if (!identical(last_row(state)$phase, "sfw")) {
+        state <- slide_state(state, ld, dg, max_eval = max_eval)
+        log_p <- log_p_at_nodes(state, ld)
+        found <- search_null(state, linear_oracle(state, log_p, ld))
+      }
+      inserted <- step_towards(
+        state,
+        found,
+        # Already recorded as the previous row's `1 + gap_after`.
+        oracle_value = NA_real_,
+        log_p,
+        ld,
+        correct = TRUE
+      )
+      slid <- slide_state(inserted$state, ld, dg, max_eval = max_eval)
+      log_p <- log_p_at_nodes(slid, ld)
+      row <- inserted$row
+      row$kl <- kl_at(slid@engine, log_p)
+      list(state = slid, log_p = log_p, row = row)
+    }
+  )
+}
+
+
 # --- Finishing ----------------------------------------------------------------
 
 #' A finished RIPr fit

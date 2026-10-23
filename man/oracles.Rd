@@ -49,7 +49,8 @@ Count steps of a kind with e.g. \code{cumsum(trace$phase == "fw")}.}
 \item{\code{oracle_value}, \code{oracle_theta}}{What the step's own search found at
 the mixture it stepped \emph{from}. For \code{\link[=fw_step]{fw_step()}}, \code{oracle_theta} is the
 linear oracle's maximiser and \code{oracle_value} is \code{NA} (its value is the
-previous row's \code{gap_after + 1}). For \code{\link[=lb_step]{lb_step()}} \code{oracle_value} is the
+previous row's \code{gap_after + 1}); likewise for \code{\link[=sfw_step]{sfw_step()}}, whose \code{kl} is
+measured after the slide. For \code{\link[=lb_step]{lb_step()}} \code{oracle_value} is the
 Li--Barron objective, not a gap; for \code{\link[=weight_step]{weight_step()}} it is the pre-sweep
 support gap plus one, with no \code{oracle_theta}. When \code{part} is not \code{NA}, the
 atom went to \code{oracle_theta}.}

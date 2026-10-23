@@ -47,7 +47,8 @@
 #'   \item{`oracle_value`, `oracle_theta`}{What the step's own search found at
 #'   the mixture it stepped *from*. For [fw_step()], `oracle_theta` is the
 #'   linear oracle's maximiser and `oracle_value` is `NA` (its value is the
-#'   previous row's `gap_after + 1`). For [lb_step()] `oracle_value` is the
+#'   previous row's `gap_after + 1`); likewise for [sfw_step()], whose `kl` is
+#'   measured after the slide. For [lb_step()] `oracle_value` is the
 #'   Li--Barron objective, not a gap; for [weight_step()] it is the pre-sweep
 #'   support gap plus one, with no `oracle_theta`. When `part` is not `NA`, the
 #'   atom went to `oracle_theta`.}

@@ -1,5 +1,30 @@
 # Weight updates on a fixed support.
 
+#' Re-solve every weight with the atoms fixed, then drop the empty atoms
+#'
+#' The fully-corrective update for verbs that re-solve the weights after
+#' moving or adding atoms: `solve_weights()` from the current weights, kept
+#' only if it does not raise KL. Returns `list(state, log_p)`, `log_p` being
+#' the new mixture's log-density at the engine's nodes.
+#' @keywords internal
+#' @noRd
+correct_state <- function(state, ld) {
+  engine <- state@engine
+  ld_all <- ld(state@mixing@atoms)
+  w <- state@mixing@weights
+  log_p <- mixture_log_p(ld_all, w)
+  if (length(w) > 1L) {
+    solved <- solve_weights(ld_all, w, engine, state@control)
+    solved_log_p <- mixture_log_p(ld_all, solved)
+    if (kl_at(engine, solved_log_p) <= kl_at(engine, log_p)) {
+      w <- solved
+      log_p <- solved_log_p
+    }
+  }
+  list(state = drop_empty(set_mixture(state, weights = w)), log_p = log_p)
+}
+
+
 #' One multiplicative sweep \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)}
 #'
 #' The exact M-step for the weights (an MM algorithm), monotone by construction.

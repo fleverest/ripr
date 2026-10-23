@@ -45,7 +45,7 @@ Encoding: UTF-8
 Language: en-GB
 Roxygen: list(markdown = TRUE)
 Config/testthat/edition: 3
-Config/roxygen2/version: 8.1.0
+Config/roxygen2/version: 8.1.1
 Collate:
     'numerics.R'
     'bernstein.R'
@@ -68,19 +68,20 @@ Collate:
     'multinomial.R'
     'dirichlet.R'
     'em.R'
+    'step_rules.R'
+    'oracles.R'
+    'weights.R'
     'state.R'
     'steps.R'
     'fit.R'
     'gaussian.R'
     'halfspace_region.R'
     'optimise.R'
-    'oracles.R'
     'simplex_region.R'
     'point_region.R'
     'real_region.R'
     'region_algebra.R'
-    'step_rules.R'
+    'slide.R'
     'triangulate.R'
-    'weights.R'
     'zzz.R'
 RdMacros: Rdpack

@@ -131,6 +131,53 @@ score <- new_generic("score", "family", function(family, theta, x) {
 })
 
 
+#' Compile the weighted density gradient at fixed outcomes
+#'
+#' Returns `function(theta_mat, log_m)` giving the `(C, d)` matrix whose row
+#' `c` is \eqn{\sum_x e^{m(x)} \nabla_\theta p_{\theta_c}(x)}{sum_x exp(m(x))
+#' grad p_theta_c(x)}, for `log_m` a length-`M` vector over the rows of `x`.
+#' Every first-order quantity of the fit is of this form: the gradient of
+#' \eqn{G(\theta)}{G(theta)} takes `log_m = log q - log P`.
+#'
+#' The default goes through [score()], as \eqn{p_\theta s_\theta}{p_theta
+#' s_theta}, skipping outcomes of zero density. That is exact wherever the
+#' density is positive, but drops one-sided terms on a boundary where it
+#' vanishes, so a family with such boundaries (the multinomial on a face of
+#' the simplex) supplies its own method.
+#' @param family A [parametric_family].
+#' @param x `(M, K)` matrix of outcomes.
+#' @return A function of `(theta_mat, log_m)`.
+#' @keywords internal
+#' @noRd
+compile_density_grad <- new_generic(
+  "compile_density_grad",
+  "family",
+  function(family, x) {
+    S7::S7_dispatch()
+  }
+)
+
+method(compile_density_grad, parametric_family) <- function(family, x) {
+  x <- as_row_matrix(x)
+  ll <- compile_loglik(family, x)
+  function(theta_mat, log_m) {
+    theta_mat <- as_row_matrix(theta_mat)
+    ld <- ll(theta_mat)
+    rows <- lapply(seq_len(nrow(theta_mat)), function(i) {
+      # Compute the density
+      wt <- exp(log_m + ld[, i])
+      keep <- wt > 0
+      # Grad = density * score
+      as.vector(crossprod(
+        score(family, theta_mat[i, ], x[keep, , drop = FALSE]),
+        wt[keep]
+      ))
+    })
+    matrix(unlist(rows), nrow = nrow(theta_mat), byrow = TRUE)
+  }
+}
+
+
 #' Draw one observation from `P_theta` per parameter
 #'
 #' One draw per row of `theta_mat`. Repeat rows for repeated draws. Usually

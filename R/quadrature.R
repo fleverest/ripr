@@ -91,6 +91,14 @@ compile_engine <- function(engine) {
 }
 
 
+#' The engine's `compile_density_grad()`, at its nodes
+#' @keywords internal
+#' @noRd
+compile_engine_grad <- function(engine) {
+  compile_density_grad(engine@family, engine@nodes)
+}
+
+
 #' `E_Q[v]` for length-`M` values `v` at the nodes, which may be negative
 #' @keywords internal
 #' @noRd

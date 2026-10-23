@@ -109,23 +109,20 @@ NULL
 
 #' The linear oracle: maximise `G(theta)` over the null (see [oracles])
 #'
-#' Gradient is \eqn{E_\theta[(Q/P_i)\, s_\theta]}{E_theta[(Q/P_i) s_theta]},
-#' differentiating under the integral.
+#' Gradient is \eqn{E_Q[\nabla_\theta p_\theta / P_i]}{E_Q[grad p_theta / P_i]},
+#' differentiating under the integral; see `compile_density_grad()`.
 #' @keywords internal
 #' @noRd
 linear_oracle <- function(state, log_p, ld) {
   engine <- state@engine
-  family <- engine@family
-  w <- exp(engine@log_w)
+  dg <- compile_engine_grad(engine)
+  log_m <- engine@log_w - log_p
 
   objective(
     value = function(theta) {
       exp(log_expect_q(engine, as.vector(ld(matrix(theta, nrow = 1L))) - log_p))
     },
-    grad = function(theta) {
-      ratio <- exp(as.vector(ld(matrix(theta, nrow = 1L))) - log_p)
-      as.vector(crossprod(score(family, theta, engine@nodes), w * ratio))
-    },
+    grad = function(theta) as.vector(dg(theta, log_m)),
     value_batch = function(theta_mat) atom_g(ld(theta_mat), log_p, engine)
   )
 }
@@ -134,7 +131,7 @@ linear_oracle <- function(state, log_p, ld) {
 #' What a step towards `theta` would do, without doing it
 #'
 #' Returns a memoised function of `theta` giving `weights`, `log_p`, `kl`,
-#' `gamma`, `direction`, `uses_candidate` and `ld_new`, so an oracle can score
+#' `gamma`, `direction` and `uses_candidate`, so an oracle can score
 #' candidates with the machinery that later takes the step.
 #'
 #' `correct` re-solves every weight after the step, which may zero the
@@ -180,7 +177,6 @@ plan_step <- function(
       res$kl <- kl_at(engine, res$log_p)
       res$uses_candidate <- res$weights[length(res$weights)] > 0
     }
-    res$ld_new <- ld_new
     res
   })
 }
@@ -189,22 +185,18 @@ plan_step <- function(
 #' Gradient of the Li--Barron objective
 #'
 #' By the envelope theorem the weight can be held fixed:
-#' \deqn{\partial_\theta E_Q[\log P] = E_Q\!\left[\frac{w(\theta) P_\theta}{P}\, s_\theta\right],}{d/dtheta E_Q[log P] = E_Q[(w(theta) P_theta / P) s_theta],}
+#' \deqn{\partial_\theta E_Q[\log P] = w(\theta)\, E_Q\!\left[\frac{\nabla_\theta P_\theta}{P}\right],}{d/dtheta E_Q[log P] = w(theta) E_Q[grad P_theta / P],}
 #' so no differentiation through the line search or weight solve is needed.
-#' Zero when the step left the candidate unweighted.
+#' Zero when the step left the candidate unweighted. `dg` is the engine's
+#' `compile_engine_grad()`.
 #' @keywords internal
 #' @noRd
-lb_gradient <- function(state, theta, planned) {
+lb_gradient <- function(state, theta, planned, dg) {
   w_new <- utils::tail(planned$weights, 1L)
   if (w_new <= 0) {
     return(numeric(length(theta)))
   }
-  engine <- state@engine
-  share <- w_new * exp(planned$ld_new - planned$log_p)
-  as.vector(crossprod(
-    score(engine@family, theta, engine@nodes),
-    exp(engine@log_w) * share
-  ))
+  w_new * as.vector(dg(theta, state@engine@log_w - planned$log_p))
 }
 
 #' The Li--Barron nonlinear oracle (see [oracles]); `value` is `-kl`
@@ -230,9 +222,11 @@ nonlinear_oracle <- function(
     correct = correct
   )
 
+  dg <- compile_engine_grad(state@engine)
+
   objective(
     value = function(theta) -after(theta)$kl,
-    grad = function(theta) lb_gradient(state, theta, after(theta)),
+    grad = function(theta) lb_gradient(state, theta, after(theta), dg),
     value_batch = function(theta_mat) {
       -vapply(
         seq_len(nrow(theta_mat)),

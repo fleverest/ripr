@@ -57,6 +57,33 @@ method(score, multinomial_family) <- function(family, theta, x) {
 }
 
 
+# `d p_theta(x) / d theta_j = coef(x) x_j theta^(x - e_j)`, in log space with
+# `0 log 0 = 0`. Finite on a face `theta_j = 0`, where `p_theta s_theta` is
+# `0 * Inf` and the default would drop the outcomes with `x_j = 1`.
+method(compile_density_grad, multinomial_family) <- function(family, x) {
+  x <- as_row_matrix(x)
+  log_coef <- log_multinom_coef(x, family@n_trials)
+  blocks <- lapply(seq_len(ncol(x)), function(j) {
+    rows <- which(x[, j] > 0)
+    lowered <- x[rows, , drop = FALSE]
+    lowered[, j] <- lowered[, j] - 1
+    list(rows = rows, lowered = lowered, base = log_coef[rows] + log(x[rows, j]))
+  })
+  function(theta_mat, log_m) {
+    log_theta <- log(as_row_matrix(theta_mat))
+    out <- matrix(0, nrow = nrow(log_theta), ncol = length(blocks))
+    for (j in seq_along(blocks)) {
+      b <- blocks[[j]]
+      if (length(b$rows)) {
+        terms <- tcrossprod_0_ninf(b$lowered, log_theta) + (b$base + log_m[b$rows])
+        out[, j] <- colSums(exp(terms))
+      }
+    }
+    out
+  }
+}
+
+
 method(kernel_draw, multinomial_family) <- function(family, theta_mat) {
   # Conditional binomials, `x_j | x_<j ~ Binom(n - sum x_<j, p_j / (1 - sum
   # p_<j))`, vectorised over rows so only `k - 1` `rbinom()` calls.

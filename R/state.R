@@ -325,7 +325,7 @@ last_row <- function(state) {
 #' A new verb is registered here; `run_steps()` refuses any other phase.
 #' @keywords internal
 #' @noRd
-step_phases <- c("fw", "lb", "em", "weight", "sfw")
+step_phases <- c("fw", "lb", "em", "weight", "sfw", "ct")
 
 #' Steps taken so far by verb, from `phase`; the `init` row is not counted
 #' @keywords internal

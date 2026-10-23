@@ -126,6 +126,7 @@ reference:
   - lb_step
   - em_step
   - weight_step
+  - ct_step
   - sfw_step
   - predicates
   - ripr_finish

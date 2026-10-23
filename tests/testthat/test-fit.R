@@ -94,13 +94,14 @@ test_that("each verb writes one row per step, tagged with its phase", {
   # The row count is the total work done, and the phases say which verb did
   # each part of it, which is what makes `kl` plottable against either.
   st <- plurality() |>
-    fw_step(2L) |>
+    fw_step(1L) |>
+    lb_step(2L) |>
     em_step(3L) |>
-    weight_step(4L) |>
-    lb_step(1L)
+    sfw_step(4L) |>
+    ct_step(5L)
   expect_identical(
     verbs_used(st),
-    c(fw = 2L, lb = 1L, em = 3L, weight = 4L)
+    c(fw = 1L, lb = 2L, em = 3L, sfw = 4L, ct = 5L)
   )
   expect_identical(st@trace$phase[1L], "init")
 })
@@ -120,7 +121,7 @@ test_that("every row records the wall-clock time it took", {
   # `times` loop. Per row rather than cumulative, so a subset still reads.
   st <- plurality()
   outer <- system.time(
-    st <- st |> fw_step(2L) |> em_step(2L) |> weight_step(1L) |> lb_step(1L)
+    st <- st |> fw_step(2L) |> em_step(2L) |> ct_step(1L) |> lb_step(1L)
   )[["elapsed"]]
   tr <- st@trace
   expect_type(tr$elapsed, "double")
@@ -156,7 +157,11 @@ test_that("`correct` makes one fw call one fully-corrective iteration", {
   one <- fw_step(st, 1L, correct = TRUE)
   g <- exact_g(one, atoms(one@mixing))
   expect_lt(max(g), 1 + 1e-6)
-  expect_equal(g[weights(one@mixing) > 0], rep(1, n_atoms(one@mixing)), tolerance = 1e-6)
+  expect_equal(
+    g[weights(one@mixing) > 0],
+    rep(1, n_atoms(one@mixing)),
+    tolerance = 1e-6
+  )
 
   added <- one@trace[seq(nrow(st@trace) + 1L, nrow(one@trace)), ]
   expect_identical(nrow(added), 1L)
@@ -177,8 +182,9 @@ test_that("the identity survives every verb", {
     function(s) fw_step(s, 2L),
     function(s) fw_step(s, 2L, variant = "away-step"),
     function(s) em_step(s, 2L),
-    function(s) weight_step(s, 5L),
-    function(s) lb_step(s, 1L)
+    function(s) ct_step(s, 5L),
+    function(s) lb_step(s, 1L),
+    function(s) sfw_step(s, 1L)
   )) {
     st <- advance(st)
     expect_equal(weighted_gain(st), 1, tolerance = rounding_tol(1))
@@ -203,7 +209,7 @@ test_that("every atom stays in the part it was found in", {
 test_that("KL never increases under a line search", {
   # Guaranteed because gamma = 0 is in the search interval: the step can always
   # decline to move. Not true of the fixed schedule -- see below.
-  st <- plurality() |> fw_step(5L) |> em_step(5L) |> weight_step(5L)
+  st <- plurality() |> fw_step(5L) |> em_step(5L) |> ct_step(5L) |> sfw_step(3L)
   expect_true(all(diff(st@trace$kl) <= rounding_tol(1)))
 })
 
@@ -306,11 +312,13 @@ test_that("a stalled sweep does not block a verb that can still progress", {
   # Reseeding before the measured and the asserted runs makes their oracle
   # searches identical, so `first` is the pending KL the predicate sees.
   empty <- matrix(numeric(0), nrow = 0L, ncol = 4L)
-  st <- plurality(atoms = list(
-    rbind(c(0.125, 0.375, 0.25, 0.25), c(0.25, 0.75, 0, 0)),
-    empty,
-    empty
-  ))
+  st <- plurality(
+    atoms = list(
+      rbind(c(0.125, 0.375, 0.25, 0.25), c(0.25, 0.75, 0, 0)),
+      empty,
+      empty
+    )
+  )
   set.seed(42)
   before <- em_step(st, 59L)
   st <- em_step(before, 1L)
@@ -340,7 +348,7 @@ test_that("record_gap makes a gap available to the predicate", {
   # The cache and the row it filled are one number.
   expect_identical(st@oracle$value - 1, utils::tail(st@trace$gap_after, 1L))
   # And through the weight verb too, which sweeps after its step.
-  st <- weight_step(st, 1L, record_gap = TRUE)
+  st <- ct_step(st, 1L, record_gap = TRUE)
   expect_true(!is.na(utils::tail(st@trace$gap_after, 1L)))
 })
 
@@ -366,11 +374,11 @@ test_that("every step clears the cached oracle, and record_gap resets it", {
     function(s) fw_step(s, 1L),
     function(s) lb_step(s, 1L),
     function(s) em_step(s, 1L),
-    function(s) weight_step(s, 1L)
+    function(s) ct_step(s, 1L)
   )) {
     expect_null(advance(st)@oracle)
   }
-  swept <- weight_step(st, 1L, record_gap = TRUE)
+  swept <- ct_step(st, 1L, record_gap = TRUE)
   expect_false(is.null(swept@oracle))
   expect_identical(
     swept@oracle$theta,
@@ -387,7 +395,10 @@ test_that("fw_step uses a cached oracle instead of searching again", {
   seed <- .Random.seed
   stepped <- fw_step(st, 1L)
   expect_identical(.Random.seed, seed)
-  expect_identical(utils::tail(stepped@trace$oracle_theta, 1L)[[1L]], cached$theta)
+  expect_identical(
+    utils::tail(stepped@trace$oracle_theta, 1L)[[1L]],
+    cached$theta
+  )
 })
 
 
@@ -545,7 +556,11 @@ test_that("splitting a call in two matches taking it in one", {
   a <- fw_step(plurality(), 3L)
   set.seed(8)
   b <- fw_step(fw_step(plurality(), 1L), 2L)
-  expect_equal(weights(a@mixing), weights(b@mixing), tolerance = rounding_tol(1))
+  expect_equal(
+    weights(a@mixing),
+    weights(b@mixing),
+    tolerance = rounding_tol(1)
+  )
   expect_equal(atoms(a@mixing), atoms(b@mixing), tolerance = rounding_tol(1))
   expect_identical(a@trace$step, b@trace$step)
   expect_identical(a@trace$phase, b@trace$phase)
@@ -556,9 +571,9 @@ test_that("verbs compose in any order", {
   # weight solve between two of them, must simply work.
   st <- plurality() |>
     em_step(2L) |>
-    weight_step(3L) |>
+    ct_step(3L) |>
     fw_step(2L) |>
-    weight_step(3L) |>
+    ct_step(3L) |>
     em_step(2L)
   expect_equal(weighted_gain(st), 1, tolerance = rounding_tol(1))
   expect_true(in_own_part(st))
@@ -569,7 +584,7 @@ test_that("only the stepping verbs can grow the support", {
   # one.
   st <- fw_step(plurality(), 3L)
   expect_identical(em_step(st, 3L)@part, st@part)
-  expect_identical(weight_step(st, 10L)@part, st@part)
+  expect_identical(ct_step(st, 10L)@part, st@part)
   expect_true(length(fw_step(st, 1L)@part) >= length(st@part))
 })
 
@@ -626,7 +641,10 @@ test_that("ripr_finish returns a ripr_fit that keeps its state", {
   expect_match(out, "refined  no", fixed = TRUE)
   expect_match(out, "4 rows, 0 snapshots", fixed = TRUE)
   expect_no_match(out, "@")
-  expect_match(format(fit), paste0("^ripr_fit: ", n_atoms(fit@W0), " atoms, KL "))
+  expect_match(
+    format(fit),
+    paste0("^ripr_fit: ", n_atoms(fit@W0), " atoms, KL ")
+  )
 })
 
 test_that("reoptimising in ripr_finish solves the weights to optimality", {
@@ -636,7 +654,11 @@ test_that("reoptimising in ripr_finish solves the weights to optimality", {
   fit <- ripr_finish(st, reoptimise = TRUE)
   g <- exact_g(st, atoms(st@mixing), W = fit@W0)
   expect_lt(max(g), 1 + 1e-6)
-  expect_equal(exact_g(st, atoms(fit@W0), W = fit@W0), rep(1, n_atoms(fit@W0)), tolerance = 1e-6)
+  expect_equal(
+    exact_g(st, atoms(fit@W0), W = fit@W0),
+    rep(1, n_atoms(fit@W0)),
+    tolerance = 1e-6
+  )
   expect_lte(fit@kl, exact_kl(st))
 })
 
@@ -750,7 +772,7 @@ test_that("a polytope null fits and certifies end to end", {
   ) |>
     fw_step(8L) |>
     em_step(8L) |>
-    weight_step(8L) |>
+    ct_step(8L) |>
     ripr_finish(record_gap = TRUE)
 
   # Every atom is in the null, and filed under the only part there is.

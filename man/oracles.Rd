@@ -51,9 +51,9 @@ the mixture it stepped \emph{from}. For \code{\link[=fw_step]{fw_step()}}, \code
 linear oracle's maximiser and \code{oracle_value} is \code{NA} (its value is the
 previous row's \code{gap_after + 1}); likewise for \code{\link[=sfw_step]{sfw_step()}}, whose \code{kl} is
 measured after the slide. For \code{\link[=lb_step]{lb_step()}} \code{oracle_value} is the
-Li--Barron objective, not a gap; for \code{\link[=weight_step]{weight_step()}} it is the pre-sweep
-support gap plus one, with no \code{oracle_theta}. When \code{part} is not \code{NA}, the
-atom went to \code{oracle_theta}.}
+Li--Barron objective, not a gap; for \code{\link[=weight_step]{weight_step()}} and \code{\link[=ct_step]{ct_step()}} it
+is the support gap before the step, plus one, with no \code{oracle_theta}. When
+\code{part} is not \code{NA}, the atom went to \code{oracle_theta}.}
 \item{\code{kl}, \code{gap_after}, \code{gap_after_theta}, \code{gap_after_part}}{The mixture
 the row \emph{produced}, and the linear oracle's gap, maximiser and part for
 it. Filled by \code{record_gap = TRUE} or the next \code{\link[=fw_step]{fw_step()}}; otherwise \code{NA}.}

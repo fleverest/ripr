@@ -53,7 +53,7 @@ lone_atom <- function(...) {
 
 # --- G, as the weight verb sees it --------------------------------------------
 
-test_that("a weight step multiplies each weight by its atom's G", {
+test_that("a Csiszar--Tusnady step multiplies each weight by its atom's G", {
   # `w_c <- w_c G(theta_c)` is the exact M-step for the weights, and the
   # identity makes it self-normalising. Checked at weights that are nowhere
   # near optimal, since the identity is algebra and does not care.
@@ -74,7 +74,7 @@ test_that("a weight step multiplies each weight by its atom's G", {
     )
     G <- exact_g(fresh, atoms(fresh@mixing))
     expect_equal(sum(w[ord] * G), 1, tolerance = rounding_tol(1))
-    swept <- weight_step(fresh, 1L)
+    swept <- ct_step(fresh, 1L)
     expect_equal(weights(swept@mixing), w[ord] * G, tolerance = rounding_tol(1))
   }
 })
@@ -84,16 +84,16 @@ test_that("a weight row's oracle value is the restricted Frank-Wolfe gap", {
   # gain over the current support.
   st <- fw_step(plurality(), 3L)
   G <- exact_g(st, atoms(st@mixing))
-  swept <- weight_step(st, 1L)
+  swept <- ct_step(st, 1L)
   expect_equal(utils::tail(swept@trace$oracle_value, 1L), max(G))
   # And the predicate reading the same number agrees on either side of it.
   expect_true(support_gap_below(max(G) - 1 + 1e-9)(st))
   expect_false(support_gap_below(max(G) - 1 - 1e-9)(st))
 })
 
-test_that("weight steps are monotone and record the KL they reach", {
+test_that("Csiszar--Tusnady steps are monotone and record the KL they reach", {
   st <- fw_step(plurality(), 3L)
-  swept <- weight_step(st, 5L)
+  swept <- ct_step(st, 5L)
   kl <- swept@trace$kl
   expect_true(all(diff(kl) <= rounding_tol(kl[-1L])))
   expect_equal(
@@ -101,6 +101,38 @@ test_that("weight steps are monotone and record the KL they reach", {
     exact_kl(swept),
     tolerance = rounding_tol(1)
   )
+})
+
+test_that("a weight step solves the weights on the current support", {
+  # Optimal for the atoms held fixed: G = 1 on the support, G <= 1 on any atom
+  # it zeroed, so the support gap is closed in one step.
+  st <- fw_step(plurality(), 5L)
+  solved <- weight_step(st)
+  G <- exact_g(solved, atoms(st@mixing))
+  expect_lt(max(G), 1 + 1e-6)
+  expect_equal(
+    exact_g(solved, atoms(solved@mixing)),
+    rep(1, n_atoms(solved@mixing)),
+    tolerance = 1e-6
+  )
+  expect_lte(
+    utils::tail(solved@trace$kl, 1L),
+    utils::tail(ct_step(st, 50L)@trace$kl, 1L) + 1e-12
+  )
+  expect_equal(
+    utils::tail(solved@trace$kl, 1L),
+    exact_kl(solved),
+    tolerance = rounding_tol(1)
+  )
+  expect_true(all(weights(solved@mixing) > 0))
+})
+
+test_that("a weight row's oracle value is the support gap before the solve", {
+  st <- fw_step(plurality(), 3L)
+  G <- exact_g(st, atoms(st@mixing))
+  solved <- weight_step(st)
+  expect_identical(utils::tail(solved@trace$phase, 1L), "weight")
+  expect_equal(utils::tail(solved@trace$oracle_value, 1L), max(G))
 })
 
 # --- Step paths ---------------------------------------------------------------
@@ -254,7 +286,10 @@ test_that("the finishing weight solve respects both its budget and tolerance", {
   # or a smaller budget can only stop the solve earlier, never beat it.
   full <- ripr_finish(fw_step(plurality(), 4L), reoptimise = TRUE)
   loose <- ripr_finish(fw_step(plurality(fc_tol = 1e10), 4L), reoptimise = TRUE)
-  capped <- ripr_finish(fw_step(plurality(fc_max_iter = 2L), 4L), reoptimise = TRUE)
+  capped <- ripr_finish(
+    fw_step(plurality(fc_max_iter = 2L), 4L),
+    reoptimise = TRUE
+  )
   expect_gte(loose@kl, full@kl - 1e-12)
   expect_gte(capped@kl, full@kl - 1e-12)
   expect_gt(capped@kl, full@kl)
@@ -377,7 +412,7 @@ test_that("an EM sweep's weights are the weight step's", {
   st <- fw_step(plurality(), 2L)
   expect_equal(
     weights(em_step(st, 1L)@mixing),
-    weights(weight_step(st, 1L)@mixing),
+    weights(ct_step(st, 1L)@mixing),
     tolerance = rounding_tol(1)
   )
 })

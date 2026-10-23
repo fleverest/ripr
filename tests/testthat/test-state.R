@@ -209,7 +209,7 @@ test_that("a row derives support size and max weight from the mixture", {
   st <- fixture()
   expect_identical(st@trace$support_size, 3L)
   expect_equal(st@trace$max_weight, 0.5)
-  stepped <- weight_step(st, 1L)
+  stepped <- ct_step(st, 1L)
   expect_equal(
     utils::tail(stepped@trace$max_weight, 1L),
     max(weights(stepped@mixing))

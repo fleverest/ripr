@@ -272,7 +272,7 @@ c(
 
 ## A second worked example: composing step verbs
 
-Because `fw_step()`, `lb_step()`, `em_step()` and `weight_step()` are independent verbs rather than a fixed pipeline, they compose freely.
+Because `fw_step()`, `lb_step()`, `em_step()`, `weight_step()` and `ct_step()` are independent verbs rather than a fixed pipeline, they compose freely.
 Here we demonstrate a null where candidate 1, 2 and 3 all fail to reach a majority (`H0: theta_1, theta_2, theta_3 <= 1/2`, the medial triangle), fit with a loop that interleaves Frank--Wolfe and EM steps, and nominate an alternative with one dirac per section, equally weighted.
 
 ```{r medial}

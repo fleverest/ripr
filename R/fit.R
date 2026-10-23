@@ -529,20 +529,22 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 }
 
 
-#' Weight correction step
+#' Csiszar--Tusnady step
 #'
 #' \eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)} with the atoms
-#' held fixed: the exact M-step for the weights, monotone in KL. Repeated, it
-#' converges only slowly to the optimal weights; to solve for optimal weights in
-#' one go, the current API supports only `fw_step(correct = TRUE)` or
-#' `ripr_finish(reoptimise = TRUE)`.
+#' held fixed: the alternating-minimisation update of \insertCite{CsiszarTusnady1984}{ripr}
+#' for the weights, which is also their exact EM (MM) step. Monotone in KL, but
+#' converges only slowly to the optimal weights; [weight_step()] solves for them
+#' in one go via SQP.
 #'
 #' Stop with `until = support_gap_below(tol)`, making `times` a budget.
 #' Convergence slows as atoms crowd together.
 #'
 #' @inheritParams em_step
 #' @return The updated [ripr_state].
-#' @seealso [predicates]
+#' @references
+#'   \insertAllCited{}
+#' @seealso [weight_step()], [predicates]
 #' @examples
 #' set.seed(1)
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -556,15 +558,15 @@ em_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |>
 #'   fw_step(times = 5L) |>
-#'   weight_step(times = 20L, until = support_gap_below(1e-6))
+#'   ct_step(times = 20L, until = support_gap_below(1e-6))
 #' state@trace$kl
 #' @export
-weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
+ct_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
   run_steps(
     state,
     times,
     until,
-    "weight",
+    "ct",
     record_gap,
     function(state, ld) {
       ld_all <- ld(state@mixing@atoms)
@@ -585,6 +587,63 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
           # The pre-sweep support gap; no `oracle_theta`, since its location
           # is already an atom.
           oracle_value = sweep$residual + 1
+        )
+      )
+    }
+  )
+}
+
+
+#' Fully-corrective weight step
+#'
+#' Re-solves every weight to optimality (via SQP) with the atoms held fixed, the
+#' solve that `fw_step(correct = TRUE)` runs after each step and
+#' `ripr_finish(reoptimise = TRUE)` runs at the end, to `fc_tol` and
+#' `fc_max_iter` from [ripr_control()]. Atoms whose weight reaches zero are
+#' dropped entirely. One step suffices: a second starts at the optimum. Compare
+#' [ct_step()], the cheap multiplicative update that only approaches it.
+#'
+#' The `times` parameter is accepted to be consistent with other steps, even
+#' though additional `weight_step`s after a converged solve does nothing.
+#'
+#' @inheritParams em_step
+#' @return The updated [ripr_state].
+#' @seealso [ct_step()], [fw_step()], [predicates]
+#' @examples
+#' set.seed(1)
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- fam(c(0.4, 0.35, 0.25))
+#' state <- ripr_init(Q, plurality) |>
+#'   fw_step(times = 5L) |>
+#'   weight_step()
+#' support_gap_below(1e-6)(state)
+#' @export
+weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
+  run_steps(
+    state,
+    times,
+    until,
+    "weight",
+    record_gap,
+    function(state, ld) {
+      ld_all <- ld(state@mixing@atoms)
+      log_p <- mixture_log_p(ld_all, state@mixing@weights)
+      gap <- max(atom_g(ld_all, log_p, state@engine)) - 1
+      corrected <- correct_state(state, ld)
+      list(
+        state = corrected$state,
+        log_p = corrected$log_p,
+        row = list(
+          kl = kl_at(state@engine, corrected$log_p),
+          # As for `ct_step()`, the pre-solve support gap.
+          oracle_value = gap + 1
         )
       )
     }

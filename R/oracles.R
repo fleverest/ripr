@@ -49,9 +49,9 @@
 #'   linear oracle's maximiser and `oracle_value` is `NA` (its value is the
 #'   previous row's `gap_after + 1`); likewise for [sfw_step()], whose `kl` is
 #'   measured after the slide. For [lb_step()] `oracle_value` is the
-#'   Li--Barron objective, not a gap; for [weight_step()] it is the pre-sweep
-#'   support gap plus one, with no `oracle_theta`. When `part` is not `NA`, the
-#'   atom went to `oracle_theta`.}
+#'   Li--Barron objective, not a gap; for [weight_step()] and [ct_step()] it
+#'   is the support gap before the step, plus one, with no `oracle_theta`. When
+#'   `part` is not `NA`, the atom went to `oracle_theta`.}
 #'   \item{`kl`, `gap_after`, `gap_after_theta`, `gap_after_part`}{The mixture
 #'   the row *produced*, and the linear oracle's gap, maximiser and part for
 #'   it. Filled by `record_gap = TRUE` or the next [fw_step()]; otherwise `NA`.}

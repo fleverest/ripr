@@ -2,7 +2,7 @@
 % Please edit documentation in R/fit.R
 \name{weight_step}
 \alias{weight_step}
-\title{Weight correction step}
+\title{Fully-corrective weight step}
 \usage{
 weight_step(state, times = 1L, record_gap = FALSE, until = NULL)
 }
@@ -22,15 +22,16 @@ each step; see \link{predicates}.}
 The updated \link{ripr_state}.
 }
 \description{
-\eqn{w_c \leftarrow w_c G(\theta_c)}{w_c <- w_c G(theta_c)} with the atoms
-held fixed: the exact M-step for the weights, monotone in KL. Repeated, it
-converges only slowly to the optimal weights; to solve for optimal weights in
-one go, the current API supports only \code{fw_step(correct = TRUE)} or
-\code{ripr_finish(reoptimise = TRUE)}.
+Re-solves every weight to optimality (via SQP) with the atoms held fixed, the
+solve that \code{fw_step(correct = TRUE)} runs after each step and
+\code{ripr_finish(reoptimise = TRUE)} runs at the end, to \code{fc_tol} and
+\code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Atoms whose weight reaches zero are
+dropped entirely. One step suffices: a second starts at the optimum. Compare
+\code{\link[=ct_step]{ct_step()}}, the cheap multiplicative update that only approaches it.
 }
 \details{
-Stop with \code{until = support_gap_below(tol)}, making \code{times} a budget.
-Convergence slows as atoms crowd together.
+The \code{times} parameter is accepted to be consistent with other steps, even
+though additional \code{weight_step}s after a converged solve does nothing.
 }
 \examples{
 set.seed(1)
@@ -45,9 +46,9 @@ plurality <- null_model(
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |>
   fw_step(times = 5L) |>
-  weight_step(times = 20L, until = support_gap_below(1e-6))
-state@trace$kl
+  weight_step()
+support_gap_below(1e-6)(state)
 }
 \seealso{
-\link{predicates}
+\code{\link[=ct_step]{ct_step()}}, \code{\link[=fw_step]{fw_step()}}, \link{predicates}
 }

@@ -320,13 +320,19 @@ last_row <- function(state) {
   if (length(rows)) rows[[length(rows)]] else NULL
 }
 
-#' Steps taken so far by verb (`fw`, `lb`, `em`, `weight`), from `phase`;
-#' the `init` row is not counted
+#' The `phase` each step verb writes to the trace: its name without `_step`
+#'
+#' A new verb is registered here; `run_steps()` refuses any other phase.
+#' @keywords internal
+#' @noRd
+step_phases <- c("fw", "lb", "em", "weight")
+
+#' Steps taken so far by verb, from `phase`; the `init` row is not counted
 #' @keywords internal
 #' @noRd
 phase_counts <- function(trace) {
   vapply(
-    c(fw = "fw", lb = "lb", em = "em", weight = "weight"),
+    stats::setNames(step_phases, step_phases),
     \(p) sum(trace$phase == p),
     integer(1)
   )

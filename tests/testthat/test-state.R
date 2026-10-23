@@ -148,7 +148,7 @@ test_that("a trace row carries its step index and phase", {
   st <- em_step(fw_step(fixture(), 1L), 1L)
   expect_identical(st@trace$step, 0:2)
   expect_identical(st@trace$phase, c("init", "fw", "em"))
-  expect_identical(verb_counts(st), c(fw = 1L, lb = 0L, em = 1L, weight = 0L))
+  expect_identical(verbs_used(st), c(fw = 1L, em = 1L))
 })
 
 test_that("the trace is a read-only data frame over the stored rows", {

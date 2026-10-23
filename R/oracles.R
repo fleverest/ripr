@@ -41,7 +41,8 @@
 #'
 #' \describe{
 #'   \item{`step`, `phase`}{The row's index ([ripr_init()]'s row is 0) and the
-#'   verb that wrote it (`"init"`, `"fw"`, `"lb"`, `"em"` or `"weight"`).
+#'   verb that wrote it: `"init"`, or the verb's name without `_step`, such
+#'   as `"fw"` for [fw_step()].
 #'   Count steps of a kind with e.g. `cumsum(trace$phase == "fw")`.}
 #'   \item{`oracle_value`, `oracle_theta`}{What the step's own search found at
 #'   the mixture it stepped *from*. For [fw_step()], `oracle_theta` is the

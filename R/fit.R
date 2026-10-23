@@ -243,6 +243,7 @@ run_steps <- function(
 ) {
   rlang::check_number_whole(times, min = 1, max = 2147483647)
   check_until(until)
+  stopifnot(phase %in% step_phases)
   ld <- compile_engine(state@engine)
 
   for (i in seq_len(times)) {

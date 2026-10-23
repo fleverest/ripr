@@ -43,7 +43,8 @@ its columns split by which mixture they measure.
 
 \describe{
 \item{\code{step}, \code{phase}}{The row's index (\code{\link[=ripr_init]{ripr_init()}}'s row is 0) and the
-verb that wrote it (\code{"init"}, \code{"fw"}, \code{"lb"}, \code{"em"} or \code{"weight"}).
+verb that wrote it: \code{"init"}, or the verb's name without \verb{_step}, such
+as \code{"fw"} for \code{\link[=fw_step]{fw_step()}}.
 Count steps of a kind with e.g. \code{cumsum(trace$phase == "fw")}.}
 \item{\code{oracle_value}, \code{oracle_theta}}{What the step's own search found at
 the mixture it stepped \emph{from}. For \code{\link[=fw_step]{fw_step()}}, \code{oracle_theta} is the

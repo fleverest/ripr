@@ -99,7 +99,7 @@ test_that("each verb writes one row per step, tagged with its phase", {
     weight_step(4L) |>
     lb_step(1L)
   expect_identical(
-    verb_counts(st),
+    verbs_used(st),
     c(fw = 2L, lb = 1L, em = 3L, weight = 4L)
   )
   expect_identical(st@trace$phase[1L], "init")

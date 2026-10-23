@@ -35,7 +35,9 @@ support may settle in far fewer oracle calls.
 }
 \details{
 The slide never increases KL. Atoms of the same part that slide onto the
-same point are merged, and atoms whose weight reaches zero are dropped.
+same point (to within \code{merge_atol} and \code{merge_rtol} from \code{\link[=ripr_control]{ripr_control()}})
+are merged at their weight-averaged position, and atoms whose weight
+reaches zero are dropped.
 Since each step consumes one linear-oracle search, \code{\link[=gap_below]{gap_below()}} works as
 \code{until}, as for \code{\link[=fw_step]{fw_step()}}.
 

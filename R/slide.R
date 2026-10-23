@@ -111,55 +111,18 @@ slide_sweep <- function(state, ld, dg, max_eval) {
 }
 
 
-#' Fold atoms of the same part that slid onto the same point into one.
-#'
-#' This is necessary because the hessian may be degenerate when there are
-#' coincident atoms.
-#' @keywords internal
-#' @noRd
-merge_coincident <- function(atoms, weights, part, tol = 1e-9) {
-  n <- nrow(atoms)
-  alive <- rep(TRUE, n)
-  for (a in seq_len(n - 1L)) {
-    if (!alive[a]) {
-      next
-    }
-    for (b in (a + 1L):n) {
-      # Merge if a and b are less than a distance of # `tol` apart.
-      if (
-        alive[b] &&
-          part[a] == part[b] &&
-          max(abs(atoms[a, ] - atoms[b, ])) < tol
-      ) {
-        # move all mass from b to a
-        weights[a] <- weights[a] + weights[b]
-        alive[b] <- FALSE
-      }
-    }
-  }
-  list(
-    atoms = atoms[alive, , drop = FALSE],
-    weights = weights[alive],
-    part = part[alive]
-  )
-}
-
-
 #' Slide a state: descend, merge coincident atoms, re-solve the weights
 #'
 #' The descent stops once KL stops changing in floating point, which can leave
 #' the weights slightly off optimal for the atoms it found, so they are
-#' re-solved with the atoms fixed by `correct_state()`.
+#' re-solved with the atoms fixed by `correct_state()`, which first merges
+#' atoms that slid onto the same point.
 #' @keywords internal
 #' @noRd
 slide_state <- function(state, ld, dg, max_eval) {
   slid <- slide_sweep(state, ld, dg, max_eval = max_eval)
-  m <- merge_coincident(slid$atoms, slid$weights, state@part)
-  state <- set_mixture(
-    state,
-    atoms = m$atoms,
-    weights = m$weights,
-    part = m$part
-  )
-  correct_state(state, ld)$state
+  correct_state(
+    set_mixture(state, atoms = slid$atoms, weights = slid$weights),
+    ld
+  )$state
 }

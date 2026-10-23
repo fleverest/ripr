@@ -281,17 +281,21 @@ test_that("a step's part says whether it used the candidate", {
 # --- The corrective solve -----------------------------------------------------
 
 test_that("the finishing weight solve respects both its budget and tolerance", {
-  # `fc_tol` and `fc_max_iter` are read only by a corrective solve, so they
-  # change nothing about the plain steps taken to get here; a looser tolerance
-  # or a smaller budget can only stop the solve earlier, never beat it.
-  full <- ripr_finish(fw_step(plurality(), 4L), reoptimise = TRUE)
-  loose <- ripr_finish(fw_step(plurality(fc_tol = 1e10), 4L), reoptimise = TRUE)
-  capped <- ripr_finish(
-    fw_step(plurality(fc_max_iter = 2L), 4L),
-    reoptimise = TRUE
-  )
-  expect_gte(loose@kl, full@kl - 1e-12)
+  # The solver settings are read only by a corrective solve, so with the same
+  # seed the plain steps taken to get here are identical; a looser tolerance or
+  # a smaller budget can only stop the solve earlier, never beat it.
+  finish <- function(...) {
+    set.seed(1)
+    ripr_finish(fw_step(plurality(...), 4L), reoptimise = TRUE)
+  }
+  full <- finish()
+  loose_sqp <- finish(kkt_tol = 1e-2)
+  loose_slsqp <- finish(weight_solver = "slsqp", fc_tol = 1e10)
+  capped <- finish(fc_max_iter = 2L)
+  expect_gte(loose_sqp@kl, full@kl - 1e-12)
+  expect_gte(loose_slsqp@kl, full@kl - 1e-12)
   expect_gte(capped@kl, full@kl - 1e-12)
+  expect_gt(loose_sqp@kl, full@kl)
   expect_gt(capped@kl, full@kl)
 })
 

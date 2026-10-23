@@ -94,3 +94,26 @@ test_that("sfw_step slides a state that came from another verb before inserting"
   sfw_step(stepped)
   expect_identical(slides, 1L) # a state from sfw_step() is not slid first
 })
+
+test_that("merge_coincident merges at the weight-averaged position, within tolerance", {
+  a <- c(0.2, 0.3, 0.5)
+  b <- a + c(1e-10, -1e-10, 0)
+  m <- ripr:::merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
+  expect_identical(nrow(m$atoms), 1L)
+  expect_equal(as.vector(m$atoms), 0.25 * a + 0.75 * b, tolerance = 0)
+  expect_equal(m$weights, 1)
+  # Beyond atol + rtol * max(|a|, |b|), nothing merges.
+  far <- ripr:::merge_coincident(rbind(a, a + c(1e-6, -1e-6, 0)), c(0.5, 0.5), part = c(1L, 1L))
+  expect_identical(nrow(far$atoms), 2L)
+  # rtol scales with the coordinates' size.
+  big <- c(1e6, 0)
+  near <- rbind(big, big + c(1e-4, 0))
+  expect_identical(nrow(ripr:::merge_coincident(near, c(0.5, 0.5), c(1L, 1L), atol = 1e-9, rtol = 0)$atoms), 2L)
+  expect_identical(nrow(ripr:::merge_coincident(near, c(0.5, 0.5), c(1L, 1L), atol = 1e-9, rtol = 1e-9)$atoms), 1L)
+})
+
+test_that("ripr_control checks the merge tolerances", {
+  expect_identical(ripr_control()$merge_atol, 1e-9)
+  expect_identical(ripr_control(merge_rtol = 0)$merge_rtol, 0)
+  expect_error(ripr_control(merge_atol = -1), "larger than or equal to 0")
+})

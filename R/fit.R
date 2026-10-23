@@ -629,15 +629,15 @@ ct_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
   )
 }
 
-
 #' Fully-corrective weight step
 #'
 #' Re-solves every weight to optimality (via SQP) with the atoms held fixed, the
 #' solve that `fw_step(correct = TRUE)` runs after each step and
 #' `ripr_finish(reoptimise = TRUE)` runs at the end, to `fc_tol` and
 #' `fc_max_iter` from [ripr_control()]. Atoms whose weight reaches zero are
-#' dropped entirely. One step suffices: a second starts at the optimum. Compare
-#' [ct_step()], the cheap multiplicative update that only approaches it.
+#' dropped entirely. One step suffices, as any further `weight_step`s start at
+#' the optimum and will converge immediately; cf. [ct_step()], its cheap
+#' multiplicative updates only approaches the optimum.
 #'
 #' The `times` parameter is accepted to be consistent with other steps, even
 #' though additional `weight_step`s after a converged solve does nothing.
@@ -698,7 +698,9 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' support may settle in far fewer oracle calls.
 #'
 #' The slide never increases KL. Atoms of the same part that slide onto the
-#' same point are merged, and atoms whose weight reaches zero are dropped.
+#' same point (to within `merge_atol` and `merge_rtol` from [ripr_control()])
+#' are merged at their weight-averaged position, and atoms whose weight
+#' reaches zero are dropped.
 #' Since each step consumes one linear-oracle search, [gap_below()] works as
 #' `until`, as for [fw_step()].
 #'

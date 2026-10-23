@@ -7,8 +7,12 @@
 ripr_control(
   n_seeds = 200L,
   n_restarts = 25L,
+  weight_solver = c("sqp", "slsqp"),
+  kkt_tol = 1e-12,
   fc_tol = 1e-10,
   fc_max_iter = 500L,
+  merge_atol = 1e-09,
+  merge_rtol = 1e-09,
   snapshot = c("none", "step", "all")
 )
 }
@@ -18,10 +22,33 @@ ripr_control(
 \item{n_restarts}{Number of top seeds to be refined by SLSQP per oracle
 call.}
 
-\item{fc_tol}{Relative tolerance on the weights for a corrective weight
-solve (\code{correct = TRUE}, or \code{ripr_finish(reoptimise = TRUE)}).}
+\item{weight_solver}{How a corrective weight solve (\code{correct = TRUE},
+\code{\link[=weight_step]{weight_step()}}, or \code{ripr_finish(reoptimise = TRUE)}) finds the optimal
+weights for fixed atoms. \code{"sqp"} (default) is an exact-Hessian sequential
+quadratic programming method, cf. mix-SQP
+\insertCite{KimCarbonettoStephensAnitescu2020}{ripr}, which stops once the
+Frank--Wolfe gap over the current support is below \code{kkt_tol} and falls back
+on \code{"slsqp"} if it doesn't converge. \code{"slsqp"} is nloptr's quasi-Newton
+SLSQP, which stops when the KL stops changing (much) in floating point,
+typically the gap is larger than the change in KL at that point.}
 
-\item{fc_max_iter}{Cap on the objective evaluations such a solve may take.}
+\item{kkt_tol}{For \code{weight_solver = "sqp"}: the target KKT residual, the
+largest of \eqn{|G_c - 1|}{|G_c - 1|} over atoms with weight and
+\eqn{G_c - 1}{G_c - 1} over atoms without.}
+
+\item{fc_tol}{For \code{"slsqp"}, and the fallback: its relative tolerance on the
+weights.}
+
+\item{fc_max_iter}{Cap on the iterations (\code{"sqp"}) or objective evaluations
+(\code{"slsqp"}) a solve may take.}
+
+\item{merge_atol, merge_rtol}{When two atoms of the same part agree in every
+coordinate to within \verb{merge_atol + merge_rtol * max(|a|, |b|)}, they are
+merged into one at their weight-averaged position: after every step that
+adds or moves atoms, and before \code{\link[=weight_step]{weight_step()}}'s solve. Two copies of one
+atom make the weight problem degenerate (its Hessian singular), so this
+keeps the solve well-posed. Meant to catch atoms that coincide up to
+rounding; large values change the fit.}
 
 \item{snapshot}{How often to record the fitted mixture alongside the trace.
 \code{"none"} (default) never records the state; \code{"step"} records the atoms and
@@ -38,4 +65,7 @@ Tuning for the RIPr optimiser
 }
 \examples{
 ripr_control(n_seeds = 50L, snapshot = "step")
+}
+\references{
+\insertAllCited{}
 }

@@ -26,8 +26,9 @@ Re-solves every weight to optimality (via SQP) with the atoms held fixed, the
 solve that \code{fw_step(correct = TRUE)} runs after each step and
 \code{ripr_finish(reoptimise = TRUE)} runs at the end, to \code{fc_tol} and
 \code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Atoms whose weight reaches zero are
-dropped entirely. One step suffices: a second starts at the optimum. Compare
-\code{\link[=ct_step]{ct_step()}}, the cheap multiplicative update that only approaches it.
+dropped entirely. One step suffices, as any further \code{weight_step}s start at
+the optimum and will converge immediately; cf. \code{\link[=ct_step]{ct_step()}}, its cheap
+multiplicative updates only approaches the optimum.
 }
 \details{
 The \code{times} parameter is accepted to be consistent with other steps, even

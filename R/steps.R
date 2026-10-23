@@ -71,7 +71,7 @@ search_null <- function(
 #' @noRd
 commit_step <- function(state, theta, part, planned) {
   stepped <- if (planned$uses_candidate) {
-    add_atom(state, theta, part, planned$weights)
+    merge_state(add_atom(state, theta, part, planned$weights))
   } else {
     set_mixture(state, weights = planned$weights[-length(planned$weights)])
   }
@@ -94,28 +94,34 @@ commit_step <- function(state, theta, part, planned) {
 #' @keywords internal
 #' @noRd
 insert_candidates <- function(state, found, tol = 1e-6) {
-  near <- function(a, b) max(abs(a - b)) <= tol
-  kept <- list(list(
-    theta = as.vector(found$theta),
-    part = as.integer(found$part)
-  ))
+  oracle <- list(theta = as.vector(found$theta), part = as.integer(found$part))
   maxima <- found$maxima
   if (is.null(maxima)) {
-    return(kept)
+    return(list(oracle))
   }
+  up <- which(is.finite(maxima$value) & maxima$value > 1)
+  up <- up[order(maxima$value[up], decreasing = TRUE)]
+  merged <- merge_coincident(
+    rbind(oracle$theta, maxima$theta[up, , drop = FALSE], deparse.level = 0),
+    c(found$value, maxima$value[up]),
+    c(oracle$part, as.integer(maxima$part[up])),
+    atol = tol,
+    rtol = tol
+  )
   atoms <- state@mixing@atoms
-  for (i in order(maxima$value, decreasing = TRUE)) {
-    if (!is.finite(maxima$value[i]) || maxima$value[i] <= 1) {
-      break
-    }
-    theta <- maxima$theta[i, ]
-    fresh <- !any(apply(atoms, 1L, near, theta)) &&
-      !any(vapply(kept, \(k) near(k$theta, theta), logical(1)))
-    if (fresh) {
-      kept[[length(kept) + 1L]] <- list(
-        theta = theta,
-        part = as.integer(maxima$part[i])
-      )
+  kept <- list(list(theta = merged$atoms[1L, ], part = merged$part[[1L]]))
+  for (i in seq_len(nrow(merged$atoms))[-1L]) {
+    theta <- merged$atoms[i, ]
+    same_as_atom <- vapply(
+      seq_len(nrow(atoms)),
+      \(c_i) {
+        state@part[c_i] == merged$part[i] &&
+          coincident(atoms[c_i, ], theta, tol, tol)
+      },
+      logical(1)
+    )
+    if (!any(same_as_atom)) {
+      kept[[length(kept) + 1L]] <- list(theta = theta, part = merged$part[[i]])
     }
   }
   kept
@@ -144,8 +150,17 @@ step_towards_all <- function(state, candidates, log_p, ld, ...) {
     part = c(state@part, vapply(candidates, `[[`, integer(1), "part"))
   )
   corrected <- correct_state(inserted, ld)
+  # The oracle's atom may have merged with a coincident one.
+  ctl <- state@control
   atoms <- corrected$state@mixing@atoms
-  oracle_kept <- any(apply(atoms, 1L, \(a) all(a == found$theta)))
+  oracle_kept <- any(apply(
+    atoms,
+    1L,
+    coincident,
+    found$theta,
+    ctl$merge_atol,
+    ctl$merge_rtol
+  ))
   list(
     state = corrected$state,
     log_p = corrected$log_p,

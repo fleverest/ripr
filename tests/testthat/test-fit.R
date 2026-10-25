@@ -796,3 +796,27 @@ test_that("a polytope null fits and certifies end to end", {
   # decomposition disturbs it.
   expect_equal(cert@sup_ub - 1, fit@gap_final, tolerance = 1e-4)
 })
+
+test_that("a corrective step refuses step-rule arguments it would ignore", {
+  # With `correct_weights = TRUE` the weight solve replaces the step that
+  # `variant` and `size` choose, so setting them can only mislead.
+  st <- plurality()
+  expect_error(
+    fw_step(st, correct_weights = TRUE, variant = "pairwise"),
+    "`variant` cannot be set"
+  )
+  expect_error(
+    fw_step(st, correct_weights = TRUE, size = "fixed"),
+    "`size` cannot be set"
+  )
+  expect_error(
+    fw_step(st, correct_weights = TRUE, variant = "away-step", size = "fixed"),
+    "`variant` and `size` cannot be set"
+  )
+  expect_error(lb_step(st, correct_weights = TRUE, size = "fixed"), "`size`")
+  # Left at their defaults, or without the solve, they are fine.
+  set.seed(1)
+  expect_no_error(fw_step(st, correct_weights = TRUE))
+  expect_no_error(fw_step(st, variant = "pairwise", size = "fixed"))
+  expect_error(fw_step(st, correct_weights = NA), "TRUE` or `FALSE")
+})

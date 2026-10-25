@@ -30,7 +30,8 @@ from that worst atom directly to the new one.}
 
 \item{correct_weights}{Re-solve the weights with atoms fixed after each
 step, by the \code{weight_solver} set in \code{\link[=ripr_control]{ripr_control()}} (as \code{\link[=weight_step]{weight_step()}}
-does). The \code{size} step only seeds the solve.}
+does). The solve replaces the step \code{variant} and \code{size} would choose, so
+setting either alongside it is an error.}
 
 \item{insert}{\code{"single"} adds the oracle's atom. \code{"multi"} also adds every
 other distinct local maximiser of \eqn{G}{G} with \eqn{G > 1}{G > 1} that

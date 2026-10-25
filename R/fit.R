@@ -359,7 +359,8 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
 #' @param correct_weights Re-solve the weights with atoms fixed after each
 #'   step, by the `weight_solver` set in [ripr_control()] (as [weight_step()]
-#'   does). The `size` step only seeds the solve.
+#'   does). The solve replaces the step `variant` and `size` would choose, so
+#'   setting either alongside it is an error.
 #' @param insert `"single"` adds the oracle's atom. `"multi"` also adds every
 #'   other distinct local maximiser of \eqn{G}{G} with \eqn{G > 1}{G > 1} that
 #'   the oracle's multi-start found. This is the multi-point insertion of PDAP
@@ -402,10 +403,15 @@ fw_step <- function(
   record_gap = FALSE,
   until = NULL
 ) {
+  rlang::check_bool(correct_weights)
+  check_step_rule_unused(
+    correct_weights,
+    c(variant = !missing(variant), size = !missing(size))
+  )
   directions <- variant_directions(rlang::arg_match(variant))
   size <- rlang::arg_match(size)
   insert <- rlang::arg_match(insert)
-  if (insert == "multi" && !isTRUE(correct_weights)) {
+  if (insert == "multi" && !correct_weights) {
     stop(
       "`insert = \"multi\"` needs `correct_weights = TRUE`: only the weight ",
       "solve can give the extra atoms mass.",
@@ -451,6 +457,26 @@ fw_step <- function(
 }
 
 
+#' Refuse step-rule arguments that a corrective solve would make moot
+#'
+#' With `correct_weights = TRUE` the weights are re-solved after every step,
+#' so the step rule only seeds that solve; `specified` flags which step-rule
+#' arguments the caller set.
+#' @keywords internal
+#' @noRd
+check_step_rule_unused <- function(correct_weights, specified) {
+  if (correct_weights && any(specified)) {
+    args <- paste0("`", names(specified)[specified], "`", collapse = " and ")
+    stop(
+      args, " cannot be set with `correct_weights = TRUE`: the weight solve ",
+      "replaces the step they choose, so they would have no effect.",
+      call. = FALSE
+    )
+  }
+  invisible()
+}
+
+
 #' Li--Barron greedy step
 #'
 #' Scores each candidate by the KL left *after* its weight is chosen, so the
@@ -458,6 +484,10 @@ fw_step <- function(
 #' [fw_step()]; see [oracles].
 #'
 #' @inheritParams fw_step
+#' @param correct_weights Re-solve the weights with atoms fixed after each
+#'   step, by the `weight_solver` set in [ripr_control()], both when scoring
+#'   candidates and when taking the step. The solve replaces the step `size`
+#'   would choose, so setting `size` alongside it is an error.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture,
 #'   filling `gap_after` and caching it for [gap_below()] and [fw_step()].
 #'   `FALSE` by default.
@@ -485,6 +515,8 @@ lb_step <- function(
   record_gap = FALSE,
   until = NULL
 ) {
+  rlang::check_bool(correct_weights)
+  check_step_rule_unused(correct_weights, c(size = !missing(size)))
   size <- rlang::arg_match(size)
 
   run_steps(

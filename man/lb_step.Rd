@@ -21,8 +21,9 @@ lb_step(
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 
 \item{correct_weights}{Re-solve the weights with atoms fixed after each
-step, by the \code{weight_solver} set in \code{\link[=ripr_control]{ripr_control()}} (as \code{\link[=weight_step]{weight_step()}}
-does). The \code{size} step only seeds the solve.}
+step, by the \code{weight_solver} set in \code{\link[=ripr_control]{ripr_control()}}, both when scoring
+candidates and when taking the step. The solve replaces the step \code{size}
+would choose, so setting \code{size} alongside it is an error.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture,
 filling \code{gap_after} and caching it for \code{\link[=gap_below]{gap_below()}} and \code{\link[=fw_step]{fw_step()}}.

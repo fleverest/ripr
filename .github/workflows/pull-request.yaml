@@ -1,17 +1,21 @@
-# Runs on every pull request into main.
+# Runs on every pull request into main, and on every push to main.
 #
 #   render  - regenerates roxygen docs, README.md and the vignette HTML from
 #             their sources, and commits the result back to the PR branch if
 #             anything changed (fails with the diff instead for PRs from forks,
-#             which the workflow token cannot push to).
+#             which the workflow token cannot push to). On a push to main the
+#             rebuilt files are committed directly to main.
 #   format  - fails if any R file is not formatted with air.
-#   check   - R CMD check on the branch as it stands after `render`.
+#   check   - R CMD check on the branch as it stands after `render`, across the
+#             platform matrix used by r-lib/actions' check-standard example.
 #
 # Commits pushed with GITHUB_TOKEN do not trigger further workflow runs, so a
 # rebuilt commit carries no check runs of its own; the `check` job in this run
 # covers it. To get a full run on the rebuilt commit, add a fine-grained PAT
 # with contents: write as the WORKFLOW_PUSH_TOKEN secret.
 on:
+  push:
+    branches: [main, master]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -93,7 +97,17 @@ jobs:
 
   check:
     needs: render
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: macos-latest, r: release}
+          - {os: windows-latest, r: release}
+          - {os: ubuntu-latest, r: devel, http-user-agent: release}
+          - {os: ubuntu-latest, r: release}
+          - {os: ubuntu-latest, r: oldrel-1}
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
@@ -107,6 +121,8 @@ jobs:
 
       - uses: r-lib/actions/setup-r@v2
         with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
       - uses: r-lib/actions/setup-r-dependencies@v2

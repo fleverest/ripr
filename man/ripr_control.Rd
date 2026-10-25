@@ -70,7 +70,8 @@ tolerance are treated as the same point. Used by, e.g.
 the search found: restarts that ascend to the same local maximum end up
 about this close, so they are added as one atom rather than multiple, and
 a candidate this close to an existing atom is dropped. Candidates enter at
-weight zero, so merging them does not cost anything in KL or gap.}
+weight zero, so merging them does not cost anything in KL or gap.
+Also used after each \code{\link[=sfw_step]{sfw_step()}} slide.}
 
 \item{snapshot}{How often to record the fitted mixture alongside the trace.
 \code{"none"} (default) never records the state; \code{"step"} records the atoms and

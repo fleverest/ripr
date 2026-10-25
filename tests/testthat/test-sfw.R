@@ -236,3 +236,77 @@ test_that("insert_candidates merges a maximum found from two parts into one", {
   m <- ripr:::merge_coincident(rbind(shared, shared), c(1, 1), c(1L, 2L))
   expect_identical(nrow(m$atoms), 2L)
 })
+
+test_that("the slide merges nearly coincident pairs it would leave apart", {
+  # Start with a bunch of random atoms and run sliding Frank--Wolfe;
+  # we want to make sure that atoms are merged appropriately.
+  near_pairs <- function(st, tol) {
+    a <- atoms(st@mixing)
+    same <- outer(st@part, st@part, "==") & upper.tri(diag(nrow(a)))
+    d <- as.matrix(stats::dist(a, method = "maximum"))[same]
+    sum(d > 1e-9 & d <= tol)
+  }
+  stalled <- 0L
+  for (seed in 1:6) {
+    set.seed(seed)
+    st <- ripr_init(
+      sfw_fixture()@alternative,
+      sfw_fixture()@null,
+      exact_engine(),
+      atoms = lapply(parts(sfw_fixture()@null@region), function(p) {
+        ch <- chart(p)
+        ch$to_theta_batch(ch$seed(40L))
+      })
+    )
+    ld <- ripr:::compile_engine(st@engine)
+    dg <- ripr:::compile_engine_grad(st@engine)
+    apart <- ripr:::slide_state(st, ld, dg, tol = 0)
+    merged <- ripr:::slide_state(st, ld, dg)
+    stalled <- stalled + near_pairs(apart, st@control$near_tol)
+    expect_identical(near_pairs(merged, st@control$near_tol), 0L)
+    expect_lte(exact_kl(merged), exact_kl(apart) + 1e-12)
+  }
+  skip_if(stalled == 0L, "no slide stalled with a pair apart on this platform")
+  expect_gt(stalled, 0L)
+})
+
+test_that("merge_coincident merges to a fixed point", {
+  # The second and third points merge at their midpoint, which lands within
+  # tolerance of the first: one pass would leave that pair, so passes repeat.
+  tol <- 1e-3
+  pts <- rbind(c(0, 0), c(1.2, 0.4) * tol, c(0.4, 1.2) * tol)
+  m <- ripr:::merge_coincident(
+    pts,
+    c(1, 1, 1),
+    c(1L, 1L, 1L),
+    atol = tol,
+    rtol = 0
+  )
+  expect_identical(nrow(m$atoms), 1L)
+  expect_equal(m$weights, 3)
+})
+
+test_that("the slide's merge never costs KL", {
+  # With a tolerance wide enough to catch genuinely distinct atoms, merging
+  # them would raise KL, so the slide keeps them apart.
+  fam <- multinomial_family(n_trials = 8L, k = 3L)
+  medial <- simplex_region(
+    vertices = rbind(c(0.5, 0.5, 0), c(0.5, 0, 0.5), c(0, 0.5, 0.5))
+  )
+  q <- fam(finite_dist(
+    atoms = rbind(c(0.7, 0.15, 0.15), c(0.15, 0.7, 0.15)),
+    weights = c(0.5, 0.5)
+  ))
+  set.seed(1)
+  st <- sfw_step(
+    ripr_init(q, null_model(fam, medial), exact_engine()),
+    times = 10L,
+    until = gap_below(1e-9)
+  )
+  expect_gt(n_atoms(st@mixing), 1L)
+  ld <- ripr:::compile_engine(st@engine)
+  dg <- ripr:::compile_engine_grad(st@engine)
+  wide <- ripr:::slide_state(st, ld, dg, tol = 1)
+  expect_identical(n_atoms(wide@mixing), n_atoms(st@mixing))
+  expect_lte(exact_kl(wide), exact_kl(st) + 1e-12)
+})

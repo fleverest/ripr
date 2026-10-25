@@ -120,12 +120,43 @@ slide_sweep <- function(state, ld, dg) {
 #' the weights slightly off optimal for the atoms it found, so they are
 #' re-solved with the atoms fixed by `correct_state()`, which first merges
 #' atoms that slid onto the same point.
+#'
+#' Same-part pairs within `tol` (`near_tol` in [ripr_control()]) are then merged
+#' too, the weights re-solved, and the result kept only if KL rises by no more
+#' than `1e-12` relative. Atoms that are genuinely distinct worsen KL, and stay
+#' apart.
 #' @keywords internal
 #' @noRd
-slide_state <- function(state, ld, dg) {
+slide_state <- function(
+  state,
+  ld,
+  dg,
+  tol = state@control$near_tol
+) {
   slid <- slide_sweep(state, ld, dg)
-  correct_state(
+  corrected <- correct_state(
     set_mixture(state, atoms = slid$atoms, weights = slid$weights),
     ld
-  )$state
+  )
+  st <- corrected$state
+  m <- merge_coincident(
+    st@mixing@atoms,
+    st@mixing@weights,
+    st@part,
+    atol = tol,
+    rtol = tol
+  )
+  if (nrow(m$atoms) == n_atoms(st@mixing)) {
+    return(st)
+  }
+  merged <- correct_state(
+    set_mixture(st, atoms = m$atoms, weights = m$weights, part = m$part),
+    ld
+  )
+  kl <- kl_at(st@engine, corrected$log_p)
+  if (kl_at(st@engine, merged$log_p) <= kl + 1e-12 * max(1, abs(kl))) {
+    merged$state
+  } else {
+    st
+  }
 }

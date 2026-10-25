@@ -68,6 +68,7 @@ NULL
 #'   about this close, so they are added as one atom rather than multiple, and
 #'   a candidate this close to an existing atom is dropped. Candidates enter at
 #'   weight zero, so merging them does not cost anything in KL or gap.
+#'   Also used after each [sfw_step()] slide.
 #' @param snapshot How often to record the fitted mixture alongside the trace.
 #'   `"none"` (default) never records the state; `"step"` records the atoms and
 #'   weights once per step call (e.g. [fw_step()]), so `fw_step(times = 10)`

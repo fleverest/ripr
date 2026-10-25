@@ -27,32 +27,38 @@ merge_coincident <- function(
   rtol = 1e-9,
   by_part = TRUE
 ) {
-  n <- nrow(atoms)
-  alive <- rep(TRUE, n)
-  for (a in seq_len(n - 1L)) {
-    if (!alive[a]) {
-      next
-    }
-    for (b in (a + 1L):n) {
-      if (!alive[b] || (by_part && part[a] != part[b])) {
+  # A merge moves the surviving atom, possibly onto one an earlier pass
+  # compared it with, so passes repeat until one merges nothing.
+  repeat {
+    n <- nrow(atoms)
+    alive <- rep(TRUE, n)
+    for (a in seq_len(n - 1L)) {
+      if (!alive[a]) {
         next
       }
-      if (coincident(atoms[a, ], atoms[b, ], atol, rtol)) {
-        total <- weights[a] + weights[b]
-        if (total > 0) {
-          atoms[a, ] <- (weights[a] * atoms[a, ] + weights[b] * atoms[b, ]) /
-            total
+      for (b in (a + 1L):n) {
+        if (!alive[b] || (by_part && part[a] != part[b])) {
+          next
         }
-        weights[a] <- total
-        alive[b] <- FALSE
+        if (coincident(atoms[a, ], atoms[b, ], atol, rtol)) {
+          total <- weights[a] + weights[b]
+          if (total > 0) {
+            atoms[a, ] <- (weights[a] * atoms[a, ] + weights[b] * atoms[b, ]) /
+              total
+          }
+          weights[a] <- total
+          alive[b] <- FALSE
+        }
       }
     }
+    atoms <- atoms[alive, , drop = FALSE]
+    weights <- weights[alive]
+    part <- part[alive]
+    if (all(alive)) {
+      break
+    }
   }
-  list(
-    atoms = atoms[alive, , drop = FALSE],
-    weights = weights[alive],
-    part = part[alive]
-  )
+  list(atoms = atoms, weights = weights, part = part)
 }
 
 

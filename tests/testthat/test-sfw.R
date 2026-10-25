@@ -204,3 +204,35 @@ test_that("ripr_control checks the merge tolerances", {
   expect_identical(ripr_control(merge_rtol = 0)$merge_rtol, 0)
   expect_error(ripr_control(merge_atol = -1), "larger than or equal to 0")
 })
+
+test_that("insert_candidates merges a maximum found from two parts into one", {
+  # (0, 0.5, 0.5) lies on the face both parts share, so each part's search
+  # can end there; it must be inserted once, in the part with the higher G.
+  # The search output is synthetic, as in the near_tol test above.
+  st <- ripr_init(
+    sfw_fixture()@alternative,
+    sfw_fixture()@null,
+    exact_engine(),
+    atoms = list(rbind(c(0.3, 0.4, 0.3)), rbind(c(0.3, 0.3, 0.4)))
+  )
+  shared <- c(0, 0.5, 0.5)
+  found <- list(
+    theta = c(0.1, 0.6, 0.3),
+    value = 1.3,
+    part = 1L,
+    maxima = list(
+      theta = rbind(shared, shared + c(0, 1e-8, -1e-8), c(0.3, 0.4, 0.3)),
+      value = c(1.1, 1.2, 1.05),
+      part = c(1L, 2L, 1L)
+    )
+  )
+  cands <- ripr:::insert_candidates(st, found)
+  expect_length(cands, 2L)
+  expect_equal(cands[[1L]]$theta, found$theta)
+  expect_equal(cands[[2L]]$theta, shared, tolerance = 1e-7)
+  expect_identical(cands[[2L]]$part, 2L)
+  expect_true(contains(parts(st@null@region)[[2L]], cands[[2L]]$theta))
+  # merge_coincident() itself still keeps parts apart unless told otherwise.
+  m <- ripr:::merge_coincident(rbind(shared, shared), c(1, 1), c(1L, 2L))
+  expect_identical(nrow(m$atoms), 2L)
+})

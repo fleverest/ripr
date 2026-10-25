@@ -14,10 +14,19 @@ coincident <- function(a, b, atol, rtol) {
 #' Two atoms of a part are the same point when every coordinate agrees to
 #' within `atol + rtol * max(|a|, |b|)`. The merged atom sits at their
 #' weight-averaged position (inside the part, which is convex) with their summed
-#' weight.
+#' weight, and keeps the earlier atom's part. With `by_part = FALSE` atoms of
+#' different parts merge too, as points on a face two parts share; their
+#' average may then lie just outside the kept part, so the caller projects it.
 #' @keywords internal
 #' @noRd
-merge_coincident <- function(atoms, weights, part, atol = 1e-9, rtol = 1e-9) {
+merge_coincident <- function(
+  atoms,
+  weights,
+  part,
+  atol = 1e-9,
+  rtol = 1e-9,
+  by_part = TRUE
+) {
   n <- nrow(atoms)
   alive <- rep(TRUE, n)
   for (a in seq_len(n - 1L)) {
@@ -25,7 +34,7 @@ merge_coincident <- function(atoms, weights, part, atol = 1e-9, rtol = 1e-9) {
       next
     }
     for (b in (a + 1L):n) {
-      if (!alive[b] || part[a] != part[b]) {
+      if (!alive[b] || (by_part && part[a] != part[b])) {
         next
       }
       if (coincident(atoms[a, ], atoms[b, ], atol, rtol)) {

@@ -89,10 +89,12 @@ commit_step <- function(state, theta, part, planned) {
 #' \insertCite{PieperWalter2021}{ripr}. The inserted points come from the
 #' refined multi-start search, `n_restarts` starts per cell, and
 #' `found$maxima` keeps their end points. Those with `G > 1` are candidates,
-#' best first; one within `tol` (`near_tol` in [ripr_control()]; in
-#' every coordinate) of a current atom or of a better candidate is interpreted
-#' as the same local maximum reached twice, and is dropped/merged. Returns a
-#' list of `list(theta, part)`, the oracle's atom first.
+#' best first. Candidates within `tol` (`near_tol` in [ripr_control()]; in
+#' every coordinate) of each other are the same local maximum reached twice,
+#' and merge into the better one, in any part: a maximum on a face two parts
+#' share is found from both. A candidate within `tol` of a current atom, in
+#' any part, is dropped. Returns a list of `list(theta, part)`, the oracle's
+#' atom first.
 #' @keywords internal
 #' @noRd
 insert_candidates <- function(
@@ -107,27 +109,31 @@ insert_candidates <- function(
   }
   up <- which(is.finite(maxima$value) & maxima$value > 1)
   up <- up[order(maxima$value[up], decreasing = TRUE)]
+  # Across parts: a maximum on a face two parts share is found from both.
   merged <- merge_coincident(
     rbind(oracle$theta, maxima$theta[up, , drop = FALSE], deparse.level = 0),
     c(found$value, maxima$value[up]),
     c(oracle$part, as.integer(maxima$part[up])),
     atol = tol,
-    rtol = tol
+    rtol = tol,
+    by_part = FALSE
   )
+  prts <- parts(state@null@region)
+  candidate <- function(i) {
+    p <- merged$part[[i]]
+    list(theta = as.vector(project(prts[[p]], merged$atoms[i, ])), part = p)
+  }
   atoms <- state@mixing@atoms
-  kept <- list(list(theta = merged$atoms[1L, ], part = merged$part[[1L]]))
+  kept <- list(candidate(1L))
   for (i in seq_len(nrow(merged$atoms))[-1L]) {
     theta <- merged$atoms[i, ]
     same_as_atom <- vapply(
       seq_len(nrow(atoms)),
-      \(c_i) {
-        state@part[c_i] == merged$part[i] &&
-          coincident(atoms[c_i, ], theta, tol, tol)
-      },
+      \(c_i) coincident(atoms[c_i, ], theta, tol, tol),
       logical(1)
     )
     if (!any(same_as_atom)) {
-      kept[[length(kept) + 1L]] <- list(theta = theta, part = merged$part[[i]])
+      kept[[length(kept) + 1L]] <- candidate(i)
     }
   }
   kept

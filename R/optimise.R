@@ -60,6 +60,8 @@ memoise_last <- function(f) {
 #'   from, one per row.
 #' @param n_seeds Random seeds drawn from the chart.
 #' @param n_restarts How many of the best seeds to refine.
+#' @param xtol,max_eval SLSQP's relative tolerance on chart coordinates, and
+#'   its cap on objective evaluations, per refined seed.
 #' @param keep_maxima Also return every refined restart's end point and value.
 #' @return `list(theta = , value = )` with `theta` in the space, and with
 #'   `keep_maxima = TRUE`, an additional `maxima` element: a list of `theta`
@@ -72,6 +74,8 @@ maximise_over <- function(
   seeds = NULL,
   n_seeds = 200L,
   n_restarts = 25L,
+  xtol = 1e-8,
+  max_eval = 1000L,
   keep_maxima = FALSE
 ) {
   ch <- chart(space)
@@ -106,7 +110,7 @@ maximise_over <- function(
           lower = ch$lower,
           heq = ch$heq,
           heqjac = ch$heqjac,
-          control = list(xtol_rel = 1e-8, maxeval = 1000L)
+          control = list(xtol_rel = xtol, maxeval = max_eval)
         )
         list(par = fit$par, value = fit$value)
       },

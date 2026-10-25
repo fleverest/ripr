@@ -9,7 +9,7 @@ fw_step(
   times = 1L,
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
-  correct = FALSE,
+  correct_weights = FALSE,
   insert = c("single", "multi"),
   record_gap = FALSE,
   until = NULL
@@ -28,15 +28,15 @@ from that worst atom directly to the new one.}
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 
-\item{correct}{Re-solve the weights with atoms fixed after each step, to
-\code{fc_tol} and \code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Can be expensive; the
-\code{size} step only seeds the solve.}
+\item{correct_weights}{Re-solve the weights with atoms fixed after each
+step, by the \code{weight_solver} set in \code{\link[=ripr_control]{ripr_control()}} (as \code{\link[=weight_step]{weight_step()}}
+does). The \code{size} step only seeds the solve.}
 
 \item{insert}{\code{"single"} adds the oracle's atom. \code{"multi"} also adds every
 other distinct local maximiser of \eqn{G}{G} with \eqn{G > 1}{G > 1} that
 the oracle's multi-start found. This is the multi-point insertion of PDAP
-\insertCite{PieperWalter2021}{ripr}. Needs \code{correct = TRUE}, since only
-the weight solve can give the extra atoms mass.}
+\insertCite{PieperWalter2021}{ripr}. Needs \code{correct_weights = TRUE},
+since only the weight solve can give the extra atoms mass.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture
 after each step, filling \code{gap_after}. Earlier rows fill anyway from the
@@ -56,8 +56,8 @@ towards the maximiser; see \link{oracles}. The search is skipped if
 step costs one search.
 }
 \details{
-\code{correct = TRUE} gives fully-corrective Frank--Wolfe: after each step every
-weight is re-solved to optimality over the current atoms.
+\code{correct_weights = TRUE} gives fully-corrective Frank--Wolfe: after each
+step every weight is re-solved to optimality over the current atoms.
 }
 \examples{
 set.seed(1)

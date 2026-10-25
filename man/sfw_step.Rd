@@ -4,14 +4,12 @@
 \alias{sfw_step}
 \title{Sliding Frank--Wolfe step}
 \usage{
-sfw_step(state, times = 1L, max_eval = 2000L, record_gap = FALSE, until = NULL)
+sfw_step(state, times = 1L, record_gap = FALSE, until = NULL)
 }
 \arguments{
 \item{state}{A \link{ripr_state}.}
 
 \item{times}{Steps to take.}
-
-\item{max_eval}{Cap on objective evaluations per slide.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture
 after each step, filling \code{gap_after}. Earlier rows fill anyway from the
@@ -27,8 +25,9 @@ The updated \link{ripr_state}.
 \description{
 One iteration of sliding Frank--Wolfe \insertCite{Denoyelle2020}{ripr}: a
 fully-corrective Frank--Wolfe step towards the linear oracle's atom (as
-\code{fw_step(correct = TRUE)}), then a \emph{slide}: a local descent of the KL over
-every weight and atom position jointly, each atom kept in its own part.
+\code{fw_step(correct_weights = TRUE)}), then a \emph{slide}: a local descent of the
+KL over every weight and atom position jointly, each atom kept in its own
+part.
 Where \code{\link[=fw_step]{fw_step()}} only adds atoms and \code{\link[=em_step]{em_step()}} moves them one at a
 time with the weights fixed, the slide moves them all together, so the
 support may settle in far fewer oracle calls.
@@ -39,7 +38,8 @@ same point (to within \code{merge_atol} and \code{merge_rtol} from \code{\link[=
 are merged at their weight-averaged position, and atoms whose weight
 reaches zero are dropped.
 Since each step consumes one linear-oracle search, \code{\link[=gap_below]{gap_below()}} works as
-\code{until}, as for \code{\link[=fw_step]{fw_step()}}.
+\code{until}, as for \code{\link[=fw_step]{fw_step()}}. The slide's tolerance and evaluation cap are
+\code{slide_xtol} and \code{slide_max_eval} in \code{\link[=ripr_control]{ripr_control()}}.
 
 A state that did not come from \code{sfw_step()} (fresh from \code{\link[=ripr_init]{ripr_init()}}, or
 last advanced by another verb) has its atoms slid once before the first

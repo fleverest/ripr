@@ -80,15 +80,15 @@ test_that("a solve that stops short falls back to SLSQP, from where SQP stopped"
 
   # Two iterations cannot: SLSQP runs once, from SQP's end point, and the
   # better of the two is kept.
-  ctl <- ripr_control(fc_max_iter = 2L) # Inhibits SQP but not SLSQP.
+  ctl <- ripr_control(weight_max_iter = 2L) # Inhibits SQP but not SLSQP.
   short <- ripr:::sqp_weights(
     ld_all,
     w0,
     st@engine,
-    tol = ctl$kkt_tol,
+    tol = ctl$weight_sqp_tol,
     max_iter = 2L
   )
-  expect_gt(short$kkt, ctl$kkt_tol)
+  expect_gt(short$kkt, ctl$weight_sqp_tol)
   w <- ripr:::solve_weights(ld_all, w0, st@engine, ctl)
   expect_length(starts, 1L)
   expect_equal(starts[[1L]], short$weights)
@@ -113,7 +113,7 @@ test_that("ripr_control verifies the solver settings", {
   expect_identical(ripr_control()$weight_solver, "sqp")
   expect_identical(ripr_control(weight_solver = "slsqp")$weight_solver, "slsqp")
   expect_error(ripr_control(weight_solver = "other"), "must be one of")
-  expect_error(ripr_control(kkt_tol = -1), "larger than or equal to 0")
+  expect_error(ripr_control(weight_sqp_tol = -1), "larger than or equal to 0")
 })
 
 test_that("weight_step merges duplicate atoms before solving, leaving the mixture unchanged", {

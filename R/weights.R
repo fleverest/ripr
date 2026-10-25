@@ -46,10 +46,10 @@ weight_sweep <- function(ld_all, w, log_p, engine) {
 #'
 #' Minimises `KL(Q || P_w)` over the simplex with the atoms fixed, a smooth
 #' convex problem. `control$weight_solver` picks the method: `"sqp"` runs
-#' `sqp_weights()` to a KKT residual of `kkt_tol`, falling back to SLSQP from
-#' where it stopped (keeping whichever has the lower KL) if it stops short;
-#' `"slsqp"` runs `slsqp_weights()` alone. Each takes at most `fc_max_iter`
-#' iterations or evaluations.
+#' `sqp_weights()` to a KKT residual of `weight_sqp_tol`, falling back to
+#' SLSQP from where it stopped (keeping whichever has the lower KL) if it
+#' stops short; `"slsqp"` runs `slsqp_weights()` alone. Each takes at most
+#' `weight_max_iter` iterations or evaluations.
 #' @keywords internal
 #' @noRd
 solve_weights <- function(ld_all, w, engine, control) {
@@ -58,26 +58,26 @@ solve_weights <- function(ld_all, w, engine, control) {
       ld_all,
       w,
       engine,
-      control$fc_tol,
-      control$fc_max_iter
+      control$weight_slsqp_tol,
+      control$weight_max_iter
     ))
   }
   fit <- sqp_weights(
     ld_all,
     w,
     engine,
-    tol = control$kkt_tol,
-    max_iter = control$fc_max_iter
+    tol = control$weight_sqp_tol,
+    max_iter = control$weight_max_iter
   )
-  if (fit$kkt <= control$kkt_tol) {
+  if (fit$kkt <= control$weight_sqp_tol) {
     return(fit$weights)
   }
   fallback <- slsqp_weights(
     ld_all,
     fit$weights,
     engine,
-    control$fc_tol,
-    control$fc_max_iter
+    control$weight_slsqp_tol,
+    control$weight_max_iter
   )
   kl <- \(x) kl_at(engine, mixture_log_p(ld_all, x))
   if (kl(fallback) < kl(fit$weights)) fallback else fit$weights

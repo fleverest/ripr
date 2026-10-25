@@ -31,9 +31,9 @@ test_that("sfw_step records one sfw row per step, with exact KL", {
 
 test_that("the slide never leaves KL above the corrective step alone", {
   set.seed(1)
-  st <- fw_step(sfw_fixture(), times = 2L, correct = TRUE)
+  st <- fw_step(sfw_fixture(), times = 2L, correct_weights = TRUE)
   set.seed(2)
-  fw <- fw_step(st, correct = TRUE)
+  fw <- fw_step(st, correct_weights = TRUE)
   set.seed(2)
   sfw <- sfw_step(st)
   expect_lte(
@@ -50,12 +50,66 @@ test_that("sfw_step reaches a small gap in few steps", {
   expect_lte(n_atoms(st@mixing), 4L)
 })
 
-test_that("sfw_step honours until and checks max_eval", {
+test_that("sfw_step honours until and a tiny slide budget", {
   st <- sfw_fixture()
   none <- sfw_step(st, times = 5L, until = function(state, candidate) TRUE)
-  expect_identical(nrow(none@trace), nrow(st@trace))
-  expect_error(sfw_step(st, max_eval = 0))
-  expect_no_error(sfw_step(st, max_eval = 5L))
+  expect_identical(nrow(none@trace), nrow(st@trace)) # No further iterations
+  set.seed(1)
+  long <- sfw_step(st) # No max_eval
+  set.seed(1)
+  st@control$slide_max_eval <- 2L
+  short <- sfw_step(st) # max_eval is 2
+  expect_lte(
+    utils::tail(long@trace$kl, 1L),
+    utils::tail(short@trace$kl, 1L)
+  )
+})
+
+test_that("the searches use the control's tolerance and budget", {
+  st <- sfw_fixture()
+  st@control$search_xtol <- 1e-5
+  st@control$search_max_eval <- 7L
+  seen <- list()
+  maximise <- ripr:::maximise_over
+  local_mocked_bindings(
+    maximise_over = function(..., xtol, max_eval) {
+      seen[[length(seen) + 1L]] <<- c(xtol, max_eval)
+      maximise(..., xtol = xtol, max_eval = max_eval)
+    },
+    .package = "ripr"
+  )
+  set.seed(1)
+  fw_step(st)
+  em_step(st)
+  expect_gt(length(seen), 0L)
+  for (s in seen) {
+    expect_identical(s, c(1e-5, 7))
+  }
+})
+
+test_that("candidate_merge_tol decides which maxima are one", {
+  # Two end points 1e-8 apart are one maximum at the default tolerance and
+  # two at a zero one.
+  st <- ripr_init(
+    sfw_fixture()@alternative,
+    sfw_fixture()@null,
+    exact_engine(),
+    atoms = list(rbind(c(0.3, 0.4, 0.3)), rbind(c(0.3, 0.3, 0.4)))
+  )
+  p <- c(0.1, 0.5, 0.4)
+  found <- list(
+    theta = c(0.1, 0.6, 0.3),
+    value = 1.3,
+    part = 1L,
+    maxima = list(
+      theta = rbind(p, p + c(0, 1e-8, -1e-8)),
+      value = c(1.2, 1.1),
+      part = c(1L, 1L)
+    )
+  ) # found$maxima$theta has two rows that are close
+  expect_length(ripr:::insert_candidates(st, found), 2L)
+  st@control$candidate_merge_tol <- 0
+  expect_length(ripr:::insert_candidates(st, found), 3L)
 })
 
 test_that("merge_coincident folds same-part duplicates only", {
@@ -96,20 +150,51 @@ test_that("sfw_step slides a state that came from another verb before inserting"
 })
 
 test_that("merge_coincident merges at the weight-averaged position, within tolerance", {
+  # Default tolerances
+  atol <- ripr_control()$merge_atol
+  rtol <- ripr_control()$merge_rtol
+  # Construct a, b
   a <- c(0.2, 0.3, 0.5)
-  b <- a + c(1e-10, -1e-10, 0)
+  delta <- atol + rtol * norm(a, type = "2")
+  b <- a + c(delta / 2, -delta / 2, 0) # closer than atol + rtol * max(|a|, |b|)
+  # Check that they merge
   m <- ripr:::merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
   expect_identical(nrow(m$atoms), 1L)
   expect_equal(as.vector(m$atoms), 0.25 * a + 0.75 * b, tolerance = 0)
   expect_equal(m$weights, 1)
+
   # Beyond atol + rtol * max(|a|, |b|), nothing merges.
-  far <- ripr:::merge_coincident(rbind(a, a + c(1e-6, -1e-6, 0)), c(0.5, 0.5), part = c(1L, 1L))
-  expect_identical(nrow(far$atoms), 2L)
+  b <- a + c(delta, -delta, 0) # further than atol + rtol * max(|a|, |b|)
+  m <- ripr:::merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
+  expect_identical(nrow(m$atoms), 2L)
   # rtol scales with the coordinates' size.
   big <- c(1e6, 0)
-  near <- rbind(big, big + c(1e-4, 0))
-  expect_identical(nrow(ripr:::merge_coincident(near, c(0.5, 0.5), c(1L, 1L), atol = 1e-9, rtol = 0)$atoms), 2L)
-  expect_identical(nrow(ripr:::merge_coincident(near, c(0.5, 0.5), c(1L, 1L), atol = 1e-9, rtol = 1e-9)$atoms), 1L)
+  delta <- atol + rtol * 1e6
+  near <- rbind(big, big + c(delta, 0))
+  expect_identical(
+    nrow(
+      ripr:::merge_coincident(
+        near,
+        c(0.5, 0.5),
+        c(1L, 1L),
+        atol = 1e-9,
+        rtol = 0
+      )$atoms
+    ),
+    2L
+  )
+  expect_identical(
+    nrow(
+      ripr:::merge_coincident(
+        near,
+        c(0.5, 0.5),
+        c(1L, 1L),
+        atol = 1e-9,
+        rtol = 1e-9
+      )$atoms
+    ),
+    1L
+  )
 })
 
 test_that("ripr_control checks the merge tolerances", {

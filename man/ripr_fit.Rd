@@ -36,7 +36,7 @@ describe an earlier iterate than the returned mixture; \code{NA} if none was.}
 \code{\link[=ripr_finish]{ripr_finish()}} was called with \code{record_gap = TRUE}.}
 
 \item{rounds}{Number of refinement rounds \code{\link[=ripr_finish]{ripr_finish()}} ran; \code{0} when
-neither \code{reoptimise} nor \code{identify} was on.}
+neither \code{correct_weights} nor \code{identify} was on.}
 
 \item{state}{The \link{ripr_state} the fit was finished from.}
 }

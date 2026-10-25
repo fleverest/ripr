@@ -74,7 +74,9 @@ em_atom_step <- function(state, ld, wt) {
         obj,
         seeds = atoms[c_i, , drop = FALSE],
         n_seeds = 0L,
-        n_restarts = 1L
+        n_restarts = 1L,
+        xtol = state@control$search_xtol,
+        max_eval = state@control$search_max_eval
       )
       # A step that found nothing finite learned nothing: keep the atom.
       if (is.finite(res$value)) res$theta else atoms[c_i, ]

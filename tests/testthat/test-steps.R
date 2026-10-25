@@ -286,12 +286,12 @@ test_that("the finishing weight solve respects both its budget and tolerance", {
   # a smaller budget can only stop the solve earlier, never beat it.
   finish <- function(...) {
     set.seed(1)
-    ripr_finish(fw_step(plurality(...), 4L), reoptimise = TRUE)
+    ripr_finish(fw_step(plurality(...), 4L), correct_weights = TRUE)
   }
   full <- finish()
-  loose_sqp <- finish(kkt_tol = 1e-2)
-  loose_slsqp <- finish(weight_solver = "slsqp", fc_tol = 1e10)
-  capped <- finish(fc_max_iter = 2L)
+  loose_sqp <- finish(weight_sqp_tol = 1e-2)
+  loose_slsqp <- finish(weight_solver = "slsqp", weight_slsqp_tol = 1e10)
+  capped <- finish(weight_max_iter = 2L)
   expect_gte(loose_sqp@kl, full@kl - 1e-12)
   expect_gte(loose_slsqp@kl, full@kl - 1e-12)
   expect_gte(capped@kl, full@kl - 1e-12)
@@ -681,12 +681,17 @@ test_that("an atom whose M-step finds nothing finite stays where it is", {
 })
 
 test_that("multi-point insertion needs a corrective weight solve", {
-  expect_error(fw_step(plurality(), insert = "multi"), "correct = TRUE")
+  expect_error(fw_step(plurality(), insert = "multi"), "correct_weights = TRUE")
 })
 
 test_that("the oracle keeps every restart's local maximum", {
   set.seed(1)
-  st <- fw_step(plurality(), times = 2L, correct = TRUE, record_gap = TRUE)
+  st <- fw_step(
+    plurality(),
+    times = 2L,
+    correct_weights = TRUE,
+    record_gap = TRUE
+  )
   maxima <- st@oracle$maxima
   expect_identical(nrow(maxima$theta), length(maxima$value))
   expect_identical(length(maxima$part), length(maxima$value))
@@ -697,7 +702,12 @@ test_that("the oracle keeps every restart's local maximum", {
 
 test_that("insert_candidates puts the oracle first and keeps distinct maxima above one", {
   set.seed(1)
-  st <- fw_step(plurality(), times = 2L, correct = TRUE, record_gap = TRUE)
+  st <- fw_step(
+    plurality(),
+    times = 2L,
+    correct_weights = TRUE,
+    record_gap = TRUE
+  )
   cands <- ripr:::insert_candidates(st, st@oracle)
   expect_equal(cands[[1L]]$theta, as.vector(st@oracle$theta))
   for (cd in cands[-1L]) {
@@ -719,7 +729,7 @@ test_that("fw_step's multi-point insertion keeps atoms in their parts and reache
   fw <- fw_step(
     plurality(),
     times = 25L,
-    correct = TRUE,
+    correct_weights = TRUE,
     insert = "multi",
     until = gap_below(1e-6)
   )

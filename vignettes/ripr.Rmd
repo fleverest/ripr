@@ -156,7 +156,12 @@ Here we run 40 steps of Frank--Wolfe, then use `ripr_finish()` to solve the weig
 set.seed(1)
 state <- ripr_init(Q, plurality)
 state <- sfw_step(state, times = 10L, until = gap_below(1e-10))
-fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+fit <- ripr_finish(
+  state,
+  correct_weights = TRUE,
+  identify = TRUE,
+  record_gap = TRUE
+)
 
 c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 ```

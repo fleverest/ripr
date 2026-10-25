@@ -22,13 +22,14 @@ each step; see \link{predicates}.}
 The updated \link{ripr_state}.
 }
 \description{
-Re-solves every weight to optimality (via SQP) with the atoms held fixed, the
-solve that \code{fw_step(correct = TRUE)} runs after each step and
-\code{ripr_finish(reoptimise = TRUE)} runs at the end, to \code{fc_tol} and
-\code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Atoms whose weight reaches zero are
-dropped entirely. One step suffices, as any further \code{weight_step}s start at
-the optimum and will converge immediately; cf. \code{\link[=ct_step]{ct_step()}}, its cheap
-multiplicative updates only approaches the optimum.
+Re-solves every weight to optimality with the atoms held fixed, the solve
+that \code{fw_step(correct_weights = TRUE)} runs after each step and
+\code{ripr_finish(correct_weights = TRUE)} runs at the end, by the
+\code{weight_solver} set in \code{\link[=ripr_control]{ripr_control()}} (SQP by default). Atoms of a part
+that coincide (to \code{merge_atol} and \code{merge_rtol}) are merged first, and atoms
+whose weight reaches zero are dropped. One step suffices, as any further
+\code{weight_step}s start at the optimum and converge immediately; cf.
+\code{\link[=ct_step]{ct_step()}}, whose cheap multiplicative updates only approach the optimum.
 }
 \details{
 The \code{times} parameter is accepted to be consistent with other steps, even

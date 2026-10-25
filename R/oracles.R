@@ -120,7 +120,7 @@ linear_oracle <- function(state, log_p, ld) {
 #' `gamma`, `direction` and `uses_candidate`, so an oracle can score
 #' candidates with the machinery that later takes the step.
 #'
-#' `correct` re-solves every weight after the step, which may zero the
+#' `correct_weights` re-solves every weight after the step, which may zero the
 #' candidate or an incumbent.
 #' @keywords internal
 #' @noRd
@@ -131,7 +131,7 @@ plan_step <- function(
   directions = "forward",
   size = "line-search",
   gamma_fixed = NULL,
-  correct = FALSE
+  correct_weights = FALSE
 ) {
   engine <- state@engine
   ctl <- state@control
@@ -151,7 +151,7 @@ plan_step <- function(
       size = size,
       gamma_fixed = gamma_fixed
     )
-    if (correct) {
+    if (correct_weights) {
       res$weights <- solve_weights(ld_all, res$weights, engine, ctl)
       res$log_p <- mixture_log_p(ld_all, res$weights)
       res$kl <- kl_at(engine, res$log_p)
@@ -191,7 +191,7 @@ nonlinear_oracle <- function(
   ld,
   size = "line-search",
   gamma_fixed = NULL,
-  correct = FALSE
+  correct_weights = FALSE
 ) {
   after <- plan_step(
     state,
@@ -199,7 +199,7 @@ nonlinear_oracle <- function(
     ld,
     size = size,
     gamma_fixed = gamma_fixed,
-    correct = correct
+    correct_weights = correct_weights
   )
 
   dg <- compile_engine_grad(state@engine)

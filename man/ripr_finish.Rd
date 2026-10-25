@@ -7,7 +7,7 @@
 ripr_finish(
   state,
   threshold = 0,
-  reoptimise = FALSE,
+  correct_weights = FALSE,
   identify = FALSE,
   record_gap = FALSE,
   max_rounds = 10L
@@ -18,7 +18,8 @@ ripr_finish(
 
 \item{threshold}{Drop atoms with weight at or below this. Must be below 1.}
 
-\item{reoptimise}{Re-solve the weights before dropping any. Off by default.}
+\item{correct_weights}{Re-solve the weights before dropping any. Off by
+default.}
 
 \item{identify}{Zero atoms whose removal does not increase KL. Off by
 default.}
@@ -39,8 +40,9 @@ Converts a fitted state into a mixture. By default the weights come across
 as they stand and nothing is dropped.
 }
 \details{
-\emph{Experimental}: two optional refinements, both off by default. \code{reoptimise}
-re-solves the weights over the current atoms (to \code{fc_tol}/\code{fc_max_iter}).
+\emph{Experimental}: two optional refinements, both off by default.
+\code{correct_weights} re-solves the weights over the current atoms, as
+\code{\link[=weight_step]{weight_step()}} does.
 \code{identify} zeroes, lightest first, each atom whose removal does not increase
 KL. With both on they alternate until a round removes nothing. They are sound
 only because the atoms have stopped moving; \code{identify} never increases KL but
@@ -66,7 +68,12 @@ plurality <- null_model(
 )
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
-fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+fit <- ripr_finish(
+  state,
+  correct_weights = TRUE,
+  identify = TRUE,
+  record_gap = TRUE
+)
 fit
 fit@kl
 fit@gap_fit

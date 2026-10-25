@@ -346,8 +346,8 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
 #' `state@oracle` already holds it (e.g. after `record_gap = TRUE`), so each
 #' step costs one search.
 #'
-#' `correct = TRUE` gives fully-corrective Frank--Wolfe: after each step every
-#' weight is re-solved to optimality over the current atoms.
+#' `correct_weights = TRUE` gives fully-corrective Frank--Wolfe: after each
+#' step every weight is re-solved to optimality over the current atoms.
 #'
 #' @param state A [ripr_state].
 #' @param times Steps to take.
@@ -357,14 +357,14 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
 #'   \eqn{\langle -\nabla f, d\rangle}{<-grad f, d>}. `"pairwise"` moves mass
 #'   from that worst atom directly to the new one.
 #' @param size `"line-search"`, or `"fixed"` for the open-loop schedule.
-#' @param correct Re-solve the weights with atoms fixed after each step, to
-#'   `fc_tol` and `fc_max_iter` from [ripr_control()]. Can be expensive; the
-#'   `size` step only seeds the solve.
+#' @param correct_weights Re-solve the weights with atoms fixed after each
+#'   step, by the `weight_solver` set in [ripr_control()] (as [weight_step()]
+#'   does). The `size` step only seeds the solve.
 #' @param insert `"single"` adds the oracle's atom. `"multi"` also adds every
 #'   other distinct local maximiser of \eqn{G}{G} with \eqn{G > 1}{G > 1} that
 #'   the oracle's multi-start found. This is the multi-point insertion of PDAP
-#'   \insertCite{PieperWalter2021}{ripr}. Needs `correct = TRUE`, since only
-#'   the weight solve can give the extra atoms mass.
+#'   \insertCite{PieperWalter2021}{ripr}. Needs `correct_weights = TRUE`,
+#'   since only the weight solve can give the extra atoms mass.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the produced mixture
 #'   after each step, filling `gap_after`. Earlier rows fill anyway from the
 #'   next step's search, so `TRUE` buys the final row's gap for about one extra
@@ -397,7 +397,7 @@ fw_step <- function(
   times = 1L,
   variant = c("standard", "away-step", "pairwise"),
   size = c("line-search", "fixed"),
-  correct = FALSE,
+  correct_weights = FALSE,
   insert = c("single", "multi"),
   record_gap = FALSE,
   until = NULL
@@ -405,10 +405,10 @@ fw_step <- function(
   directions <- variant_directions(rlang::arg_match(variant))
   size <- rlang::arg_match(size)
   insert <- rlang::arg_match(insert)
-  if (insert == "multi" && !isTRUE(correct)) {
+  if (insert == "multi" && !isTRUE(correct_weights)) {
     stop(
-      "`insert = \"multi\"` needs `correct = TRUE`: only the weight solve ",
-      "can give the extra atoms mass.",
+      "`insert = \"multi\"` needs `correct_weights = TRUE`: only the weight ",
+      "solve can give the extra atoms mass.",
       call. = FALSE
     )
   }
@@ -443,7 +443,7 @@ fw_step <- function(
           directions = directions,
           size = size,
           gamma_fixed = schedule_gamma(state),
-          correct = correct
+          correct_weights = correct_weights
         )
       }
     }
@@ -481,7 +481,7 @@ lb_step <- function(
   state,
   times = 1L,
   size = c("line-search", "fixed"),
-  correct = FALSE,
+  correct_weights = FALSE,
   record_gap = FALSE,
   until = NULL
 ) {
@@ -502,7 +502,7 @@ lb_step <- function(
         ld,
         size = size,
         gamma_fixed = gamma_fixed,
-        correct = correct
+        correct_weights = correct_weights
       )
       found <- search_null(state, obj)
       step_towards(
@@ -513,7 +513,7 @@ lb_step <- function(
         ld,
         size = size,
         gamma_fixed = gamma_fixed,
-        correct = correct
+        correct_weights = correct_weights
       )
     }
   )
@@ -631,13 +631,14 @@ ct_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 
 #' Fully-corrective weight step
 #'
-#' Re-solves every weight to optimality (via SQP) with the atoms held fixed, the
-#' solve that `fw_step(correct = TRUE)` runs after each step and
-#' `ripr_finish(reoptimise = TRUE)` runs at the end, to `fc_tol` and
-#' `fc_max_iter` from [ripr_control()]. Atoms whose weight reaches zero are
-#' dropped entirely. One step suffices, as any further `weight_step`s start at
-#' the optimum and will converge immediately; cf. [ct_step()], its cheap
-#' multiplicative updates only approaches the optimum.
+#' Re-solves every weight to optimality with the atoms held fixed, the solve
+#' that `fw_step(correct_weights = TRUE)` runs after each step and
+#' `ripr_finish(correct_weights = TRUE)` runs at the end, by the
+#' `weight_solver` set in [ripr_control()] (SQP by default). Atoms of a part
+#' that coincide (to `merge_atol` and `merge_rtol`) are merged first, and atoms
+#' whose weight reaches zero are dropped. One step suffices, as any further
+#' `weight_step`s start at the optimum and converge immediately; cf.
+#' [ct_step()], whose cheap multiplicative updates only approach the optimum.
 #'
 #' The `times` parameter is accepted to be consistent with other steps, even
 #' though additional `weight_step`s after a converged solve does nothing.
@@ -691,8 +692,9 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #'
 #' One iteration of sliding Frank--Wolfe \insertCite{Denoyelle2020}{ripr}: a
 #' fully-corrective Frank--Wolfe step towards the linear oracle's atom (as
-#' `fw_step(correct = TRUE)`), then a *slide*: a local descent of the KL over
-#' every weight and atom position jointly, each atom kept in its own part.
+#' `fw_step(correct_weights = TRUE)`), then a *slide*: a local descent of the
+#' KL over every weight and atom position jointly, each atom kept in its own
+#' part.
 #' Where [fw_step()] only adds atoms and [em_step()] moves them one at a
 #' time with the weights fixed, the slide moves them all together, so the
 #' support may settle in far fewer oracle calls.
@@ -702,7 +704,8 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' are merged at their weight-averaged position, and atoms whose weight
 #' reaches zero are dropped.
 #' Since each step consumes one linear-oracle search, [gap_below()] works as
-#' `until`, as for [fw_step()].
+#' `until`, as for [fw_step()]. The slide's tolerance and evaluation cap are
+#' `slide_xtol` and `slide_max_eval` in [ripr_control()].
 #'
 #' A state that did not come from `sfw_step()` (fresh from [ripr_init()], or
 #' last advanced by another verb) has its atoms slid once before the first
@@ -712,7 +715,6 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 #' it, the incoming atoms are positioned before any is dropped.
 #'
 #' @inheritParams fw_step
-#' @param max_eval Cap on objective evaluations per slide.
 #' @return The updated [ripr_state].
 #' @references
 #'   \insertAllCited{}
@@ -735,11 +737,9 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
 sfw_step <- function(
   state,
   times = 1L,
-  max_eval = 2000L,
   record_gap = FALSE,
   until = NULL
 ) {
-  rlang::check_number_whole(max_eval, min = 1)
   dg <- compile_engine_grad(state@engine)
 
   run_steps(
@@ -753,7 +753,7 @@ sfw_step <- function(
       found <- state@oracle
       log_p <- log_p_at_nodes(state, ld)
       if (!identical(last_row(state)$phase, "sfw")) {
-        state <- slide_state(state, ld, dg, max_eval = max_eval)
+        state <- slide_state(state, ld, dg)
         log_p <- log_p_at_nodes(state, ld)
         found <- search_null(state, linear_oracle(state, log_p, ld))
       }
@@ -764,9 +764,9 @@ sfw_step <- function(
         oracle_value = NA_real_,
         log_p,
         ld,
-        correct = TRUE
+        correct_weights = TRUE
       )
-      slid <- slide_state(inserted$state, ld, dg, max_eval = max_eval)
+      slid <- slide_state(inserted$state, ld, dg)
       log_p <- log_p_at_nodes(slid, ld)
       row <- inserted$row
       row$kl <- kl_at(slid@engine, log_p)
@@ -799,7 +799,7 @@ sfw_step <- function(
 #' @param gap_final The Frank--Wolfe gap over the returned mixture, `NA` unless
 #'   [ripr_finish()] was called with `record_gap = TRUE`.
 #' @param rounds Number of refinement rounds [ripr_finish()] ran; `0` when
-#'   neither `reoptimise` nor `identify` was on.
+#'   neither `correct_weights` nor `identify` was on.
 #' @param state The [ripr_state] the fit was finished from.
 #' @return A `ripr_fit`.
 #' @seealso [ripr_finish()]
@@ -914,8 +914,9 @@ method(format, ripr_fit) <- function(x, ...) {
 #' Converts a fitted state into a mixture. By default the weights come across
 #' as they stand and nothing is dropped.
 #'
-#' *Experimental*: two optional refinements, both off by default. `reoptimise`
-#' re-solves the weights over the current atoms (to `fc_tol`/`fc_max_iter`).
+#' *Experimental*: two optional refinements, both off by default.
+#' `correct_weights` re-solves the weights over the current atoms, as
+#' [weight_step()] does.
 #' `identify` zeroes, lightest first, each atom whose removal does not increase
 #' KL. With both on they alternate until a round removes nothing. They are sound
 #' only because the atoms have stopped moving; `identify` never increases KL but
@@ -931,7 +932,8 @@ method(format, ripr_fit) <- function(x, ...) {
 #'
 #' @param state A [ripr_state].
 #' @param threshold Drop atoms with weight at or below this. Must be below 1.
-#' @param reoptimise Re-solve the weights before dropping any. Off by default.
+#' @param correct_weights Re-solve the weights before dropping any. Off by
+#'   default.
 #' @param identify Zero atoms whose removal does not increase KL. Off by
 #'   default.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the *returned* mixture,
@@ -956,7 +958,12 @@ method(format, ripr_fit) <- function(x, ...) {
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
-#' fit <- ripr_finish(state, reoptimise = TRUE, identify = TRUE, record_gap = TRUE)
+#' fit <- ripr_finish(
+#'   state,
+#'   correct_weights = TRUE,
+#'   identify = TRUE,
+#'   record_gap = TRUE
+#' )
 #' fit
 #' fit@kl
 #' fit@gap_fit
@@ -965,13 +972,13 @@ method(format, ripr_fit) <- function(x, ...) {
 ripr_finish <- function(
   state,
   threshold = 0,
-  reoptimise = FALSE,
+  correct_weights = FALSE,
   identify = FALSE,
   record_gap = FALSE,
   max_rounds = 10L
 ) {
   rlang::check_number_decimal(threshold)
-  rlang::check_bool(reoptimise)
+  rlang::check_bool(correct_weights)
   rlang::check_bool(identify)
   rlang::check_bool(record_gap)
   if (threshold >= 1) {
@@ -991,10 +998,11 @@ ripr_finish <- function(
   # Alternating only helps with both on: with one alone a second round would
   # repeat the first.
   rounds <- 0L
-  if (reoptimise || identify) {
-    for (round in seq_len(if (reoptimise && identify) max_rounds else 1L)) {
+  if (correct_weights || identify) {
+    rounds_max <- if (correct_weights && identify) max_rounds else 1L
+    for (round in seq_len(rounds_max)) {
       rounds <- round
-      if (reoptimise) {
+      if (correct_weights) {
         w <- solve_weights(ld_all, w, engine, ctl)
       }
       if (!identify) {

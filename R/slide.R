@@ -15,7 +15,7 @@
 #' start: a failed or worsening descent returns the start unchanged.
 #' @keywords internal
 #' @noRd
-slide_sweep <- function(state, ld, dg, max_eval) {
+slide_sweep <- function(state, ld, dg) {
   engine <- state@engine
   atoms <- state@mixing@atoms
   w <- state@mixing@weights
@@ -85,7 +85,10 @@ slide_sweep <- function(state, ld, dg, max_eval) {
       lower = c(numeric(n), unlist(lapply(charts, `[[`, "lower"))),
       heq = heq,
       heqjac = heqjac,
-      control = list(xtol_rel = 1e-10, maxeval = max_eval)
+      control = list(
+        xtol_rel = state@control$slide_xtol,
+        maxeval = state@control$slide_max_eval
+      )
     ),
     error = function(e) NULL
   )
@@ -119,8 +122,8 @@ slide_sweep <- function(state, ld, dg, max_eval) {
 #' atoms that slid onto the same point.
 #' @keywords internal
 #' @noRd
-slide_state <- function(state, ld, dg, max_eval) {
-  slid <- slide_sweep(state, ld, dg, max_eval = max_eval)
+slide_state <- function(state, ld, dg) {
+  slid <- slide_sweep(state, ld, dg)
   correct_state(
     set_mixture(state, atoms = slid$atoms, weights = slid$weights),
     ld

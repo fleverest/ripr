@@ -10,6 +10,8 @@ maximise_over(
   seeds = NULL,
   n_seeds = 200L,
   n_restarts = 25L,
+  xtol = 1e-08,
+  max_eval = 1000L,
   keep_maxima = FALSE
 )
 }
@@ -24,6 +26,9 @@ from, one per row.}
 \item{n_seeds}{Random seeds drawn from the chart.}
 
 \item{n_restarts}{How many of the best seeds to refine.}
+
+\item{xtol, max_eval}{SLSQP's relative tolerance on chart coordinates, and
+its cap on objective evaluations, per refined seed.}
 
 \item{keep_maxima}{Also return every refined restart's end point and value.}
 }

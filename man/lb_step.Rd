@@ -8,7 +8,7 @@ lb_step(
   state,
   times = 1L,
   size = c("line-search", "fixed"),
-  correct = FALSE,
+  correct_weights = FALSE,
   record_gap = FALSE,
   until = NULL
 )
@@ -20,9 +20,9 @@ lb_step(
 
 \item{size}{\code{"line-search"}, or \code{"fixed"} for the open-loop schedule.}
 
-\item{correct}{Re-solve the weights with atoms fixed after each step, to
-\code{fc_tol} and \code{fc_max_iter} from \code{\link[=ripr_control]{ripr_control()}}. Can be expensive; the
-\code{size} step only seeds the solve.}
+\item{correct_weights}{Re-solve the weights with atoms fixed after each
+step, by the \code{weight_solver} set in \code{\link[=ripr_control]{ripr_control()}} (as \code{\link[=weight_step]{weight_step()}}
+does). The \code{size} step only seeds the solve.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the produced mixture,
 filling \code{gap_after} and caching it for \code{\link[=gap_below]{gap_below()}} and \code{\link[=fw_step]{fw_step()}}.

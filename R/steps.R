@@ -134,17 +134,18 @@ insert_candidates <- function(
 }
 
 
-#' Step towards the oracle's atom, insert every candidate, solve the weights
+#' Insert every candidate at weight zero, then solve the weights
 #'
-#' The Frank--Wolfe step towards the first candidate (the oracle's atom) seeds
-#' `correct_state()` over the current atoms and every candidate, which alone
-#' can give the other candidates mass; atoms left at zero are dropped. Returns
-#' `list(state, log_p, row)`, as `step_towards()` does.
+#' `correct_state()` over the current atoms and every candidate gives the
+#' candidates their mass: each has `G > 1`, so the solve's first QP frees it.
+#' No Frank--Wolfe step seeds the solve, since its result would be replaced.
+#' Atoms left at zero are dropped. Returns `list(state, log_p, row)`, as
+#' `step_towards()` does; the row's `part` is the oracle's atom's, if it kept
+#' any weight.
 #' @keywords internal
 #' @noRd
-step_towards_all <- function(state, candidates, log_p, ld, ...) {
+step_towards_all <- function(state, candidates, ld) {
   found <- candidates[[1L]]
-  planned <- plan_step(state, log_p, ld, ...)(found$theta)
   inserted <- set_mixture(
     state,
     atoms = rbind(
@@ -152,7 +153,7 @@ step_towards_all <- function(state, candidates, log_p, ld, ...) {
       do.call(rbind, lapply(candidates, `[[`, "theta")),
       deparse.level = 0
     ),
-    weights = c(planned$weights, numeric(length(candidates) - 1L)),
+    weights = c(state@mixing@weights, numeric(length(candidates))),
     part = c(state@part, vapply(candidates, `[[`, integer(1), "part"))
   )
   corrected <- correct_state(inserted, ld)

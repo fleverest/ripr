@@ -737,3 +737,19 @@ test_that("fw_step's multi-point insertion keeps atoms in their parts and reache
   expect_true(in_own_part(fw))
   expect_equal(utils::tail(fw@trace$kl, 1L), exact_kl(fw), tolerance = 1e-10)
 })
+
+test_that("multi-point insertion records no step size or direction", {
+  # The weight solve, not a Frank--Wolfe step, sets every weight, so there is
+  # no step to describe.
+  set.seed(1)
+  st <- fw_step(
+    plurality(),
+    times = 2L,
+    correct_weights = TRUE,
+    insert = "multi"
+  )
+  rows <- st@trace[-1L, ]
+  expect_true(all(is.na(rows$step_size)))
+  expect_true(all(is.na(rows$direction)))
+  expect_true(all(!is.na(rows$part)))
+})

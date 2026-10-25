@@ -427,24 +427,15 @@ fw_step <- function(
     record_gap = record_gap,
     uses_oracle = TRUE,
     advance = function(state, ld) {
-      log_p <- log_p_at_nodes(state, ld)
       if (insert == "multi") {
-        step_towards_all(
-          state,
-          insert_candidates(state, state@oracle),
-          log_p,
-          ld,
-          directions = directions,
-          size = size,
-          gamma_fixed = schedule_gamma(state)
-        )
+        step_towards_all(state, insert_candidates(state, state@oracle), ld)
       } else {
         step_towards(
           state,
           state@oracle,
           # Already recorded as the previous row's `1 + gap_after`.
           oracle_value = NA_real_,
-          log_p,
+          log_p_at_nodes(state, ld),
           ld,
           directions = directions,
           size = size,

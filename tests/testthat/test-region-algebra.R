@@ -506,7 +506,10 @@ test_that("disjoin() covers the same set with parts that do not overlap", {
       # They may meet, but only in a face: the plurality cells are
       # 2-dimensional in `R^3`, so an overlap of dimension 2 would be the
       # double-counting the peeling exists to remove.
-      full <- min(affine_dim(parts(peeled)[[i]]), affine_dim(parts(peeled)[[j]]))
+      full <- min(
+        affine_dim(parts(peeled)[[i]]),
+        affine_dim(parts(peeled)[[j]])
+      )
       for (cell in parts(shared)) {
         expect_lt(affine_dim(cell), full)
       }

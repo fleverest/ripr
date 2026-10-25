@@ -185,7 +185,10 @@ test_that("kernel_draw agrees in distribution with the per-row sampler", {
   key <- function(m) apply(m, 1L, paste, collapse = ",")
   tally <- function(d) tabulate(match(key(d), key(outcomes)), nrow(outcomes))
 
-  got <- tally(kernel_draw(fam, matrix(theta, nrow = n, ncol = 3L, byrow = TRUE)))
+  got <- tally(kernel_draw(
+    fam,
+    matrix(theta, nrow = n, ncol = 3L, byrow = TRUE)
+  ))
   want <- n * exp(log_density(fam(theta), outcomes))
   chi <- sum((got - want)^2 / want)
   expect_gt(pchisq(chi, nrow(outcomes) - 1L, lower.tail = FALSE), 1e-4)

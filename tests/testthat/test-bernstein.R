@@ -632,13 +632,16 @@ test_that("reparametrise_to() preserves the enclosure on an interior sub-simplex
   for (K in 2:4) {
     lat <- bernstein_lattice(4L, as.integer(K))
     coef <- stats::rnorm(lat$n_coef)
-    V <- do.call(rbind, lapply(
-      seq_len(K),
-      function(i) {
-        z <- stats::rgamma(K, shape = 2)
-        z / sum(z)
-      }
-    ))
+    V <- do.call(
+      rbind,
+      lapply(
+        seq_len(K),
+        function(i) {
+          z <- stats::rgamma(K, shape = 2)
+          z / sum(z)
+        }
+      )
+    )
     out <- reparametrise_to(coef, lat, V)
     for (rep in 1:40) {
       mu <- rand_lambda(K)

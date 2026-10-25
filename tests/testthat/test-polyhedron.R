@@ -229,7 +229,11 @@ test_that("the parent validator runs through every subclass constructor", {
 
   # Integer matrices are numeric already and flow through as they are.
   square <- polytope_region(
-    vertices = matrix(c(0L, 0L, 1L, 0L, 1L, 1L, 0L, 1L), nrow = 4L, byrow = TRUE)
+    vertices = matrix(
+      c(0L, 0L, 1L, 0L, 1L, 1L, 0L, 1L),
+      nrow = 4L,
+      byrow = TRUE
+    )
   )
   expect_identical(nrow(square@facets$a), 4L)
 })

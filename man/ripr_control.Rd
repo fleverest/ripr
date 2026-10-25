@@ -17,7 +17,7 @@ ripr_control(
   weight_max_iter = 500L,
   merge_atol = 1e-09,
   merge_rtol = 1e-09,
-  candidate_merge_tol = 1e-06,
+  near_tol = 1e-06,
   snapshot = c("none", "step", "all")
 )
 }
@@ -64,11 +64,13 @@ point when every coordinate agrees to within
 adds or moves atoms and before every weight solve. Meant to catch atoms
 that coincide up to rounding; large values change the fit.}
 
-\item{candidate_merge_tol}{Merging: \code{fw_step(insert = "multi")} inserts
-every distinct local maximum the search found; restarts that reached the
-same maximum end within the search's precision of each other, so
-candidates within this (absolute and relative) tolerance are one maximum,
-and a candidate this close to a current atom is dropped.}
+\item{near_tol}{Merging: points within this (absolute and relative)
+tolerance are treated as the same point. Used by, e.g.
+\code{fw_step(insert = "multi")}, which inserts every distinct local maximum
+the search found: restarts that ascend to the same local maximum end up
+about this close, so they are added as one atom rather than multiple, and
+a candidate this close to an existing atom is dropped. Candidates enter at
+weight zero, so merging them does not cost anything in KL or gap.}
 
 \item{snapshot}{How often to record the fitted mixture alongside the trace.
 \code{"none"} (default) never records the state; \code{"step"} records the atoms and
@@ -109,8 +111,12 @@ The corrective solve over the weights with fixed support (atom locations),
 \section{Merging}{
 
 Two copies of one atom make the weight problem degenerate (its Hessian
-singular), so atoms of a part that coincide are merged into one at their
-weight-averaged position.
+singular), so points of a part that are the same are merged into one at
+their weight-averaged position. Two tolerances say when: \code{merge_atol} and
+\code{merge_rtol} catch atoms that coincide up to rounding, and are applied
+unconditionally; \code{near_tol} catches distinct points that the search
+(for the supremum) found and merges them if they are close enough; here we
+assume they represent the same local optimum.
 }
 
 \examples{

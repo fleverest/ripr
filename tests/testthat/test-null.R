@@ -118,8 +118,10 @@ peak_at <- function(fam, target) {
   random_variable(
     function(x) {
       x <- matrix(x, ncol = length(target))
-      1 - rowSums(x * (x - 1)) / (n * (n - 1)) +
-        2 * as.vector(x %*% target) / n - sum(target^2)
+      1 -
+        rowSums(x * (x - 1)) / (n * (n - 1)) +
+        2 * as.vector(x %*% target) / n -
+        sum(target^2)
     },
     fam@sample_space
   )
@@ -408,7 +410,6 @@ test_that("a null_model prints a summary, not a property dump", {
     fixed = TRUE
   )
 })
-
 
 
 test_that("ripr_init() refuses an atom outside its own part", {

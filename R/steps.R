@@ -89,7 +89,7 @@ commit_step <- function(state, theta, part, planned) {
 #' \insertCite{PieperWalter2021}{ripr}. The inserted points come from the
 #' refined multi-start search, `n_restarts` starts per cell, and
 #' `found$maxima` keeps their end points. Those with `G > 1` are candidates,
-#' best first; one within `tol` (`candidate_merge_tol` in [ripr_control()]; in
+#' best first; one within `tol` (`near_tol` in [ripr_control()]; in
 #' every coordinate) of a current atom or of a better candidate is interpreted
 #' as the same local maximum reached twice, and is dropped/merged. Returns a
 #' list of `list(theta, part)`, the oracle's atom first.
@@ -98,7 +98,7 @@ commit_step <- function(state, theta, part, planned) {
 insert_candidates <- function(
   state,
   found,
-  tol = state@control$candidate_merge_tol
+  tol = state@control$near_tol
 ) {
   oracle <- list(theta = as.vector(found$theta), part = as.integer(found$part))
   maxima <- found$maxima

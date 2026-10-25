@@ -87,9 +87,11 @@ test_that("the searches use the control's tolerance and budget", {
   }
 })
 
-test_that("candidate_merge_tol decides which maxima are one", {
+test_that("near_tol decides which maxima are one", {
   # Two end points 1e-8 apart are one maximum at the default tolerance and
-  # two at a zero one.
+  # two at a zero one. The search output is synthetic: insert_candidates()
+  # reads only the end points' positions, their parts, and the order of their
+  # values (all above one).
   st <- ripr_init(
     sfw_fixture()@alternative,
     sfw_fixture()@null,
@@ -108,7 +110,7 @@ test_that("candidate_merge_tol decides which maxima are one", {
     )
   ) # found$maxima$theta has two rows that are close
   expect_length(ripr:::insert_candidates(st, found), 2L)
-  st@control$candidate_merge_tol <- 0
+  st@control$near_tol <- 0
   expect_length(ripr:::insert_candidates(st, found), 3L)
 })
 

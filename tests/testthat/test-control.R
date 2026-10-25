@@ -17,8 +17,13 @@ test_that("counts are coerced to integer", {
     slide_max_eval = 4,
     weight_max_iter = 5
   )
-  for (count in c("n_seeds", "n_restarts", "search_max_eval",
-                  "slide_max_eval", "weight_max_iter")) {
+  for (count in c(
+    "n_seeds",
+    "n_restarts",
+    "search_max_eval",
+    "slide_max_eval",
+    "weight_max_iter"
+  )) {
     expect_type(ctl[[count]], "integer")
   }
   expect_type(ctl$weight_slsqp_tol, "double")
@@ -68,9 +73,15 @@ test_that("counts respect their lower bounds", {
 
 test_that("each tolerance must be a single non-negative number", {
   # The error names the offending setting, and ripr_control() as the caller.
-  for (tol in c("search_xtol", "slide_xtol", "weight_sqp_tol",
-                "weight_slsqp_tol", "merge_atol", "merge_rtol",
-                "candidate_merge_tol")) {
+  for (tol in c(
+    "search_xtol",
+    "slide_xtol",
+    "weight_sqp_tol",
+    "weight_slsqp_tol",
+    "merge_atol",
+    "merge_rtol",
+    "near_tol"
+  )) {
     expect_silent(do.call(ripr_control, stats::setNames(list(0), tol)))
     bad <- function(v) do.call(ripr_control, stats::setNames(list(v), tol))
     expect_error(bad(-1), paste0("`", tol, "` must be"))

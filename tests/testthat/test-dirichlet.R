@@ -560,7 +560,10 @@ test_that("Dirichlet mixing measures print their concentration", {
     vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
   )
   out <- paste(
-    capture.output(print(truncated_dirichlet(alpha = c(4, 3, 2), region = region))),
+    capture.output(print(truncated_dirichlet(
+      alpha = c(4, 3, 2),
+      region = region
+    ))),
     collapse = "\n"
   )
   expect_match(out, "<truncated_dirichlet>", fixed = TRUE)
@@ -613,7 +616,8 @@ test_that("a dropped measure-zero cell does not stay in the law's support", {
   fam <- multinomial_family(n_trials = 3L, k = 3L)
   region <- simplex_region(
     vertices = rbind(c(1, 0, 0), c(0.5, 0.5, 0), c(0, 0, 1))
-  ) | polytope_region(vertices = rbind(c(1, 0, 0), c(0.9, 0.1, 0)))
+  ) |
+    polytope_region(vertices = rbind(c(1, 0, 0), c(0.9, 0.1, 0)))
   expect_warning(
     w <- truncated_dirichlet(alpha = c(2, 2, 2), region = region),
     class = "ripr_degenerate_warning"

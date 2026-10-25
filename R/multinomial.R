@@ -67,7 +67,11 @@ method(compile_density_grad, multinomial_family) <- function(family, x) {
     rows <- which(x[, j] > 0)
     lowered <- x[rows, , drop = FALSE]
     lowered[, j] <- lowered[, j] - 1
-    list(rows = rows, lowered = lowered, base = log_coef[rows] + log(x[rows, j]))
+    list(
+      rows = rows,
+      lowered = lowered,
+      base = log_coef[rows] + log(x[rows, j])
+    )
   })
   function(theta_mat, log_m) {
     log_theta <- log(as_row_matrix(theta_mat))
@@ -75,7 +79,8 @@ method(compile_density_grad, multinomial_family) <- function(family, x) {
     for (j in seq_along(blocks)) {
       b <- blocks[[j]]
       if (length(b$rows)) {
-        terms <- tcrossprod_0_ninf(b$lowered, log_theta) + (b$base + log_m[b$rows])
+        terms <- tcrossprod_0_ninf(b$lowered, log_theta) +
+          (b$base + log_m[b$rows])
         out[, j] <- colSums(exp(terms))
       }
     }

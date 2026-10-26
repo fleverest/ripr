@@ -114,10 +114,11 @@ reference:
 
 - title: Fitting the RIPr
   desc: >
-    `ripr_init()` builds a starting state; the step verbs advance it by
-    Frank--Wolfe, Li--Barron and/or EM; `ripr_finish()` turns it into a
-    distribution.
+    `ripr()` fits in one call. Step by step, `ripr_init()` builds a starting
+    state; the step verbs (e.g. `fw_step()`) advance it by Frank--Wolfe,
+    Li--Barron and/or EM; `ripr_finish()` cleans up and packages the result.
   contents:
+  - ripr
   - ripr_control
   - ripr_state
   - ripr_init

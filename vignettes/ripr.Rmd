@@ -150,7 +150,7 @@ The two parts overlap, and the alternative sits in the cap above them, where can
 
 The fitting procedure is a sequence of steps: e.g. `sfw_step()` for sliding Frank--Wolfe updates and `em_step()` for EM (also `fw_step` for standard Frank--Wolfe variants, and `lb_step()` for Li--Barron [@LiBarron1999], though Li--Barron is not generally recommended: see `?oracles`).
 There is no fixed pipeline; which algorithm runs is decided by which verbs are called, and in what order.
-Here we run 40 steps of Frank--Wolfe, then use `ripr_finish()` to solve the weights and drop any low-mass atoms.
+Here we run at most 10 steps of sliding Frank--Wolfe, stopping once the Frank--Wolfe gap is below `1e-10`, then use `ripr_finish()` to turn the state into a fit.
 
 ```{r fit}
 set.seed(1)
@@ -164,6 +164,8 @@ fit <- ripr_finish(
 
 c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
 ```
+
+`ripr(Q, plurality, tol = 1e-10)` does the same in one call, with `method = "pdap"` or `"fcfw"` for the other recommended methods; given a fit in place of `Q`, it resumes it.
 
 ```{r plot-plurality-fit, echo = FALSE, fig.cap = "Plurality null, with the support of W1 (alternative) and W0 (null, fitted)."}
 plot_null(

@@ -2,7 +2,6 @@
 % Please edit documentation in R/ripr-package.R
 \docType{package}
 \name{ripr-package}
-\alias{ripr}
 \alias{ripr-package}
 \title{ripr: Reverse Information Projection onto Finite Unions of Convex Sets}
 \description{

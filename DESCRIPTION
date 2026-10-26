@@ -80,6 +80,7 @@ Collate:
     'point_region.R'
     'real_region.R'
     'region_algebra.R'
+    'ripr.R'
     'slide.R'
     'sqp.R'
     'triangulate.R'

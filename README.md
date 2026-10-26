@@ -71,8 +71,8 @@ set.seed(1)
 fit <- ripr(Q, plurality, tol = 1e-10)
 
 c(kl = fit@kl, gap = fit@gap_final, atoms = n_atoms(fit@W0))
-#>           kl          gap        atoms 
-#> 2.822068e-02 1.776357e-15 2.000000e+00
+#>         kl        gap      atoms 
+#> 0.02822068 0.00000000 2.00000000
 ```
 
 <div class="figure" style="text-align: center">
@@ -113,7 +113,7 @@ cert
 #>   X = Q / P*
 #>   under null_model: multinomial_family over 2 parts
 #>   sup E[X] <= 1  (certified via bernstein)
-#>   sup E[X] >= 1  (interval width: 9.48e-10)
+#>   sup E[X] >= 1  (interval width: 9.46e-10)
 #>          bound attained iterations converged
 #>   part 1     1        1         26      TRUE
 #>   part 2     1        1         28      TRUE
@@ -137,10 +137,10 @@ print(E(outcomes))
 
 `vignette("ripr")` walks through the same example in more depth: why
 validity survives a deliberately bad fit, how a bound from `certify()`
-differs from `search_sup()`, and what happens when no certification method
-exists for a family/geometry pair. `vignette("regions")` covers the
-region interface and set algebra (`|`, `&`, `-`, `==` and `disjoin()`)
-used to build nulls out of convex pieces.
+differs from `search_sup()`, and what happens when no certification
+method exists for a family/geometry pair. `vignette("regions")` covers
+the region interface and set algebra (`|`, `&`, `-`, `==` and
+`disjoin()`) used to build nulls out of convex pieces.
 
 ## References
 

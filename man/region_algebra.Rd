@@ -65,7 +65,7 @@ simplex <- simplex_region(vertices = diag(3))
 simplex - plurality
 
 # Several regions are subtracted as their union, so this is the same set:
-(simplex - (trails_2 | trails_3)) == (simplex - plurality)
+(simplex - (loses_2 | loses_3)) == (simplex - plurality)
 
 # A square, and the same square cut into two triangles: different objects,
 # the same set. One of those triangles alone is not.

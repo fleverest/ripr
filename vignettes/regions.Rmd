@@ -286,7 +286,7 @@ rather than being typed out by hand as two parts:
 set.seed(3)
 fit <- ripr_init(Q_alt, sierpinski) |>
   sfw_step(times = 40L, until = gap_below(1e-10)) |>
-  ripr_finish(correct_weights = TRUE, identify = TRUE, record_gap = TRUE)
+  ripr_finish(correct_weights = TRUE, record_gap = TRUE)
 
 c(kl = fit@kl, atoms = n_atoms(fit@W0))
 ```

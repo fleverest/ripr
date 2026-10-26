@@ -630,7 +630,7 @@ test_that("ripr_finish returns a ripr_fit that keeps its state", {
   expect_true(S7::S7_inherits(fit@W0, finite_dist))
   expect_true(S7::S7_inherits(fit@P_star, mixture))
   expect_identical(fit@part, sort(st@part))
-  expect_identical(fit@rounds, 0L)
+  expect_false(fit@corrected_weights)
   # The history is the state's, reached through it rather than copied out.
   expect_identical(fit@state, st)
   expect_identical(fit@state@trace, st@trace)
@@ -638,7 +638,7 @@ test_that("ripr_finish returns a ripr_fit that keeps its state", {
   out <- paste(capture.output(print(fit)), collapse = "\n")
   expect_match(out, "<ripr_fit>", fixed = TRUE)
   expect_match(out, paste("mixed over", n_atoms(fit@W0), "atoms"), fixed = TRUE)
-  expect_match(out, "refined  no", fixed = TRUE)
+  expect_match(out, "weights  as fitted", fixed = TRUE)
   expect_match(out, "4 rows, 0 snapshots", fixed = TRUE)
   expect_no_match(out, "@")
   expect_match(
@@ -679,29 +679,31 @@ test_that("kl describes the returned mixture, not the state", {
   # Refining and pruning both change the mixture, so a `kl` taken from the state
   # would describe something the caller was not given.
   st <- fw_step(plurality(), 5L)
-  fit <- ripr_finish(st, correct_weights = TRUE, identify = TRUE)
+  fit <- ripr_finish(st, correct_weights = TRUE, threshold = 0.05)
   expect_equal(fit@kl, exact_kl(st, fit@W0), tolerance = rounding_tol(1))
 })
 
-test_that("refining lowers KL and shrinks the support", {
+test_that("correcting the weights lowers KL and shrinks the support", {
+  # Plain Frank--Wolfe leaves many lightly weighted atoms; the exact solve
+  # zeroes those it does not need, and they are dropped.
   st <- fw_step(plurality(), 6L)
   plain <- ripr_finish(st)
-  refined <- ripr_finish(st, correct_weights = TRUE, identify = TRUE)
-  expect_true(refined@kl <= plain@kl)
-  expect_true(n_atoms(refined@W0) <= n_atoms(plain@W0))
-  expect_true(refined@rounds >= 1L)
+  corrected <- ripr_finish(st, correct_weights = TRUE)
+  expect_lte(corrected@kl, plain@kl)
+  expect_lt(n_atoms(corrected@W0), n_atoms(plain@W0))
+  expect_true(corrected@corrected_weights)
+  out <- paste(capture.output(print(corrected)), collapse = "\n")
+  expect_match(out, "weights  re-solved", fixed = TRUE)
 })
 
 test_that("threshold keeps, drops, or errors", {
   st <- fw_step(plurality(), 5L)
-  identified <- ripr_finish(st, identify = TRUE)
-  expect_true(
-    n_atoms(ripr_finish(st, identify = TRUE, threshold = -1)@W0) >=
-      n_atoms(identified@W0)
+  plain <- ripr_finish(st)
+  expect_identical(
+    n_atoms(ripr_finish(st, threshold = -1)@W0),
+    n_atoms(plain@W0)
   )
-  expect_true(
-    n_atoms(ripr_finish(st, threshold = 0.2)@W0) <= n_atoms(identified@W0)
-  )
+  expect_lte(n_atoms(ripr_finish(st, threshold = 0.2)@W0), n_atoms(plain@W0))
   expect_error(ripr_finish(st, threshold = 1), "`threshold` must be below 1")
   expect_error(ripr_finish(st, threshold = 0.99), "no atom has weight above")
 })
@@ -722,12 +724,7 @@ test_that("the returned mixture is a distribution", {
 test_that("gap_final measures the returned mixture, gap_fit the state", {
   # `gap_fit` cannot show what finishing did -- it was recorded on the way in.
   st <- fw_step(plurality(), 5L)
-  fit <- ripr_finish(
-    st,
-    correct_weights = TRUE,
-    identify = TRUE,
-    record_gap = TRUE
-  )
+  fit <- ripr_finish(st, correct_weights = TRUE, record_gap = TRUE)
   gaps <- st@trace$gap_after[!is.na(st@trace$gap_after)]
   expect_equal(fit@gap_fit, utils::tail(gaps, 1L))
   expect_true(is.na(utils::tail(st@trace$gap_after, 1L)))
@@ -743,7 +740,7 @@ test_that("the binomial projection concentrates at the boundary", {
   fit <- binomial(p = 0.75, n_seeds = 100L) |>
     fw_step(8L) |>
     em_step(20L) |>
-    ripr_finish(correct_weights = TRUE, identify = TRUE)
+    ripr_finish(correct_weights = TRUE)
   heavy <- fit@W0@atoms[which.max(weights(fit@W0)), ]
   expect_equal(heavy, c(0.5, 0.5), tolerance = 1e-3)
   expect_true(max(weights(fit@W0)) > 0.99)

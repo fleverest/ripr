@@ -532,7 +532,7 @@ test_that("a truncated Dirichlet alternative fits against the plurality null", {
   state <- ripr_init(Q, null_model(family, plurality), engine = exact_engine())
   state <- fw_step(state, times = 20L)
   state <- em_step(state, times = 60L, until = kl_flat(1e-9))
-  fit <- ripr_finish(state, correct_weights = TRUE, identify = TRUE)
+  fit <- ripr_finish(state, correct_weights = TRUE)
 
   expect_true(is.finite(fit@kl))
   expect_gt(fit@kl, 0)

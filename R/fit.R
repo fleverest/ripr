@@ -821,8 +821,8 @@ sfw_step <- function(
 #'   describe an earlier iterate than the returned mixture; `NA` if none was.
 #' @param gap_final The Frank--Wolfe gap over the returned mixture, `NA` unless
 #'   [ripr_finish()] was called with `record_gap = TRUE`.
-#' @param rounds Number of refinement rounds [ripr_finish()] ran; `0` when
-#'   neither `correct_weights` nor `identify` was on.
+#' @param corrected_weights Whether [ripr_finish()] re-solved the weights
+#'   (`correct_weights = TRUE`).
 #' @param state The [ripr_state] the fit was finished from.
 #' @return A `ripr_fit`.
 #' @seealso [ripr_finish()]
@@ -853,7 +853,7 @@ ripr_fit <- new_class(
     kl = class_numeric,
     gap_fit = class_numeric,
     gap_final = class_numeric,
-    rounds = class_integer,
+    corrected_weights = class_logical,
     state = ripr_state
   ),
   validator = function(self) {
@@ -864,11 +864,11 @@ ripr_fit <- new_class(
       kl = self@kl,
       gap_fit = self@gap_fit,
       gap_final = self@gap_final,
-      rounds = self@rounds
+      corrected_weights = self@corrected_weights
     )
     for (nm in names(scalars)) {
       if (length(scalars[[nm]]) != 1L) {
-        return(sprintf("`%s` must be a single number", nm))
+        return(sprintf("`%s` must be a single value", nm))
       }
     }
     NULL
@@ -901,8 +901,8 @@ method(print, ripr_fit) <- function(x, ...) {
     sep = ""
   )
   cat(
-    "  refined  ",
-    if (x@rounds) count_label(x@rounds, "round") else "no",
+    "  weights  ",
+    if (x@corrected_weights) "re-solved" else "as fitted",
     "\n",
     sep = ""
   )
@@ -937,37 +937,24 @@ method(format, ripr_fit) <- function(x, ...) {
 #' Converts a fitted state into a mixture. By default the weights come across
 #' as they stand and nothing is dropped.
 #'
-#' *Experimental*: two optional refinements, both off by default.
-#' `correct_weights` re-solves the weights over the current atoms, as
-#' [weight_step()] does.
-#' `identify` zeroes, lightest first, each atom whose removal does not increase
-#' KL. With both on they alternate until a round removes nothing. They are sound
-#' only because the atoms have stopped moving; `identify` never increases KL but
-#' does not *certify* that a removed atom is zero at the optimum.
+#' `correct_weights = TRUE` re-solves the weights over the current atoms, as
+#' [weight_step()] does, and drops atoms the solve leaves at zero. It is a
+#' no-op after a verb that already solved them ([sfw_step()], [weight_step()],
+#' or `correct_weights = TRUE`), and lowers KL after one that did not.
 #'
-#' Atoms with weight at or below `threshold` are then dropped: by default only
-#' those `identify` zeroed. A positive value may raise KL.
-#'
-#' Refining lowers KL but can *raise* the gap, since the weights are optimised
-#' over the current support and dropping atoms leaves more of the null
-#' uncovered. Choose according to whether you want the fit or a certificate
-#' resting on the gap.
+#' Atoms with weight at or below `threshold` are then dropped. A positive
+#' value may raise KL.
 #'
 #' @param state A [ripr_state].
 #' @param threshold Drop atoms with weight at or below this. Must be below 1.
 #' @param correct_weights Re-solve the weights before dropping any. Off by
 #'   default.
-#' @param identify Zero atoms whose removal does not increase KL. Off by
-#'   default.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the *returned* mixture,
 #'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
-#' @param max_rounds Cap on refinement rounds.
 #' @return A [ripr_fit], whose `W0` is the mixing measure (a [finite_dist]),
 #'   `P_star` the mixture it induces, and `kl`, `gap_fit` and `gap_final`
 #'   describe it. The state it was finished from, with its trace and
 #'   snapshots, is kept as `fit@state`.
-#' @references
-#'   \insertRef{FercoqGramfortSalmon2015}{ripr}
 #' @seealso [ripr_fit]
 #' @examples
 #' set.seed(1)
@@ -981,12 +968,7 @@ method(format, ripr_fit) <- function(x, ...) {
 #' )
 #' Q <- fam(c(0.4, 0.35, 0.25))
 #' state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
-#' fit <- ripr_finish(
-#'   state,
-#'   correct_weights = TRUE,
-#'   identify = TRUE,
-#'   record_gap = TRUE
-#' )
+#' fit <- ripr_finish(state, correct_weights = TRUE, record_gap = TRUE)
 #' fit
 #' fit@kl
 #' fit@gap_fit
@@ -996,13 +978,10 @@ ripr_finish <- function(
   state,
   threshold = 0,
   correct_weights = FALSE,
-  identify = FALSE,
-  record_gap = FALSE,
-  max_rounds = 10L
+  record_gap = FALSE
 ) {
   rlang::check_number_decimal(threshold)
   rlang::check_bool(correct_weights)
-  rlang::check_bool(identify)
   rlang::check_bool(record_gap)
   if (threshold >= 1) {
     stop(
@@ -1018,26 +997,8 @@ ripr_finish <- function(
   ld_all <- ld(support)
   w <- weights(state@mixing)
 
-  # Alternating only helps with both on: with one alone a second round would
-  # repeat the first.
-  rounds <- 0L
-  if (correct_weights || identify) {
-    rounds_max <- if (correct_weights && identify) max_rounds else 1L
-    for (round in seq_len(rounds_max)) {
-      rounds <- round
-      if (correct_weights) {
-        w <- solve_weights(ld_all, w, engine, ctl)
-      }
-      if (!identify) {
-        break
-      }
-      refined <- identify_support(ld_all, w, engine)
-      settled <- identical(which(refined > 0), which(w > 0))
-      w <- refined
-      if (settled) {
-        break
-      }
-    }
+  if (correct_weights) {
+    w <- solve_weights(ld_all, w, engine, ctl)
   }
 
   # Group atoms by part, so `W0` lines up with `part`.
@@ -1064,7 +1025,7 @@ ripr_finish <- function(
     } else {
       NA_real_
     },
-    rounds = as.integer(rounds),
+    corrected_weights = correct_weights,
     state = state
   )
 }

@@ -13,7 +13,7 @@ ripr_fit(
   kl = integer(0),
   gap_fit = integer(0),
   gap_final = integer(0),
-  rounds = integer(0),
+  corrected_weights = logical(0),
   state = ripr_state()
 )
 }
@@ -35,8 +35,8 @@ describe an earlier iterate than the returned mixture; \code{NA} if none was.}
 \item{gap_final}{The Frank--Wolfe gap over the returned mixture, \code{NA} unless
 \code{\link[=ripr_finish]{ripr_finish()}} was called with \code{record_gap = TRUE}.}
 
-\item{rounds}{Number of refinement rounds \code{\link[=ripr_finish]{ripr_finish()}} ran; \code{0} when
-neither \code{correct_weights} nor \code{identify} was on.}
+\item{corrected_weights}{Whether \code{\link[=ripr_finish]{ripr_finish()}} re-solved the weights
+(\code{correct_weights = TRUE}).}
 
 \item{state}{The \link{ripr_state} the fit was finished from.}
 }

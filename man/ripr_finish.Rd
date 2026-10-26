@@ -4,14 +4,7 @@
 \alias{ripr_finish}
 \title{Turn a fitted state into a mixture}
 \usage{
-ripr_finish(
-  state,
-  threshold = 0,
-  correct_weights = FALSE,
-  identify = FALSE,
-  record_gap = FALSE,
-  max_rounds = 10L
-)
+ripr_finish(state, threshold = 0, correct_weights = FALSE, record_gap = FALSE)
 }
 \arguments{
 \item{state}{A \link{ripr_state}.}
@@ -21,13 +14,8 @@ ripr_finish(
 \item{correct_weights}{Re-solve the weights before dropping any. Off by
 default.}
 
-\item{identify}{Zero atoms whose removal does not increase KL. Off by
-default.}
-
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the \emph{returned} mixture,
 filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
-
-\item{max_rounds}{Cap on refinement rounds.}
 }
 \value{
 A \link{ripr_fit}, whose \code{W0} is the mixing measure (a \link{finite_dist}),
@@ -40,21 +28,13 @@ Converts a fitted state into a mixture. By default the weights come across
 as they stand and nothing is dropped.
 }
 \details{
-\emph{Experimental}: two optional refinements, both off by default.
-\code{correct_weights} re-solves the weights over the current atoms, as
-\code{\link[=weight_step]{weight_step()}} does.
-\code{identify} zeroes, lightest first, each atom whose removal does not increase
-KL. With both on they alternate until a round removes nothing. They are sound
-only because the atoms have stopped moving; \code{identify} never increases KL but
-does not \emph{certify} that a removed atom is zero at the optimum.
+\code{correct_weights = TRUE} re-solves the weights over the current atoms, as
+\code{\link[=weight_step]{weight_step()}} does, and drops atoms the solve leaves at zero. It is a
+no-op after a verb that already solved them (\code{\link[=sfw_step]{sfw_step()}}, \code{\link[=weight_step]{weight_step()}},
+or \code{correct_weights = TRUE}), and lowers KL after one that did not.
 
-Atoms with weight at or below \code{threshold} are then dropped: by default only
-those \code{identify} zeroed. A positive value may raise KL.
-
-Refining lowers KL but can \emph{raise} the gap, since the weights are optimised
-over the current support and dropping atoms leaves more of the null
-uncovered. Choose according to whether you want the fit or a certificate
-resting on the gap.
+Atoms with weight at or below \code{threshold} are then dropped. A positive
+value may raise KL.
 }
 \examples{
 set.seed(1)
@@ -68,19 +48,11 @@ plurality <- null_model(
 )
 Q <- fam(c(0.4, 0.35, 0.25))
 state <- ripr_init(Q, plurality) |> fw_step(times = 10L)
-fit <- ripr_finish(
-  state,
-  correct_weights = TRUE,
-  identify = TRUE,
-  record_gap = TRUE
-)
+fit <- ripr_finish(state, correct_weights = TRUE, record_gap = TRUE)
 fit
 fit@kl
 fit@gap_fit
 fit@gap_final
-}
-\references{
-\insertRef{FercoqGramfortSalmon2015}{ripr}
 }
 \seealso{
 \link{ripr_fit}

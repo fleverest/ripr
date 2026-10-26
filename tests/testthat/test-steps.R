@@ -364,37 +364,6 @@ test_that("a Li-Barron row records the KL its step leaves as the objective", {
   expect_lte(row$kl, utils::tail(fw@trace$kl, 1L) + rounding_tol(1))
 })
 
-# --- Support identification ---------------------------------------------------
-
-test_that("identification does not increase KL", {
-  # It compares two feasible points and keeps the better.
-  st <- fw_step(plurality(), 6L)
-  plain <- ripr_finish(st)
-  identified <- ripr_finish(st, identify = TRUE)
-  expect_lte(identified@kl, plain@kl + rounding_tol(plain@kl))
-  expect_equal(
-    identified@kl,
-    exact_kl(st, identified@W0),
-    tolerance = rounding_tol(1)
-  )
-})
-
-test_that("identification survives an atom carrying nearly all the mass", {
-  # Removing the dominant atom divides by 1e-15 and puts the removal share at
-  # 1 to machine precision; the pass must still come through with usable
-  # weights.
-  a <- atoms(plurality()@mixing)
-  heavy <- c(1 - 1e-15, 5e-16, 5e-16)
-  st <- plurality(
-    atoms = lapply(1:3, \(i) a[i, , drop = FALSE]),
-    weights = as.list(heavy)
-  )
-  fit <- ripr_finish(st, identify = TRUE)
-  expect_false(anyNA(weights(fit@W0)))
-  expect_equal(sum(weights(fit@W0)), 1, tolerance = rounding_tol(1))
-  expect_false(is.nan(fit@kl))
-})
-
 # --- EM -----------------------------------------------------------------------
 
 test_that("an EM sweep keeps every atom in its own part", {
@@ -596,37 +565,6 @@ test_that("pairwise and away empty the worst atom exactly at their cap", {
   w <- c(0.1, 0.3, 0.6, 0)
   pairwise <- path_pairwise(NULL, w, NULL, 1L, 0.5)
   expect_identical(pairwise$w_of(pairwise$gamma_max)[1L], 0)
-})
-
-test_that("removing an atom adjusts the mixture in place", {
-  # Identification tests every candidate atom, so rebuilding the mixture each
-  # time would make a pass O(MC^2). `log_p_without` adjusts the existing one
-  # instead, in O(M):
-  #
-  #   log P + log(1 - w_j p_j / P) - log(1 - w_j)
-  #     =  log((P - w_j p_j) / (1 - w_j))
-  #
-  # which is not hard to get wrong. A wrong downdate only mis-ranks removals,
-  # which `ripr_finish(identify = TRUE)` would hide behind its own KL check,
-  # so it is checked against the definition here, including where one atom
-  # carries all or nearly all the mass.
-  set.seed(9)
-  p <- matrix(stats::rexp(20), nrow = 5L)
-  p <- sweep(p, 2L, colSums(p), "/")
-  mix <- function(w) log(as.vector(p %*% w))
-  for (w in list(c(0.4, 0.3, 0.2, 0.1), c(1 - 1e-15, rep(1e-15 / 3, 3)))) {
-    dropped <- replace(w, 2L, 0)
-    expect_equal(
-      log_p_without(mix(w), log(p[, 2L]), w[2L]),
-      mix(dropped / sum(dropped))
-    )
-  }
-  heavy <- c(1 - 1e-15, rep(1e-15 / 3, 3))
-  expect_false(anyNA(log_p_without(mix(heavy), log(p[, 1L]), heavy[1L])))
-  # At a weight of exactly 1 nothing is left: finite arithmetic, all `-Inf`.
-  out <- log_p_without(log(p[, 1L]), log(p[, 1L]), 1)
-  expect_false(anyNA(out))
-  expect_true(all(out == -Inf))
 })
 
 test_that("the oracles' gradients and batch forms agree with their values", {

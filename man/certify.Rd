@@ -6,7 +6,7 @@
 \usage{
 certify(
   x,
-  null,
+  null = NULL,
   tol = 1e-06,
   max_splits = 20000L,
   max_coefficients = 1024^2,
@@ -14,9 +14,11 @@ certify(
 )
 }
 \arguments{
-\item{x}{A \link{random_variable}.}
+\item{x}{A \link{random_variable}, or a \link{ripr_fit} to certify its likelihood
+ratio (see "Certifying a fit").}
 
-\item{null}{A \link{null_model}.}
+\item{null}{A \link{null_model}. Required for a \link{random_variable}; leave unset
+for a \link{ripr_fit}, which is certified over its own null.}
 
 \item{tol}{Stop once the bound is within \code{tol} of the best value found.}
 
@@ -78,6 +80,15 @@ cells tile the null exactly. The bounding arithmetic is IEEE double with no
 accounting for rounding, so a certificate is a mathematical bound computed in
 floating point, not a formally proven one.
 }
+
+\subsection{Certifying a fit}{
+
+When \code{x} is a \link{ripr_fit}, \code{certify()} bounds the likelihood ratio
+\eqn{Q / \widehat{P}^*}{Q / P_star} over the fit's own null, and seeds the
+search with the fit's atoms and the last point its Frank--Wolfe oracle found.
+At the RIPr, the atoms are where the supremum is attained, so these are good
+seeds. \code{cert@random_variable} holds the ratio.
+}
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)
@@ -102,6 +113,10 @@ found <- sup_lb(X, plurality, n_seeds = 20L)
 seeded <- certify(X, plurality, tol = 1e-6, incumbent_at = found@theta)
 c(cert@sup_ub, seeded@sup_ub)
 c(sum(cert@iterations), sum(seeded@iterations))
+
+# A fit certifies its own likelihood ratio, seeded from its atoms.
+fit <- ripr(fam(c(0.4, 0.35, 0.25)), plurality, tol = 1e-8)
+certify(fit, tol = 1e-8)
 }
 \references{
 \insertAllCited{}

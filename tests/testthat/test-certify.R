@@ -1239,3 +1239,41 @@ test_that("a one-category null is refused with a reason, not an assertion", {
   null <- null_model(fam, simplex_region(vertices = matrix(1)))
   expect_error(certify(x, null), "single coordinate")
 })
+
+
+# --- Certifying a fit ----------------------------------------------------------
+
+test_that("certify() on a fit matches certifying its ratio by hand", {
+  null <- plurality_null(n = 8L, k = 3L)
+  Q <- null@family(c(0.4, 0.35, 0.25))
+  fit <- suppressWarnings(ripr(Q, null, tol = 1e-8))
+  X <- likelihood(Q, label = "Q") / likelihood(fit@P_star, label = "P*")
+
+  by_hand <- certify(X, null, tol = 1e-9)
+  from_fit <- certify(fit, tol = 1e-9)
+  expect_equal(from_fit@sup_ub, by_hand@sup_ub, tolerance = 1e-8)
+  expect_identical(format(from_fit@random_variable), "Q / P*")
+  expect_identical(from_fit@null, null)
+
+  # Seeded at the atoms, the search starts at least as high as unseeded.
+  expect_gte(from_fit@sup_lb, by_hand@sup_lb - 1e-12)
+})
+
+test_that("certify() on a fit takes no null, and a variable needs one", {
+  null <- plurality_null(n = 4L, k = 3L)
+  fit <- suppressWarnings(ripr(null@family(c(0.4, 0.35, 0.25)), null))
+  expect_error(certify(fit, null), "leave `null` unset")
+  expect_error(
+    certify(likelihood(null@family(c(0.4, 0.35, 0.25)))),
+    "`null` is required"
+  )
+})
+
+test_that("e_variable() on a fit certifies and rescales in one step", {
+  null <- plurality_null(n = 4L, k = 3L)
+  fit <- suppressWarnings(ripr(null@family(c(0.4, 0.35, 0.25)), null))
+  E <- e_variable(fit, tol = 1e-9)
+  E_manual <- e_variable(certify(fit, tol = 1e-9))
+  outcomes <- enumerate_space(null@family@sample_space)
+  expect_equal(E(outcomes), E_manual(outcomes))
+})

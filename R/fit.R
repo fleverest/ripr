@@ -1115,3 +1115,40 @@ ripr_finish <- function(state, correct_weights = FALSE, record_gap = FALSE) {
     state = state
   )
 }
+
+
+# --- From a fit to an e-variable ----------------------------------------------
+
+#' The likelihood ratio `Q / P*` of a fit, as a [random_variable]
+#' @keywords internal
+#' @noRd
+fit_ratio <- function(fit) {
+  likelihood(fit@state@alternative, label = "Q") /
+    likelihood(fit@P_star, label = "P*")
+}
+
+
+#' Points of a fit's null worth seeding certification with
+#'
+#' The atoms of `W0`, where the supremum is attained at the RIPr, and the last
+#' point the Frank--Wolfe oracle found, if any.
+#' @keywords internal
+#' @noRd
+fit_seeds <- function(fit) {
+  seeds <- atoms(fit@W0)
+  gap <- last_gap(fit@state)
+  theta <- if (!is.null(gap)) gap$theta
+  if (is.numeric(theta) && length(theta) == ncol(seeds) && !anyNA(theta)) {
+    seeds <- rbind(seeds, theta)
+  }
+  unname(seeds)
+}
+
+
+#' @description Given a [ripr_fit], `e_variable()` certifies its likelihood
+#'   ratio with [certify()], passing `...` on, and rescales it.
+#' @rdname e_variable
+#' @usage NULL
+method(e_variable, ripr_fit) <- function(x, ...) {
+  e_variable(certify(x, ...))
+}

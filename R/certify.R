@@ -244,20 +244,9 @@ point_bound <- function(x, family, cells) {
 #' @noRd
 seed_incumbents <- function(x, null, at) {
   regions <- parts(null@region)
+  at <- seed_matrix(at, null)
   if (is.null(at)) {
     return(rep(-Inf, length(regions)))
-  }
-  if (is.numeric(at) && is.null(dim(at))) {
-    at <- matrix(at, nrow = 1L)
-  }
-  d <- space_dim(null@region)
-  if (!is.matrix(at) || !is.numeric(at) || ncol(at) != d || anyNA(at)) {
-    stop(
-      "`incumbent_at` must be a parameter vector of length ",
-      d,
-      ", or a matrix of them with one per row.",
-      call. = FALSE
-    )
   }
   points <- lapply(seq_len(nrow(at)), function(i) at[i, ])
   inside <- vapply(
@@ -297,6 +286,29 @@ seed_incumbents <- function(x, null, at) {
     function(p) max(values[inside[p, ]], -Inf),
     numeric(1L)
   )
+}
+
+
+#' `incumbent_at` as a matrix with one point per row, or `NULL`
+#' @keywords internal
+#' @noRd
+seed_matrix <- function(at, null) {
+  if (is.null(at)) {
+    return(NULL)
+  }
+  if (is.numeric(at) && is.null(dim(at))) {
+    at <- matrix(at, nrow = 1L)
+  }
+  d <- space_dim(null@region)
+  if (!is.matrix(at) || !is.numeric(at) || ncol(at) != d || anyNA(at)) {
+    stop(
+      "`incumbent_at` must be a parameter vector of length ",
+      d,
+      ", or a matrix of them with one per row.",
+      call. = FALSE
+    )
+  }
+  at
 }
 
 
@@ -574,8 +586,9 @@ method(format, ripr_search) <- function(x, ...) {
 #'
 #' `X` must be non-negative (e.g. a likelihood ratio), but this is not checked.
 #' A lower bound via [ripr_search] from [sup_lb()] is illegal!
-#' @param x A [ripr_certificate], as returned by [certify()].
-#' @param ... Unused, for methods.
+#' @param x A [ripr_certificate], as returned by [certify()], or a
+#'   [ripr_fit], whose likelihood ratio is certified first.
+#' @param ... Passed to [certify()] for a [ripr_fit]; otherwise unused.
 #' @return A [random_variable] with expectation at most 1 under the null.
 #' @seealso [certify()]
 #' @examples
@@ -597,6 +610,10 @@ method(format, ripr_search) <- function(x, ...) {
 #' E <- e_variable(cert)
 #' E
 #' E(c(2, 1, 1))
+#'
+#' # From a fit, in one step.
+#' fit <- ripr(Q, plurality, tol = 1e-8)
+#' e_variable(fit, tol = 1e-8)
 #' @export
 e_variable <- new_generic("e_variable", "x", function(x, ...) {
   S7::S7_dispatch()
@@ -761,6 +778,8 @@ node_table <- function(result, cell, part) {
 #' Each cell is a separate run and `id` restarts at 1 in each, so group by
 #' `cell` before matching `parent`. A triangulated part contributes one tree per
 #' cell. Point cells, bounded in closed form, contribute no rows.
+#' @param x A [random_variable].
+#' @param null A [null_model].
 #' @inheritParams certify
 #' @return A data frame with `part`, `cell`, `id`, `parent`, `depth`, `born`,
 #'   `retired`, `fate`, `upper`, `volume` and a `vertices` list column, plus the
@@ -849,8 +868,18 @@ certify_trace <- function(
 #' cells tile the null exactly. The bounding arithmetic is IEEE double with no
 #' accounting for rounding, so a certificate is a mathematical bound computed in
 #' floating point, not a formally proven one.
-#' @param x A [random_variable].
-#' @param null A [null_model].
+#'
+#' ## Certifying a fit
+#'
+#' When `x` is a [ripr_fit], `certify()` bounds the likelihood ratio
+#' \eqn{Q / \widehat{P}^*}{Q / P_star} over the fit's own null, and seeds the
+#' search with the fit's atoms and the last point its Frank--Wolfe oracle found.
+#' At the RIPr, the atoms are where the supremum is attained, so these are good
+#' seeds. `cert@random_variable` holds the ratio.
+#' @param x A [random_variable], or a [ripr_fit] to certify its likelihood
+#'   ratio (see "Certifying a fit").
+#' @param null A [null_model]. Required for a [random_variable]; leave unset
+#'   for a [ripr_fit], which is certified over its own null.
 #' @param tol Stop once the bound is within `tol` of the best value found.
 #' @param max_splits Cap on branch-and-bound subdivisions *per cell*; a
 #'   triangulated part gets `max_splits` in each of its cells.
@@ -887,15 +916,32 @@ certify_trace <- function(
 #' seeded <- certify(X, plurality, tol = 1e-6, incumbent_at = found@theta)
 #' c(cert@sup_ub, seeded@sup_ub)
 #' c(sum(cert@iterations), sum(seeded@iterations))
+#'
+#' # A fit certifies its own likelihood ratio, seeded from its atoms.
+#' fit <- ripr(fam(c(0.4, 0.35, 0.25)), plurality, tol = 1e-8)
+#' certify(fit, tol = 1e-8)
 #' @export
 certify <- function(
   x,
-  null,
+  null = NULL,
   tol = 1e-6,
   max_splits = 20000L,
   max_coefficients = 1024^2,
   incumbent_at = NULL
 ) {
+  if (S7_inherits(x, ripr_fit)) {
+    if (!is.null(null)) {
+      stop(
+        "a fit is certified over its own null; leave `null` unset.",
+        call. = FALSE
+      )
+    }
+    null <- x@state@null
+    incumbent_at <- rbind(fit_seeds(x), seed_matrix(incumbent_at, null))
+    x <- fit_ratio(x)
+  } else if (is.null(null)) {
+    stop("`null` is required to certify a `random_variable`.", call. = FALSE)
+  }
   certify_run(
     x,
     null,

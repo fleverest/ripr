@@ -108,8 +108,8 @@ c(upper = cert@sup_ub, attained = cert@sup_lb)
 E <- e_variable(cert)
 E
 
-# Seeding the search with the approximate supremum from `sup_lb`.
-found <- sup_lb(X, plurality, n_seeds = 20L)
+# Seeding the search with the approximate supremum from `search_sup()`.
+found <- search_sup(X, plurality, n_seeds = 20L)
 seeded <- certify(X, plurality, tol = 1e-6, incumbent_at = found@theta)
 c(cert@sup_ub, seeded@sup_ub)
 c(sum(cert@iterations), sum(seeded@iterations))
@@ -122,5 +122,5 @@ certify(fit, tol = 1e-8)
 \insertAllCited{}
 }
 \seealso{
-\code{\link[=e_variable]{e_variable()}}, \code{\link[=sup_lb]{sup_lb()}}, \code{\link[=certify_trace]{certify_trace()}}
+\code{\link[=e_variable]{e_variable()}}, \code{\link[=search_sup]{search_sup()}}, \code{\link[=certify_trace]{certify_trace()}}
 }

@@ -142,5 +142,5 @@ reference:
   - ripr_certificate
   - e_variable
   - certify_trace
-  - sup_lb
+  - search_sup
   - ripr_search

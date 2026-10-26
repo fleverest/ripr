@@ -126,7 +126,7 @@ test_that("sup_ub brackets sup_lb", {
   # the floating-point slack.
   expect_gte(
     res@sup_ub + rounding_tol(res@sup_ub),
-    sup_lb(x, null, n_seeds = 100L, n_restarts = 10L)@sup_lb
+    search_sup(x, null, n_seeds = 100L, n_restarts = 10L)@sup_lb
   )
 })
 
@@ -169,7 +169,7 @@ test_that("dividing by the bound gives an e-variable", {
       numeric(1L)
     ),
     expectations(matrix(
-      sup_lb(x, null, n_seeds = 200L, n_restarts = 20L)@theta,
+      search_sup(x, null, n_seeds = 200L, n_restarts = 20L)@theta,
       nrow = 1L
     ))
   )
@@ -780,16 +780,16 @@ test_that("a null mixing a point with a simplex certifies under both methods", {
 })
 
 
-# --- sup_lb -------------------------------------------------------------------
+# --- search_sup ---------------------------------------------------------------
 
-test_that("sup_lb() reports a value the objective actually attains", {
+test_that("search_sup() reports a value the objective actually attains", {
   set.seed(106)
   null <- plurality_null(n = 8L, k = 3L)
   family <- null@family
   outcomes <- enumerate_space(family@sample_space)
   values <- stats::runif(nrow(outcomes), 0, 10)
   x <- tabulated_rv(family, values)
-  found <- sup_lb(x, null, n_seeds = 200L, n_restarts = 25L)
+  found <- search_sup(x, null, n_seeds = 200L, n_restarts = 25L)
 
   # E_theta[X] for theta supplied as rows.
   expectations <- function(theta) {
@@ -813,7 +813,7 @@ test_that("sup_lb() reports a value the objective actually attains", {
   expect_gt(found@sup_lb / certify(x, null, tol = 1e-12)@sup_ub, 0.999)
 })
 
-test_that("sup_lb() improves on a single seed given more of them", {
+test_that("search_sup() improves on a single seed given more of them", {
   # Obviously there is some randomness in test, but should often be the case for
   # non-convex solves. We fix one such seed here as a sanity check.
   set.seed(109)
@@ -824,8 +824,8 @@ test_that("sup_lb() improves on a single seed given more of them", {
     seq_len(8L),
     function(i) {
       x <- tabulated_rv(null@family, stats::runif(nrow(outcomes), 0, 10))
-      one <- sup_lb(x, null, n_seeds = 1L, n_restarts = 1L)@sup_lb
-      many <- sup_lb(x, null, n_seeds = 100L, n_restarts = 10L)@sup_lb
+      one <- search_sup(x, null, n_seeds = 1L, n_restarts = 1L)@sup_lb
+      many <- search_sup(x, null, n_seeds = 100L, n_restarts = 10L)@sup_lb
       many / one
     },
     numeric(1L)
@@ -835,18 +835,18 @@ test_that("sup_lb() improves on a single seed given more of them", {
   expect_true(all(ratios > 0.99))
 })
 
-test_that("sup_lb() rejects a non-random_variable", {
+test_that("search_sup() rejects a non-random_variable", {
   null <- plurality_null(n = 4L, k = 3L)
-  expect_error(sup_lb(function(x) 1, null), "must be a `random_variable`")
+  expect_error(search_sup(function(x) 1, null), "must be a `random_variable`")
 })
 
-test_that("sup_lb() rejects an `engine` that is not an engine spec", {
+test_that("search_sup() rejects an `engine` that is not an engine spec", {
   null <- plurality_null(n = 4L, k = 3L)
   x <- likelihood(null@family(c(0.4, 0.35, 0.25)))
-  expect_error(sup_lb(x, null, engine = gh_engine), "must be an engine spec")
+  expect_error(search_sup(x, null, engine = gh_engine), "must be an engine spec")
 })
 
-test_that("sup_lb() searches a sample space it cannot enumerate", {
+test_that("search_sup() searches a sample space it cannot enumerate", {
   # `E_theta[p_0]` is the integral of one `N(0, I)` density against another,
   # i.e. a `N(0, 2I)` density evaluated at `theta`. Over the halfspace
   # `{theta_1 <= theta_2}` that is largest at the origin, on the boundary,
@@ -859,7 +859,7 @@ test_that("sup_lb() searches a sample space it cannot enumerate", {
   )
   x <- likelihood(family(c(0, 0)))
 
-  found <- sup_lb(
+  found <- search_sup(
     x,
     null,
     engine = gh_engine(n_nodes = 9L),
@@ -872,7 +872,7 @@ test_that("sup_lb() searches a sample space it cannot enumerate", {
   expect_equal(found@log_sup_lb, log(found@sup_lb))
 })
 
-test_that("sup_lb() reads a ratio at nodes where the ratio itself is NaN", {
+test_that("search_sup() reads a ratio at nodes where the ratio itself is NaN", {
   # `E_theta[q / p]` for two Gaussian densities is `exp(theta'a + |a|^2 / 2 +
   # (|m_p|^2 - |m_q|^2) / 2)` with `a = m_q - m_p`: an exponential of a linear
   # function of theta, whatever the distance involved.
@@ -886,7 +886,7 @@ test_that("sup_lb() reads a ratio at nodes where the ratio itself is NaN", {
   truth <- sum(far * a) + sum(a^2) / 2 + (sum(m_p^2) - sum(m_q^2)) / 2
 
   engine <- gh_engine(n_nodes = 9L)
-  found <- sup_lb(x, null, engine = engine)
+  found <- search_sup(x, null, engine = engine)
   expect_equal(found@log_sup_lb, truth)
   expect_equal(found@sup_lb, exp(truth))
 
@@ -901,10 +901,10 @@ test_that("sup_lb() reads a ratio at nodes where the ratio itself is NaN", {
     function(y) x(y),
     sample_space = family@sample_space
   )
-  expect_error(sup_lb(direct, null, engine = engine), "is `NaN` at every part")
+  expect_error(search_sup(direct, null, engine = engine), "is `NaN` at every part")
 })
 
-test_that("log space changes the range of sup_lb(), not its answer", {
+test_that("log space changes the range of search_sup(), not its answer", {
   set.seed(12)
   null <- plurality_null(n = 8L, k = 3L)
   family <- null@family
@@ -915,9 +915,9 @@ test_that("log space changes the range of sup_lb(), not its answer", {
   direct <- tabulated_rv(family, x(outcomes))
 
   set.seed(13)
-  in_log <- sup_lb(x, null, n_seeds = 50L, n_restarts = 5L)
+  in_log <- search_sup(x, null, n_seeds = 50L, n_restarts = 5L)
   set.seed(13)
-  linear <- sup_lb(direct, null, n_seeds = 50L, n_restarts = 5L)
+  linear <- search_sup(direct, null, n_seeds = 50L, n_restarts = 5L)
 
   expect_equal(in_log@sup_lb, linear@sup_lb)
   expect_equal(in_log@theta, linear@theta)
@@ -1079,7 +1079,7 @@ test_that("a point handed in as `incumbent_at` prunes from the start", {
     stats::runif(nrow(enumerate_space(family@sample_space)), 0, 10)
   )
   plain <- certify(x, null, tol = 1e-9)
-  found <- sup_lb(x, null, n_seeds = 20L)
+  found <- search_sup(x, null, n_seeds = 20L)
   seeded <- certify(x, null, tol = 1e-9, incumbent_at = found@theta)
 
   expect_lt(sum(seeded@iterations), sum(plain@iterations))
@@ -1143,7 +1143,7 @@ test_that("`incumbent_at` refuses a point off the null or of the wrong length", 
 
 # --- Result objects and e_variable() ------------------------------------------
 
-test_that("certify() and sup_lb() return classed results that print", {
+test_that("certify() and search_sup() return classed results that print", {
   set.seed(120)
   null <- plurality_null(n = 4L, k = 3L)
   values <- stats::runif(nrow(enumerate_space(null@family@sample_space)), 0, 3)
@@ -1166,7 +1166,7 @@ test_that("certify() and sup_lb() return classed results that print", {
   expect_match(out, "e_variable(): X / ", fixed = TRUE)
   expect_no_match(out, "@")
 
-  found <- sup_lb(x, null, n_seeds = 10L, n_restarts = 2L)
+  found <- search_sup(x, null, n_seeds = 10L, n_restarts = 2L)
   expect_true(S7::S7_inherits(found, ripr_search))
   expect_match(
     format(found),
@@ -1227,7 +1227,7 @@ test_that("e_variable() leaves an e-variable alone and rescales anything else", 
 test_that("e_variable() refuses a searched lower bound", {
   null <- plurality_null(n = 4L, k = 3L)
   x <- likelihood(null@family(c(0.4, 0.35, 0.25)))
-  found <- sup_lb(x, null, n_seeds = 5L, n_restarts = 1L)
+  found <- search_sup(x, null, n_seeds = 5L, n_restarts = 1L)
   expect_error(e_variable(found), "lower bound")
   expect_error(e_variable(1))
 })

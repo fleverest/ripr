@@ -75,5 +75,5 @@ cert@bounds
 }
 \seealso{
 \code{\link[=certify]{certify()}}, \code{\link[=e_variable]{e_variable()}}, and \link{ripr_search} for what the
-searched lower bound \code{\link[=sup_lb]{sup_lb()}} returns.
+searched lower bound \code{\link[=search_sup]{search_sup()}} returns.
 }

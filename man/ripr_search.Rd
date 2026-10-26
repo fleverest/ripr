@@ -33,7 +33,7 @@ has a log form, so that it remains finite where \code{sup_lb} underflows.}
 A \code{ripr_search}.
 }
 \description{
-An estimate of the supremum, returned by \code{\link[=sup_lb]{sup_lb()}}. It is the largest
+An estimate of the supremum, returned by \code{\link[=search_sup]{search_sup()}}. It is the largest
 expected value found through a multi-start gradient-ascent over the null, and
 the location that the local optimum was found. It yields a \strong{lower} bound,
 so \code{sup_lb > 1} shows \code{X} is \emph{not} an e-variable, but nothing here can prove
@@ -49,10 +49,10 @@ null <- null_model(
   fam,
   simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 )
-found <- sup_lb(likelihood(fam(c(0.4, 0.35, 0.25))), null, n_seeds = 20L)
+found <- search_sup(likelihood(fam(c(0.4, 0.35, 0.25))), null, n_seeds = 20L)
 found
 found@theta
 }
 \seealso{
-\code{\link[=sup_lb]{sup_lb()}}, \link{ripr_certificate}
+\code{\link[=search_sup]{search_sup()}}, \link{ripr_certificate}
 }

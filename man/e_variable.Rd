@@ -27,7 +27,7 @@ ratio with \code{\link[=certify]{certify()}}, passing \code{...} on, and rescale
 }
 \details{
 \code{X} must be non-negative (e.g. a likelihood ratio), but this is not checked.
-A lower bound via \link{ripr_search} from \code{\link[=sup_lb]{sup_lb()}} is illegal!
+A lower bound via \link{ripr_search} from \code{\link[=search_sup]{search_sup()}} is illegal!
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

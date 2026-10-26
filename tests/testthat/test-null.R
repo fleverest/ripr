@@ -107,7 +107,7 @@ test_that("a simplex part contains its own vertices", {
 # --- The search ---------------------------------------------------------------
 #
 # Every oracle in the package is the same multistart search over a part's
-# chart; `sup_lb()` is the one that takes an arbitrary objective, as the mean
+# chart; `search_sup()` is the one that takes an arbitrary objective, as the mean
 # of a random variable. Under the multinomial `E[x_i] = n theta_i` and
 # `E[x_i (x_i - 1)] = n (n - 1) theta_i^2`, so the variable below has mean
 # exactly `1 - ||theta - target||^2`: a concave peak placed wherever a test
@@ -134,7 +134,7 @@ test_that("the search finds a maximum interior to the chart", {
   s <- plurality_simplex(3, 2)
   target <- as.vector(rep(1 / 3, 3) %*% s@vertices)
   set.seed(7)
-  res <- sup_lb(
+  res <- search_sup(
     peak_at(fam, target),
     null_model(fam, s),
     n_seeds = 50L,
@@ -155,7 +155,7 @@ test_that("a maximum at a vertex is attained exactly", {
   s <- plurality_simplex(3, 2)
   target <- s@vertices[1L, ] # vertex weight (1, 0, 0)
   set.seed(12)
-  res <- sup_lb(
+  res <- search_sup(
     peak_at(fam, target),
     null_model(fam, s),
     n_seeds = 50L,
@@ -215,7 +215,7 @@ test_that("the search accepts seeds lying outside the part", {
 test_that("the search over a singleton evaluates the point", {
   fam <- multinomial_family(n_trials = 4L, k = 2L)
   first <- random_variable(\(x) matrix(x, ncol = 2L)[, 1L], fam@sample_space)
-  res <- sup_lb(first, null_model(fam, point_region(theta = c(0.5, 0.5))))
+  res <- search_sup(first, null_model(fam, point_region(theta = c(0.5, 0.5))))
   expect_equal(res@theta, c(0.5, 0.5))
   expect_equal(res@sup_lb, 2)
 })
@@ -379,7 +379,7 @@ test_that("the search finds an interior optimum on a real region", {
     fam@sample_space
   )
   set.seed(1)
-  found <- sup_lb(
+  found <- search_sup(
     peak,
     null_model(fam, real_region(2L)),
     engine = gh_engine(3L),

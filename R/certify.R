@@ -1,7 +1,7 @@
 #' @include random_variable.R null.R bernstein.R
 NULL
 
-# Bounds on the expectation of a random variable under a null. `sup_lb()`
+# Bounds on the expectation of a random variable under a null. `search_sup()`
 # searches for the supremum via local gradient ascent (yielding a lower bound),
 # while `certify()` encloses the supremum over regions. Per cell, `certify()`
 # uses evaluation for a `point_region` and the Bernstein enclosure otherwise
@@ -57,7 +57,7 @@ certify_obstruction <- function(cell, family) {
     class_name(family),
     " expectations over ",
     geometry,
-    ". Nothing here says one does not exist. In the meantime, `sup_lb()` ",
+    ". Nothing here says one does not exist. In the meantime, `search_sup()` ",
     "still searches, and reports a lower bound."
   )
 }
@@ -81,7 +81,7 @@ point_unenumerable <- function(family) {
       "The expectation has to be computed exactly, i.e. not via quadrature or ",
       "Monte Carlo estimates, for certification. Only certification is ",
       "affected: the region charts, projects and fits like any other, and ",
-      "`sup_lb()` still searches it."
+      "`search_sup()` still searches it."
     )
   )
 }
@@ -99,7 +99,7 @@ point_unenumerable <- function(family) {
 bernstein_obstruction <- function(space) {
   only_cert_affected_msg <- paste0(
     "Only certification is affected: the region ",
-    "charts, projects and fits like any other, and `sup_lb()` still ",
+    "charts, projects and fits like any other, and `search_sup()` still ",
     "searches it."
   )
   # Before the class tests: it applies to any unbounded region.
@@ -375,7 +375,7 @@ expectation_objective <- function(family, x, spec) {
 #'   still open? The bound is still valid, but likely loose.
 #' @return A `ripr_certificate`.
 #' @seealso [certify()], [e_variable()], and [ripr_search] for what the
-#'   searched lower bound [sup_lb()] returns.
+#'   searched lower bound [search_sup()] returns.
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' null <- null_model(
@@ -499,7 +499,7 @@ e_variable_label <- function(certificate) {
 
 #' A searched lower bound on the largest null expectation
 #'
-#' An estimate of the supremum, returned by [sup_lb()]. It is the largest
+#' An estimate of the supremum, returned by [search_sup()]. It is the largest
 #' expected value found through a multi-start gradient-ascent over the null, and
 #' the location that the local optimum was found. It yields a **lower** bound,
 #' so `sup_lb > 1` shows `X` is *not* an e-variable, but nothing here can prove
@@ -513,14 +513,14 @@ e_variable_label <- function(certificate) {
 #' @param random_variable The [random_variable] searched over.
 #' @param null The [null_model] searched.
 #' @return A `ripr_search`.
-#' @seealso [sup_lb()], [ripr_certificate]
+#' @seealso [search_sup()], [ripr_certificate]
 #' @examples
 #' fam <- multinomial_family(n_trials = 4L, k = 3L)
 #' null <- null_model(
 #'   fam,
 #'   simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1)))
 #' )
-#' found <- sup_lb(likelihood(fam(c(0.4, 0.35, 0.25))), null, n_seeds = 20L)
+#' found <- search_sup(likelihood(fam(c(0.4, 0.35, 0.25))), null, n_seeds = 20L)
 #' found
 #' found@theta
 #' @export
@@ -585,7 +585,7 @@ method(format, ripr_search) <- function(x, ...) {
 #' result keeps `X`'s log form.
 #'
 #' `X` must be non-negative (e.g. a likelihood ratio), but this is not checked.
-#' A lower bound via [ripr_search] from [sup_lb()] is illegal!
+#' A lower bound via [ripr_search] from [search_sup()] is illegal!
 #' @param x A [ripr_certificate], as returned by [certify()], or a
 #'   [ripr_fit], whose likelihood ratio is certified first.
 #' @param ... Passed to [certify()] for a [ripr_fit]; otherwise unused.
@@ -641,7 +641,7 @@ method(e_variable, ripr_certificate) <- function(x, ...) {
 #' @usage NULL
 method(e_variable, ripr_search) <- function(x, ...) {
   stop(
-    "a `ripr_search` from `sup_lb()` is a lower bound on the null ",
+    "a `ripr_search` from `search_sup()` is a lower bound on the null ",
     "expectation, and dividing by it guarantees nothing. Use `certify()` for ",
     "an upper bound to rescale by.",
     call. = FALSE
@@ -677,7 +677,7 @@ method(e_variable, ripr_search) <- function(x, ...) {
 #'   )
 #' )
 #' X <- likelihood(fam(c(0.4, 0.35, 0.25)))
-#' sup_lb(X, plurality)
+#' search_sup(X, plurality)
 #'
 #' # A continuous sample space is searched the same way, under a rule that
 #' # integrates over it. Every evaluation is a quadrature rule here, so the
@@ -688,7 +688,7 @@ method(e_variable, ripr_search) <- function(x, ...) {
 #'   halfspace_region(normal = c(1, -1), offset = 0)
 #' )
 #' Y <- likelihood(gaussian(c(0, 0)))
-#' sup_lb(
+#' search_sup(
 #'   Y,
 #'   halfspace,
 #'   engine = gh_engine(n_nodes = 9L),
@@ -696,7 +696,7 @@ method(e_variable, ripr_search) <- function(x, ...) {
 #'   n_restarts = 2L
 #' )
 #' @export
-sup_lb <- function(
+search_sup <- function(
   x,
   null,
   engine = exact_engine(),
@@ -890,7 +890,7 @@ certify_trace <- function(
 #'   lie in the null (checked via [contains()]). See "Speeding things up" above.
 #' @return A [ripr_certificate]. Where `budget_hit` is set, the bound is valid
 #'   but likely loose.
-#' @seealso [e_variable()], [sup_lb()], [certify_trace()]
+#' @seealso [e_variable()], [search_sup()], [certify_trace()]
 #' @references
 #' \insertAllCited{}
 #' @examples
@@ -911,8 +911,8 @@ certify_trace <- function(
 #' E <- e_variable(cert)
 #' E
 #'
-#' # Seeding the search with the approximate supremum from `sup_lb`.
-#' found <- sup_lb(X, plurality, n_seeds = 20L)
+#' # Seeding the search with the approximate supremum from `search_sup()`.
+#' found <- search_sup(X, plurality, n_seeds = 20L)
 #' seeded <- certify(X, plurality, tol = 1e-6, incumbent_at = found@theta)
 #' c(cert@sup_ub, seeded@sup_ub)
 #' c(sum(cert@iterations), sum(seeded@iterations))

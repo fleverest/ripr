@@ -137,7 +137,7 @@ print(E(outcomes))
 
 `vignette("ripr")` walks through the same example in more depth: why
 validity survives a deliberately bad fit, how a bound from `certify()`
-differs from `sup_lb()`, and what happens when no certification method
+differs from `search_sup()`, and what happens when no certification method
 exists for a family/geometry pair. `vignette("regions")` covers the
 region interface and set algebra (`|`, `&`, `-`, `==` and `disjoin()`)
 used to build nulls out of convex pieces.

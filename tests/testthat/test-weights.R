@@ -43,10 +43,11 @@ test_that("the SQP solve reaches SLSQP's optimum, with KKT residual near roundin
     tol = 1e-10,
     max_iter = 500L
   )
+  expect_true(slsqp$converged)
   kl <- \(w) kl_at(st@engine, mixture_log_p(ld_all, w))
   expect_lte(sqp$kkt, 1e-12)
   expect_lte(weight_kkt(ld_all, sqp$weights, st@engine), 1e-11)
-  expect_lte(kl(sqp$weights), kl(slsqp) + 1e-14)
+  expect_lte(kl(sqp$weights), kl(slsqp$weights) + 1e-14)
   expect_equal(sum(sqp$weights), 1)
   expect_true(any(sqp$weights == 0))
   expect_true(all(sqp$weights >= 0))
@@ -110,25 +111,30 @@ test_that("weight_step merges duplicate atoms before solving, leaving the mixtur
 
 test_that("each corrective step records its weight solve's KKT residual", {
   # `solve_kkt` is at most `weight_sqp_tol` whenever the solve converged, and
-  # `NA` on steps that solve nothing. A slide's re-solve is exact too: a KL
+  # `solve_converged` says so; both are `NA` on steps that solve nothing. A slide's re-solve is exact too: a KL
   # that rises only by rounding must not make it keep the slide's weights.
   tol <- ripr_control()$weight_sqp_tol
   set.seed(1)
   st <- weights_fixture()
   plain <- fw_step(st, 1L)
   expect_true(is.na(utils::tail(plain@trace$solve_kkt, 1L)))
-  expect_lte(utils::tail(weight_step(st)@trace$solve_kkt, 1L), tol)
-  corrected <- fw_step(st, 2L, correct_weights = TRUE)
-  expect_true(all(utils::tail(corrected@trace$solve_kkt, 2L) <= tol))
+  expect_true(is.na(utils::tail(plain@trace$solve_converged, 1L)))
+  solved <- utils::tail(weight_step(st)@trace, 1L)
+  expect_lte(solved$solve_kkt, tol)
+  expect_true(solved$solve_converged)
+  corrected <- utils::tail(fw_step(st, 2L, correct_weights = TRUE)@trace, 2L)
+  expect_true(all(corrected$solve_kkt <= tol))
+  expect_true(all(corrected$solve_converged))
   slid <- sfw_step(sfw_step(fw_step(st, 2L)), 2L)
-  kkt <- slid@trace$solve_kkt[slid@trace$phase == "sfw"]
-  expect_length(kkt, 3L)
-  expect_true(all(kkt <= tol))
+  rows <- slid@trace[slid@trace$phase == "sfw", ]
+  expect_identical(nrow(rows), 3L)
+  expect_true(all(rows$solve_kkt <= tol))
+  expect_true(all(rows$solve_converged))
 })
 
 test_that("a weight solve that stops short warns, once per call", {
-  # One iteration cannot reach the tolerance. SLSQP has no tolerance on the
-  # residual to fall short of, so it never warns.
+  # One iteration cannot reach the tolerance, nor one evaluation let SLSQP
+  # converge.
   capped <- weights_fixture(control = ripr_control(weight_max_iter = 1L))
   expect_warning(weight_step(capped), class = "ripr_weight_solve_warning")
   expect_warning(
@@ -141,5 +147,13 @@ test_that("a weight solve that stops short warns, once per call", {
   slsqp <- weights_fixture(
     control = ripr_control(weight_solver = "slsqp", weight_max_iter = 1L)
   )
-  expect_no_warning(weight_step(slsqp))
+  expect_warning(
+    short <- weight_step(slsqp),
+    "stopped before SLSQP converged",
+    class = "ripr_weight_solve_warning"
+  )
+  expect_false(utils::tail(short@trace$solve_converged, 1L))
+  # Within budget, SLSQP converges and says nothing.
+  roomy <- weights_fixture(control = ripr_control(weight_solver = "slsqp"))
+  expect_no_warning(weight_step(roomy))
 })

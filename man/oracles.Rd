@@ -67,6 +67,11 @@ direction, and the size and heaviest weight of the produced mixture.}
 residual of the weights the solve returned, the worst over the step's
 solves: at most \code{weight_sqp_tol} when the solve converged. \code{NA} for steps
 without one.}
+\item{\code{solve_converged}}{For the same steps, whether every weight solve
+converged: for \code{weight_solver = "sqp"}, reached \code{weight_sqp_tol}; for
+\code{"slsqp"}, stopped before \code{weight_max_iter} without failing. \code{FALSE}
+rows are what the "stopped short" warning counts. \code{NA} for steps without
+one.}
 \item{\code{elapsed}}{Seconds of the step rule's work, excluding diagnostics
 (\code{record_gap}, \code{snapshot}, \code{until}). An \code{\link[=fw_step]{fw_step()}} row includes the
 linear-oracle search it consumed, even if cached. Per step; use

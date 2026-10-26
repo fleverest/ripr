@@ -65,6 +65,11 @@
 #'   residual of the weights the solve returned, the worst over the step's
 #'   solves: at most `weight_sqp_tol` when the solve converged. `NA` for steps
 #'   without one.}
+#'   \item{`solve_converged`}{For the same steps, whether every weight solve
+#'   converged: for `weight_solver = "sqp"`, reached `weight_sqp_tol`; for
+#'   `"slsqp"`, stopped before `weight_max_iter` without failing. `FALSE`
+#'   rows are what the "stopped short" warning counts. `NA` for steps without
+#'   one.}
 #'   \item{`elapsed`}{Seconds of the step rule's work, excluding diagnostics
 #'   (`record_gap`, `snapshot`, `until`). An [fw_step()] row includes the
 #'   linear-oracle search it consumed, even if cached. Per step; use
@@ -160,6 +165,7 @@ plan_step <- function(
       solved <- solve_weights(ld_all, res$weights, engine, ctl)
       res$weights <- solved$weights
       res$kkt <- solved$kkt
+      res$converged <- solved$converged
       res$log_p <- mixture_log_p(ld_all, res$weights)
       res$kl <- kl_at(engine, res$log_p)
       res$uses_candidate <- res$weights[length(res$weights)] > 0

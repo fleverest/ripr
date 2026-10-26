@@ -180,6 +180,7 @@ step_towards_all <- function(state, candidates, ld) {
     row = list(
       kl = kl_at(state@engine, corrected$log_p),
       solve_kkt = corrected$kkt,
+      solve_converged = corrected$converged,
       oracle_value = NA_real_,
       oracle_theta = found$theta,
       part = if (oracle_kept) found$part else NA_integer_,

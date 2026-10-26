@@ -260,6 +260,7 @@ trace_row <- function(
   step_size = NA_real_,
   direction = NA_character_,
   solve_kkt = NA_real_,
+  solve_converged = NA,
   elapsed = NA_real_
 ) {
   list(
@@ -276,6 +277,7 @@ trace_row <- function(
     step_size = step_size,
     direction = direction,
     solve_kkt = solve_kkt,
+    solve_converged = solve_converged,
     support_size = length(w),
     max_weight = if (length(w)) max(w) else NA_real_,
     elapsed = elapsed

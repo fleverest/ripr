@@ -6,8 +6,9 @@
 #' moving or adding atoms: merge coincident atoms (two copies of one atom make
 #' the hessian degenerate), then `solve_weights()` from the current weights,
 #' kept only if it does not raise KL beyond rounding. Returns
-#' `list(state, log_p, kkt)`, `log_p` being the new mixture's at the engine's
-#' nodes and `kkt` its weights' KKT residual (`weight_kkt()`).
+#' `list(state, log_p, kkt, converged)`, `log_p` being the new mixture's at
+#' the engine's nodes, `kkt` its weights' KKT residual (`weight_kkt()`) and
+#' `converged` whether the solve converged (see `solve_weights()`).
 #' @keywords internal
 #' @noRd
 correct_state <- function(state, ld) {
@@ -18,6 +19,7 @@ correct_state <- function(state, ld) {
   log_p <- mixture_log_p(ld_all, w)
   # A single atom's weight is 1 and optimal: its G is exactly 1.
   kkt <- 0
+  converged <- TRUE
   if (length(w) > 1L) {
     solved <- solve_weights(ld_all, w, engine, state@control)
     solved_log_p <- mixture_log_p(ld_all, solved$weights)
@@ -31,11 +33,19 @@ correct_state <- function(state, ld) {
     } else {
       kkt <- weight_kkt(ld_all, w, engine)
     }
+    # SQP bases convergence on the kkr residuals. SLSQP is based on the change
+    # between iterates.
+    converged <- if (identical(state@control$weight_solver, "sqp")) {
+      kkt <= state@control$weight_sqp_tol
+    } else {
+      solved$converged
+    }
   }
   list(
     state = drop_empty(set_mixture(state, weights = w)),
     log_p = log_p,
-    kkt = kkt
+    kkt = kkt,
+    converged = converged
   )
 }
 
@@ -76,22 +86,28 @@ weight_sweep <- function(ld_all, w, log_p, engine) {
 #' `sqp_weights()` to a KKT residual of `weight_sqp_tol`, falling back to
 #' SLSQP from where it stopped (keeping whichever has the lower KL) if it
 #' stops short; `"slsqp"` runs `slsqp_weights()` alone. Each takes at most
-#' `weight_max_iter` iterations or evaluations. Returns `list(weights, kkt)`,
-#' `kkt` being the returned weights' KKT residual (`weight_kkt()`). Residuals
-#' greater than `weight_sqp_tol` indicates that the solver stopped short of
-#' convergence.
+#' `weight_max_iter` iterations or evaluations. Returns
+#' `list(weights, kkt, converged)`, `kkt` being the returned weights' KKT
+#' residual (`weight_kkt()`). `converged` is `FALSE` when the solve stopped
+#' short: for `"sqp"` it has not converged if there is a kkt residual above
+#' `weight_sqp_tol`, for `"slsqp"` a lack of convergence is detected when
+#' it exceeds `weight_max_iter` (status 5) or if it has a negative status code.
 #' @keywords internal
 #' @noRd
 solve_weights <- function(ld_all, w, engine, control) {
   if (identical(control$weight_solver, "slsqp")) {
-    w <- slsqp_weights(
+    fit <- slsqp_weights(
       ld_all,
       w,
       engine,
       control$weight_slsqp_tol,
       control$weight_max_iter
     )
-    return(list(weights = w, kkt = weight_kkt(ld_all, w, engine)))
+    return(list(
+      weights = fit$weights,
+      kkt = weight_kkt(ld_all, fit$weights, engine),
+      converged = fit$converged
+    ))
   }
   fit <- sqp_weights(
     ld_all,
@@ -101,7 +117,7 @@ solve_weights <- function(ld_all, w, engine, control) {
     max_iter = control$weight_max_iter
   )
   if (fit$kkt <= control$weight_sqp_tol) {
-    return(fit[c("weights", "kkt")])
+    return(list(weights = fit$weights, kkt = fit$kkt, converged = TRUE))
   }
   fallback <- slsqp_weights(
     ld_all,
@@ -109,10 +125,11 @@ solve_weights <- function(ld_all, w, engine, control) {
     engine,
     control$weight_slsqp_tol,
     control$weight_max_iter
-  )
+  )$weights
   kl <- \(x) kl_at(engine, mixture_log_p(ld_all, x))
   w <- if (kl(fallback) < kl(fit$weights)) fallback else fit$weights
-  list(weights = w, kkt = weight_kkt(ld_all, w, engine))
+  kkt <- weight_kkt(ld_all, w, engine)
+  list(weights = w, kkt = kkt, converged = kkt <= control$weight_sqp_tol)
 }
 
 
@@ -120,14 +137,17 @@ solve_weights <- function(ld_all, w, engine, control) {
 #'
 #' Each row of the likelihoods is scaled by its maximum, which shifts the
 #' objective by a constant, so nothing overflows. `tol` is SLSQP's relative
-#' tolerance on the weights and `max_iter` its cap on evaluations.
+#' tolerance on the weights and `max_iter` its cap on evaluations. Returns
+#' `list(weights, converged)`: `converged` is `FALSE` when nloptr reports
+#' hitting `max_iter` (status 5) or a failure (a negative status), `TRUE` for
+#' all other successes (statuses 1 to 4, usually `xtol_rel` reached).
 #' @keywords internal
 #' @noRd
 slsqp_weights <- function(ld_all, w, engine, tol, max_iter) {
   row_max <- matrixStats::rowMaxs(ld_all)
   a <- exp(ld_all - ifelse(is.finite(row_max), row_max, 0))
   q <- exp(engine@log_w)
-  x <- nloptr::slsqp(
+  fit <- nloptr::slsqp(
     w,
     fn = function(x) -sum(q * log(as.vector(a %*% x))),
     gr = function(x) -as.vector(crossprod(a, q / as.vector(a %*% x))),
@@ -135,10 +155,14 @@ slsqp_weights <- function(ld_all, w, engine, tol, max_iter) {
     heq = function(x) sum(x) - 1,
     heqjac = function(x) matrix(1, nrow = 1L, ncol = length(x)),
     control = list(xtol_rel = tol, maxeval = max_iter)
-  )$par
+  )
+  x <- fit$par
   # SLSQP meets its bounds to rounding; snap those to exact zeros so they drop.
   x[x < 1e-12 * max(x)] <- 0
-  normalise_weights(x)
+  list(
+    weights = normalise_weights(x),
+    converged = fit$convergence > 0L && fit$convergence < 5L
+  )
 }
 
 

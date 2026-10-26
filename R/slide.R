@@ -128,8 +128,9 @@ slide_sweep <- function(state, ld, dg) {
 #' Same-part pairs within `tol` (`near_tol` in [ripr_control()]) are then merged
 #' too, the weights re-solved, and the result kept only if KL rises by no more
 #' than `1e-12` relative. Atoms that are genuinely distinct worsen KL, and stay
-#' apart. Returns `list(state, kkt, capped)`: the slid state, its weights' KKT
-#' residual, and whether the descent hit `slide_max_eval`.
+#' apart. Returns `list(state, kkt, converged, capped)`: the slid state, its
+#' weights' KKT residual and whether their solve converged (`correct_state()`),
+#' and whether the descent hit `slide_max_eval`.
 #' @keywords internal
 #' @noRd
 slide_state <- function(
@@ -151,7 +152,12 @@ slide_state <- function(
     atol = tol,
     rtol = tol
   )
-  out <- list(state = st, kkt = corrected$kkt, capped = slid$capped)
+  out <- list(
+    state = st,
+    kkt = corrected$kkt,
+    converged = corrected$converged,
+    capped = slid$capped
+  )
   if (nrow(m$atoms) == n_atoms(st@mixing)) {
     return(out)
   }
@@ -163,6 +169,7 @@ slide_state <- function(
   if (kl_at(st@engine, merged$log_p) <= kl + 1e-12 * max(1, abs(kl))) {
     out$state <- merged$state
     out$kkt <- merged$kkt
+    out$converged <- merged$converged
   }
   out
 }

@@ -7,7 +7,8 @@ NULL
 #'
 #' \eqn{\Theta = \mathbb{R}^d}{Theta = R^d} with the identity chart: the
 #' parameter space of a [gaussian_family()], or an unconstrained null. Being
-#' unbounded, it cannot be certified.
+#' unbounded, it cannot be certified unless [null_model()] clips it to a
+#' bounded parameter space, such as a multinomial's simplex.
 #'
 #' @param d Integer dimension.
 #' @return A `real_region`.

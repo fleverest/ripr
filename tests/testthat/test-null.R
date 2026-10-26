@@ -426,3 +426,37 @@ test_that("ripr_init() refuses an atom outside its own part", {
     ripr_init(fam(c(0.4, 0.35, 0.25)), null, atoms = list(c(0.2, 0.5, 0.3)))
   )
 })
+
+
+# --- Clipping to the parameter space -------------------------------------------
+
+test_that("parts reaching outside the parameter space are clipped to it", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  part <- simplex_region(
+    vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  null <- null_model(fam, halfspace_region(normal = c(1, -1, 0)))
+  expect_true(is_bounded(null@region))
+  expect_true(null@region == part)
+
+  # A part already inside is kept exactly as declared.
+  expect_identical(null_model(fam, part)@region, part)
+})
+
+test_that("a part with nothing inside the parameter space is dropped", {
+  fam <- multinomial_family(n_trials = 4L, k = 3L)
+  part <- halfspace_region(normal = c(1, -1, 0))
+  nowhere <- halfspace_region(normal = c(1, 1, 1), offset = -1)
+  expect_warning(
+    null <- null_model(fam, list(part, nowhere)),
+    "Part 2 of the null lies outside"
+  )
+  expect_length(parts(null@region), 1L)
+  expect_error(null_model(fam, nowhere), "outside the family's parameter")
+})
+
+test_that("a region inside an unbounded parameter space is left alone", {
+  fam <- gaussian_family(d = 2L)
+  half <- halfspace_region(normal = c(1, -1))
+  expect_identical(null_model(fam, half)@region, half)
+})

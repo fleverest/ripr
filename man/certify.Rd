@@ -47,9 +47,9 @@ multinomial families over simplices use branch and bound
 \insertCite{Leroy2012}{ripr} on the simplicial Bernstein range enclosure
 \insertCite{Garloff1986}{ripr}, subdividing by de Casteljau's algorithm
 \insertCite{PrautzschBoehmPaluszny2002}{ripr}. Bounded polytopes are
-triangulated first, so any bounded null certifies for a multinomial.
-Anything else, including an unbounded part such as a \code{\link[=halfspace_region]{halfspace_region()}}
-or \code{\link[=real_region]{real_region()}}, is refused with a message saying why.
+triangulated first, and \code{\link[=null_model]{null_model()}} clips every part to the simplex, so
+any multinomial null certifies, even one declared with a
+\code{\link[=halfspace_region]{halfspace_region()}}. Anything else is refused with a message saying why.
 \subsection{Speeding things up: seeding the incumbent}{
 
 Branch and bound algorithms prune nodes once their bounds cannot beat the

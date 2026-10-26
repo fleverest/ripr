@@ -14,9 +14,6 @@ NULL
 #' Coordinates are `(z, c)`: `z` positions a point on the bounding hyperplane
 #' in an orthonormal basis, and `c >= 0` is the distance inward.
 #'
-#' A halfspace cannot yet be certified; see [polytope_region()] for the bounded
-#' alternative.
-#'
 #' @param normal Normal vector `a`; must be non-zero.
 #' @param offset Offset `b`.
 #' @return A `halfspace_region`.

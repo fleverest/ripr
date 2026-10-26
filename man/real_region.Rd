@@ -15,7 +15,8 @@ A \code{real_region}.
 \description{
 \eqn{\Theta = \mathbb{R}^d}{Theta = R^d} with the identity chart: the
 parameter space of a \code{\link[=gaussian_family]{gaussian_family()}}, or an unconstrained null. Being
-unbounded, it cannot be certified.
+unbounded, it cannot be certified unless \code{\link[=null_model]{null_model()}} clips it to a
+bounded parameter space, such as a multinomial's simplex.
 }
 \examples{
 real_region(2L)

@@ -8,9 +8,10 @@ NULL
 #' The [polytope_region()] whose vertices are affinely independent, so the hull
 #' is a simplex of dimension `nrow(vertices) - 1`.
 #'
-#' [certify()] additionally needs every vertex inside the standard simplex (the
-#' tetrahedron below fails this). Such simplices still chart, project and fit;
-#' they just cannot be certified.
+#' The Bernstein enclosure in [certify()] needs every vertex inside the
+#' standard simplex (the tetrahedron below fails this), but [null_model()]
+#' clips a multinomial null to the simplex first, so such a part certifies as
+#' its intersection with the simplex.
 #'
 #' @inheritParams polytope_region
 #' @return A `simplex_region`, which is also a [polytope_region()].

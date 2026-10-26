@@ -29,11 +29,17 @@ membership with \code{contains(null@region, theta)}.
 
 \code{format()} gives the family and part count on one line.
 }
+\details{
+A part that reaches outside the family's parameter space is intersected
+with it, so a \code{\link[=halfspace_region]{halfspace_region()}} null for a multinomial becomes the
+bounded polytope it describes within the simplex.
+}
 \section{Properties}{
 
 \describe{
 \item{\code{family}}{The \link{parametric_family}.}
-\item{\code{region}}{The null's \link{region}, as declared.}
+\item{\code{region}}{The null's \link{region}, as declared, with any part reaching
+outside the family's parameter space intersected with it.}
 \item{\code{cells}}{The flat list of convex cells the region decomposes into,
 in part order: \code{cells(parts(region)[[1]])}, then those of part 2, and so
 on.}

@@ -10,6 +10,10 @@ NULL
 #' The decomposition into [cells()] is computed once, at construction. Test
 #' membership with `contains(null@region, theta)`.
 #'
+#' A part that reaches outside the family's parameter space is intersected
+#' with it, so a [halfspace_region()] null for a multinomial becomes the
+#' bounded polytope it describes within the simplex.
+#'
 #' @param family A [parametric_family].
 #' @param region The null's geometry: any [region], or a list of
 #'   [convex_region]s, which becomes their [union_region].
@@ -20,7 +24,8 @@ NULL
 #' @section Properties:
 #' \describe{
 #'   \item{`family`}{The [parametric_family].}
-#'   \item{`region`}{The null's [region], as declared.}
+#'   \item{`region`}{The null's [region], as declared, with any part reaching
+#'   outside the family's parameter space intersected with it.}
 #'   \item{`cells`}{The flat list of convex cells the region decomposes into,
 #'   in part order: `cells(parts(region)[[1]])`, then those of part 2, and so
 #'   on.}
@@ -54,7 +59,7 @@ null_model <- new_class(
     region,
     max_cells = getOption("ripr.max_cells", 1000L)
   ) {
-    region <- as_region(region)
+    region <- clip_to_parameters(as_region(region), family@parameter_space)
     if (S7_inherits(region, empty_region)) {
       stop(
         "the null is empty: there is no hypothesis to fit or certify.",
@@ -104,6 +109,71 @@ null_model <- new_class(
     NULL
   }
 )
+
+
+#' Intersect each part of `region` that leaves `parameter_space` with it
+#'
+#' Parts already inside are kept as declared. A part with nothing inside is
+#' dropped with a warning, and a region with no part inside is an error. A
+#' dimension mismatch is left for the validator.
+#' @keywords internal
+#' @noRd
+clip_to_parameters <- function(region, parameter_space) {
+  if (
+    S7_inherits(region, empty_region) ||
+      space_dim(region) != space_dim(parameter_space)
+  ) {
+    return(region)
+  }
+  prts <- parts(region)
+  inside <- vapply(prts, within_space, logical(1L), space = parameter_space)
+  if (all(inside)) {
+    return(region)
+  }
+  clipped <- prts
+  clipped[!inside] <- lapply(prts[!inside], function(p) p & parameter_space)
+  empty <- vapply(clipped, is_empty, logical(1L))
+  if (all(empty)) {
+    stop(
+      "the null lies outside the family's parameter space, where the family ",
+      "has no distributions: there is no hypothesis to fit or certify.",
+      call. = FALSE
+    )
+  }
+  if (any(empty)) {
+    rlang::warn(paste0(
+      ngettext(sum(empty), "Part ", "Parts "),
+      toString(which(empty)),
+      " of the null ",
+      ngettext(sum(empty), "lies", "lie"),
+      " outside the family's parameter space, and ",
+      ngettext(sum(empty), "was", "were"),
+      " dropped."
+    ))
+  }
+  kept <- clipped[!empty]
+  if (length(kept) == 1L) kept[[1L]] else union_region(kept)
+}
+
+
+#' Is a convex region inside `space`?
+#'
+#' A bounded part is inside when each vertex is, up to [contains()]'s
+#' tolerance, so vertices typed in decimal (`c(0.9, 0.05, 0.05)` does not sum
+#' to exactly one in binary) are not clipped. Anything with rays or lines is
+#' decided exactly.
+#' @keywords internal
+#' @noRd
+within_space <- function(part, space) {
+  if (!S7_inherits(part, polyhedron_region)) {
+    return(region_subset(part, space))
+  }
+  g <- part@generators
+  if (nrow(g$r) == 0L && nrow(g$l) == 0L) {
+    return(all(apply(g$v, 1L, function(v) contains(space, v))))
+  }
+  region_subset(part, space)
+}
 
 
 #' @rdname null_model

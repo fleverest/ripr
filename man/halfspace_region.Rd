@@ -24,9 +24,6 @@ The unbounded case:
 \details{
 Coordinates are \verb{(z, c)}: \code{z} positions a point on the bounding hyperplane
 in an orthonormal basis, and \code{c >= 0} is the distance inward.
-
-A halfspace cannot yet be certified; see \code{\link[=polytope_region]{polytope_region()}} for the bounded
-alternative.
 }
 \examples{
 # `{theta : theta_1 <= theta_2}`

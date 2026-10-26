@@ -20,9 +20,10 @@ The \code{\link[=polytope_region]{polytope_region()}} whose vertices are affinel
 is a simplex of dimension \code{nrow(vertices) - 1}.
 }
 \details{
-\code{\link[=certify]{certify()}} additionally needs every vertex inside the standard simplex (the
-tetrahedron below fails this). Such simplices still chart, project and fit;
-they just cannot be certified.
+The Bernstein enclosure in \code{\link[=certify]{certify()}} needs every vertex inside the
+standard simplex (the tetrahedron below fails this), but \code{\link[=null_model]{null_model()}}
+clips a multinomial null to the simplex first, so such a part certifies as
+its intersection with the simplex.
 }
 \examples{
 # The 2-simplex in R^3, e.g. the entire multinomial parameter space:

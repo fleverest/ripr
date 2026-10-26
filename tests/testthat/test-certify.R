@@ -440,47 +440,53 @@ test_that("lower-dimensional nulls fit and certify", {
   expect_lte(cert@sup_ub, max(along) + 1e-6)
 })
 
-test_that("the refusal names the failing condition, not the class", {
-  # A `simplex_region` the Bernstein enclosure cannot take is not a missing
-  # method. The underlying geometry is supported but region is the wrong shape.
+test_that("a null reaching outside the simplex is clipped, then certified", {
+  # `null_model()` intersects each part with the parameter space, so a region
+  # reaching outside the standard simplex (or unbounded) never reaches the
+  # enclosure: the part certifies as the polytope it describes in the simplex.
   fam <- multinomial_family(n_trials = 4L, k = 3L)
-  x <- tabulated_rv(fam, rep(1, nrow(enumerate_space(fam@sample_space))))
+  X <- likelihood(fam(c(0.4, 0.35, 0.25)))
+  inside <- simplex_region(
+    vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  reference <- certify(X, null_model(fam, inside), tol = 1e-9)
 
-  # A simplex outside the standard simplex fails on membership.
   tetra <- simplex_region(
     vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
   )
-  msg <- tryCatch(
-    certify(x, null_model(fam, list(tetra))),
-    error = conditionMessage
-  )
-  expect_match(msg, "leave the standard simplex")
-  expect_match(msg, "sum to 0 rather than 1")
-  expect_false(grepl("No bounding method is implemented", msg))
-
-  # A negative coordinate is caught before the sum, and named.
   outside <- simplex_region(
     vertices = rbind(c(-0.5, 1.5, 0), c(0, 1, 0), c(0, 0, 1))
   )
-  msg <- tryCatch(
-    certify(x, null_model(fam, list(outside))),
-    error = conditionMessage
-  )
-  expect_match(msg, "smallest coordinate is -0.5")
+  halfspace <- halfspace_region(normal = c(1, -1, 0), offset = 0)
+  for (r in list(tetra, outside, halfspace)) {
+    expect_no_error(cert <- certify(X, null_model(fam, r), tol = 1e-9))
+  }
+  # The halfspace is exactly the `inside` part once clipped.
+  cert <- certify(X, null_model(fam, halfspace), tol = 1e-9)
+  expect_equal(cert@sup_ub, reference@sup_ub, tolerance = 1e-8)
+})
 
-  # An unbounded region fails for a reason of its own, and says which. It is
-  # not a missing method either: nothing is missing, there is simply no finite
-  # simplicial cover to enclose.
-  msg <- tryCatch(
-    certify(
-      x,
-      null_model(fam, list(halfspace_region(normal = c(1, -1, 0), offset = 0)))
-    ),
-    error = conditionMessage
+test_that("the Bernstein obstruction names the failing condition", {
+  # Unreachable through `null_model()`, which clips to the simplex, but kept
+  # as a guard: the message names the condition rather than the class.
+  tetra <- simplex_region(
+    vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
   )
-  expect_match(msg, "it is unbounded")
-  expect_match(msg, "State the null over a bounded region")
-  expect_false(grepl("No bounding method is implemented", msg))
+  why <- bernstein_obstruction(tetra)
+  expect_match(why$because, "leave the standard simplex")
+  expect_match(why$because, "sum to 0 rather than 1")
+
+  outside <- simplex_region(
+    vertices = rbind(c(-0.5, 1.5, 0), c(0, 1, 0), c(0, 0, 1))
+  )
+  expect_match(
+    bernstein_obstruction(outside)$because,
+    "smallest coordinate is -0.5"
+  )
+
+  why <- bernstein_obstruction(halfspace_region(normal = c(1, -1, 0)))
+  expect_match(why$because, "it is unbounded")
+  expect_match(why$remedy, "State the null over a bounded region")
 })
 
 test_that("a region obstruction is not blamed if the family is not implemented", {
@@ -534,14 +540,16 @@ test_that("certification goes ahead exactly where the enclosure applies", {
   expect_true(certifies(
     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 0, 1)))
   ))
-  expect_false(certifies(simplex_region(
+  # Regions reaching outside the simplex, bounded or not, are clipped to it
+  # by `null_model()`, so they certify too.
+  expect_true(certifies(simplex_region(
     vertices = rbind(c(0, 0, 0), c(1, 0, 0), c(0, 1, 0), c(0, 0, 1))
   )))
-  expect_false(certifies(halfspace_region(
+  expect_true(certifies(halfspace_region(
     normal = c(1, -1, 0),
     offset = 0
   )))
-  expect_false(certifies(real_region(3L)))
+  expect_true(certifies(real_region(3L)))
 })
 
 
@@ -730,18 +738,13 @@ test_that("the wildcard does not make every refusal its business", {
 
 test_that("a point outside the parameter space is refused, not evaluated", {
   # An expectation at a point the family has no distribution for is not an
-  # expectation under the null, so the method declines it and the family's own
-  # method explains why.
+  # expectation under the null; `null_model()` refuses the null outright.
   family <- multinomial_family(n_trials = 4L, k = 3L)
-  x <- tabulated_rv(family, rep(1, nrow(enumerate_space(family@sample_space))))
   outside <- point_region(theta = c(2, -1, 0))
-
-  msg <- tryCatch(
-    certify(x, null_model(family, outside)),
-    error = conditionMessage
+  expect_error(
+    null_model(family, outside),
+    "outside the family's parameter space"
   )
-  expect_match(msg, "leave the standard simplex")
-  expect_match(msg, "basis polynomials may take negative values")
 })
 
 

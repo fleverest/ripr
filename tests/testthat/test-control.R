@@ -48,6 +48,14 @@ test_that("snapshot rejects anything else, NULL included", {
   expect_error(ripr_control(snapshot = c("none", "all")), "must be")
 })
 
+# --- weight_solver ------------------------------------------------------------
+
+test_that("weight_solver defaults to sqp and accepts slsqp", {
+  expect_identical(ripr_control()$weight_solver, "sqp")
+  expect_identical(ripr_control(weight_solver = "slsqp")$weight_solver, "slsqp")
+  expect_error(ripr_control(weight_solver = "other"), "must be one of")
+})
+
 # --- Numeric validation -------------------------------------------------------
 
 test_that("counts must be whole numbers", {

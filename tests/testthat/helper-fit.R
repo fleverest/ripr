@@ -57,5 +57,5 @@ in_own_part <- function(state, tol = 1e-5) {
 
 # Steps taken by each verb, read off the trace's `phase` column, and those
 # of the verbs that took any.
-verb_counts <- function(state) ripr:::phase_counts(state@trace)
+verb_counts <- function(state) phase_counts(state@trace)
 verbs_used <- function(state) Filter(\(n) n > 0L, verb_counts(state))

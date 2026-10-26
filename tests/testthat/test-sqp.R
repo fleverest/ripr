@@ -12,7 +12,7 @@ test_that("qp_nonneg agrees with quadprog", {
   m <- matrix(stats::rnorm(40), 8L, 5L)
   h <- crossprod(m) + diag(1e-3, 5L)
   c <- stats::rnorm(5L)
-  ours <- ripr:::qp_nonneg(h, c, numeric(5L))
+  ours <- qp_nonneg(h, c, numeric(5L))
   ref <- quadprog::solve.QP(h, -c, diag(5L), numeric(5L))$solution
   expect_equal(ours, pmax(ref, 0), tolerance = 1e-8)
 })
@@ -24,7 +24,7 @@ test_that("sqp_nonneg solves a non-negative quadratic in one iteration", {
   m <- matrix(stats::rnorm(40), 8L, 5L)
   h <- crossprod(m) + diag(1e-3, 5L)
   c <- stats::rnorm(5L)
-  fit <- ripr:::sqp_nonneg(
+  fit <- sqp_nonneg(
     rep(1, 5L),
     fn = \(x) sum(x * (h %*% x)) / 2 + sum(c * x),
     gr = \(x) as.vector(h %*% x) + c,
@@ -32,13 +32,13 @@ test_that("sqp_nonneg solves a non-negative quadratic in one iteration", {
   )
   expect_identical(fit$iterations, 1L)
   expect_lte(fit$kkt, 1e-12)
-  expect_equal(fit$par, ripr:::qp_nonneg(h, c, numeric(5L)), tolerance = 1e-10)
+  expect_equal(fit$par, qp_nonneg(h, c, numeric(5L)), tolerance = 1e-10)
 })
 
 test_that("sqp_nonneg reaches the bound-constrained optimum of a convex function", {
   # sum(exp(x) - b x) over x >= 0 is minimised at pmax(log(b), 0).
   b <- c(0.2, 0.9, 1, 2, 5)
-  fit <- ripr:::sqp_nonneg(
+  fit <- sqp_nonneg(
     rep(1, 5L),
     fn = \(x) sum(exp(x) - b * x),
     gr = \(x) exp(x) - b,
@@ -47,7 +47,7 @@ test_that("sqp_nonneg reaches the bound-constrained optimum of a convex function
   expect_lte(fit$kkt, 1e-12)
   expect_equal(fit$par, pmax(log(b), 0), tolerance = 1e-12)
   expect_identical(fit$par[1:2], c(0, 0)) # strictly active bounds are exact
-  short <- ripr:::sqp_nonneg(
+  short <- sqp_nonneg(
     rep(1, 5L),
     fn = \(x) sum(exp(x) - b * x),
     gr = \(x) exp(x) - b,

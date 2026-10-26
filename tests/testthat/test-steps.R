@@ -79,13 +79,15 @@ test_that("a Csiszar--Tusnady step multiplies each weight by its atom's G", {
   }
 })
 
-test_that("a weight row's oracle value is the restricted Frank-Wolfe gap", {
-  # `max_c G(theta_c)`, measured before the sweep: what the sweep had left to
+test_that("a weight row's oracle value is the support gap before the step", {
+  # `max_c G(theta_c)`, measured before the sweep or solve: what it had left to
   # gain over the current support.
   st <- fw_step(plurality(), 3L)
   G <- exact_g(st, atoms(st@mixing))
-  swept <- ct_step(st, 1L)
-  expect_equal(utils::tail(swept@trace$oracle_value, 1L), max(G))
+  for (step in list(ct_step, weight_step)) {
+    swept <- step(st)
+    expect_equal(utils::tail(swept@trace$oracle_value, 1L), max(G))
+  }
   # And the predicate reading the same number agrees on either side of it.
   expect_true(support_gap_below(max(G) - 1 + 1e-9)(st))
   expect_false(support_gap_below(max(G) - 1 - 1e-9)(st))
@@ -109,11 +111,11 @@ test_that("a weight step solves the weights on the current support", {
   st <- fw_step(plurality(), 5L)
   solved <- weight_step(st)
   G <- exact_g(solved, atoms(st@mixing))
-  expect_lt(max(G), 1 + 1e-6)
+  expect_lt(max(G), 1 + 1e-10)
   expect_equal(
     exact_g(solved, atoms(solved@mixing)),
     rep(1, n_atoms(solved@mixing)),
-    tolerance = 1e-6
+    tolerance = 1e-10
   )
   expect_lte(
     utils::tail(solved@trace$kl, 1L),
@@ -125,14 +127,6 @@ test_that("a weight step solves the weights on the current support", {
     tolerance = rounding_tol(1)
   )
   expect_true(all(weights(solved@mixing) > 0))
-})
-
-test_that("a weight row's oracle value is the support gap before the solve", {
-  st <- fw_step(plurality(), 3L)
-  G <- exact_g(st, atoms(st@mixing))
-  solved <- weight_step(st)
-  expect_identical(utils::tail(solved@trace$phase, 1L), "weight")
-  expect_equal(utils::tail(solved@trace$oracle_value, 1L), max(G))
 })
 
 # --- Step paths ---------------------------------------------------------------
@@ -275,7 +269,11 @@ test_that("a step's part says whether it used the candidate", {
     }
   }
   expect_true(any(is.na(tr$part[tr$phase == "fw"])))
-  expect_true(all(is.na(tr$part[tr$direction %in% "away"])))
+  # An away step records where the oracle looked, but adds nothing.
+  away <- tr$direction %in% "away"
+  expect_true(any(away))
+  expect_true(all(is.na(tr$part[away])))
+  expect_false(anyNA(tr$oracle_theta[away]))
 })
 
 # --- The corrective solve -----------------------------------------------------
@@ -374,11 +372,6 @@ test_that("an EM sweep keeps every atom in its own part", {
   # migrate between parts however the responsibilities fall.
   st <- fw_step(plurality(), 2L)
   expect_true(in_own_part(em_step(st, 1L)))
-})
-
-test_that("an EM sweep neither grows nor shrinks the support", {
-  st <- fw_step(plurality(), 2L)
-  expect_identical(em_step(st, 1L)@part, st@part)
 })
 
 test_that("an EM sweep's weights are the weight step's", {
@@ -649,7 +642,7 @@ test_that("insert_candidates puts the oracle first and keeps distinct maxima abo
     correct_weights = TRUE,
     record_gap = TRUE
   )
-  cands <- ripr:::insert_candidates(st, st@oracle)
+  cands <- insert_candidates(st, st@oracle)
   expect_equal(cands[[1L]]$theta, as.vector(st@oracle$theta))
   for (cd in cands[-1L]) {
     expect_gt(exact_g(st, matrix(cd$theta, nrow = 1L)), 1)

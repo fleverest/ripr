@@ -1,9 +1,10 @@
 # Properties of sfw_step().
 #
 # Each step is a fully-corrective FW step followed by a slide, so it must
-# record one row per step, never end above the KL a plain corrective step
-# would reach from the same state, keep atoms in their own parts, and reach a
-# small gap quickly on a problem fw_step() alone converges on slowly.
+# never end above the KL a plain corrective step would reach from the same
+# state, and reach a small gap quickly on a problem fw_step() alone converges
+# on slowly. Its rows, KL and parts are checked with the other verbs' in
+# test-fit.R.
 
 sfw_fixture <- function(n = 8L, q = c(0.4, 0.35, 0.25)) {
   fam <- multinomial_family(n_trials = n, k = 3L)
@@ -19,15 +20,6 @@ sfw_fixture <- function(n = 8L, q = c(0.4, 0.35, 0.25)) {
     control = ripr_control(n_seeds = 30L, n_restarts = 4L)
   )
 }
-
-test_that("sfw_step records one sfw row per step, with exact KL", {
-  set.seed(1)
-  st <- sfw_step(sfw_fixture(), times = 3L)
-  expect_identical(st@trace$phase, c("init", "sfw", "sfw", "sfw"))
-  expect_equal(utils::tail(st@trace$kl, 1L), exact_kl(st), tolerance = 1e-10)
-  expect_equal(sum(weights(st@mixing)), 1)
-  expect_true(in_own_part(st))
-})
 
 test_that("the slide never leaves KL above the corrective step alone", {
   set.seed(1)
@@ -70,7 +62,7 @@ test_that("the searches use the control's tolerance and budget", {
   st@control$search_xtol <- 1e-5
   st@control$search_max_eval <- 7L
   seen <- list()
-  maximise <- ripr:::maximise_over
+  maximise <- maximise_over
   local_mocked_bindings(
     maximise_over = function(..., xtol, max_eval) {
       seen[[length(seen) + 1L]] <<- c(xtol, max_eval)
@@ -109,9 +101,9 @@ test_that("near_tol decides which maxima are one", {
       part = c(1L, 1L)
     )
   ) # found$maxima$theta has two rows that are close
-  expect_length(ripr:::insert_candidates(st, found), 2L)
+  expect_length(insert_candidates(st, found), 2L)
   st@control$near_tol <- 0
-  expect_length(ripr:::insert_candidates(st, found), 3L)
+  expect_length(insert_candidates(st, found), 3L)
 })
 
 test_that("merge_coincident folds same-part duplicates only", {
@@ -121,7 +113,7 @@ test_that("merge_coincident folds same-part duplicates only", {
     c(0.2, 0.3, 0.5),
     c(0.6, 0.2, 0.2)
   )
-  m <- ripr:::merge_coincident(
+  m <- merge_coincident(
     atoms,
     c(0.1, 0.2, 0.3, 0.4),
     part = c(1L, 1L, 2L, 1L)
@@ -136,7 +128,7 @@ test_that("sfw_step slides a state that came from another verb before inserting"
   set.seed(1)
   st <- fw_step(sfw_fixture(), times = 2L)
   slides <- 0L
-  slide <- ripr:::slide_state
+  slide <- slide_state
   local_mocked_bindings(
     slide_state = function(...) {
       slides <<- slides + 1L
@@ -160,14 +152,14 @@ test_that("merge_coincident merges at the weight-averaged position, within toler
   delta <- atol + rtol * norm(a, type = "2")
   b <- a + c(delta / 2, -delta / 2, 0) # closer than atol + rtol * max(|a|, |b|)
   # Check that they merge
-  m <- ripr:::merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
+  m <- merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
   expect_identical(nrow(m$atoms), 1L)
   expect_equal(as.vector(m$atoms), 0.25 * a + 0.75 * b, tolerance = 0)
   expect_equal(m$weights, 1)
 
   # Beyond atol + rtol * max(|a|, |b|), nothing merges.
   b <- a + c(delta, -delta, 0) # further than atol + rtol * max(|a|, |b|)
-  m <- ripr:::merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
+  m <- merge_coincident(rbind(a, b), c(0.25, 0.75), part = c(1L, 1L))
   expect_identical(nrow(m$atoms), 2L)
   # rtol scales with the coordinates' size.
   big <- c(1e6, 0)
@@ -175,7 +167,7 @@ test_that("merge_coincident merges at the weight-averaged position, within toler
   near <- rbind(big, big + c(delta, 0))
   expect_identical(
     nrow(
-      ripr:::merge_coincident(
+      merge_coincident(
         near,
         c(0.5, 0.5),
         c(1L, 1L),
@@ -187,7 +179,7 @@ test_that("merge_coincident merges at the weight-averaged position, within toler
   )
   expect_identical(
     nrow(
-      ripr:::merge_coincident(
+      merge_coincident(
         near,
         c(0.5, 0.5),
         c(1L, 1L),
@@ -197,12 +189,6 @@ test_that("merge_coincident merges at the weight-averaged position, within toler
     ),
     1L
   )
-})
-
-test_that("ripr_control checks the merge tolerances", {
-  expect_identical(ripr_control()$merge_atol, 1e-9)
-  expect_identical(ripr_control(merge_rtol = 0)$merge_rtol, 0)
-  expect_error(ripr_control(merge_atol = -1), "larger than or equal to 0")
 })
 
 test_that("insert_candidates merges a maximum found from two parts into one", {
@@ -226,14 +212,14 @@ test_that("insert_candidates merges a maximum found from two parts into one", {
       part = c(1L, 2L, 1L)
     )
   )
-  cands <- ripr:::insert_candidates(st, found)
+  cands <- insert_candidates(st, found)
   expect_length(cands, 2L)
   expect_equal(cands[[1L]]$theta, found$theta)
   expect_equal(cands[[2L]]$theta, shared, tolerance = 1e-7)
   expect_identical(cands[[2L]]$part, 2L)
   expect_true(contains(parts(st@null@region)[[2L]], cands[[2L]]$theta))
   # merge_coincident() itself still keeps parts apart unless told otherwise.
-  m <- ripr:::merge_coincident(rbind(shared, shared), c(1, 1), c(1L, 2L))
+  m <- merge_coincident(rbind(shared, shared), c(1, 1), c(1L, 2L))
   expect_identical(nrow(m$atoms), 2L)
 })
 
@@ -258,10 +244,10 @@ test_that("the slide merges nearly coincident pairs it would leave apart", {
         ch$to_theta_batch(ch$seed(40L))
       })
     )
-    ld <- ripr:::compile_engine(st@engine)
-    dg <- ripr:::compile_engine_grad(st@engine)
-    apart <- ripr:::slide_state(st, ld, dg, tol = 0)$state
-    merged <- ripr:::slide_state(st, ld, dg)$state
+    ld <- compile_engine(st@engine)
+    dg <- compile_engine_grad(st@engine)
+    apart <- slide_state(st, ld, dg, tol = 0)$state
+    merged <- slide_state(st, ld, dg)$state
     stalled <- stalled + near_pairs(apart, st@control$near_tol)
     expect_identical(near_pairs(merged, st@control$near_tol), 0L)
     expect_lte(exact_kl(merged), exact_kl(apart) + 1e-12)
@@ -275,7 +261,7 @@ test_that("merge_coincident merges to a fixed point", {
   # tolerance of the first: one pass would leave that pair, so passes repeat.
   tol <- 1e-3
   pts <- rbind(c(0, 0), c(1.2, 0.4) * tol, c(0.4, 1.2) * tol)
-  m <- ripr:::merge_coincident(
+  m <- merge_coincident(
     pts,
     c(1, 1, 1),
     c(1L, 1L, 1L),
@@ -304,9 +290,9 @@ test_that("the slide's merge never costs KL", {
     until = gap_below(1e-9)
   )
   expect_gt(n_atoms(st@mixing), 1L)
-  ld <- ripr:::compile_engine(st@engine)
-  dg <- ripr:::compile_engine_grad(st@engine)
-  wide <- ripr:::slide_state(st, ld, dg, tol = 1)$state
+  ld <- compile_engine(st@engine)
+  dg <- compile_engine_grad(st@engine)
+  wide <- slide_state(st, ld, dg, tol = 1)$state
   expect_identical(n_atoms(wide@mixing), n_atoms(st@mixing))
   expect_lte(exact_kl(wide), exact_kl(st) + 1e-12)
 })

@@ -14,7 +14,7 @@ test_that("the multinomial density gradient matches finite differences", {
   x <- enumerate_space(fam@sample_space)
   set.seed(1)
   log_m <- log(stats::runif(nrow(x)))
-  dg <- ripr:::compile_density_grad(fam, x)
+  dg <- compile_density_grad(fam, x)
   h <- 1e-6
 
   for (theta in list(c(0.3, 0.3, 0.4), c(0.5, 0.5, 0))) {
@@ -40,10 +40,10 @@ test_that("the default density gradient agrees with the multinomial one inside t
   x <- enumerate_space(fam@sample_space)
   log_m <- -seq_len(nrow(x)) / 10
   theta_mat <- rbind(c(0.2, 0.5, 0.3), c(0.6, 0.1, 0.3))
-  default <- S7::method(ripr:::compile_density_grad, ripr::parametric_family)
+  default <- S7::method(compile_density_grad, ripr::parametric_family)
   expect_equal(
     default(fam, x)(theta_mat, log_m),
-    ripr:::compile_density_grad(fam, x)(theta_mat, log_m)
+    compile_density_grad(fam, x)(theta_mat, log_m)
   )
 })
 
@@ -56,8 +56,8 @@ test_that("the linear oracle's gradient is finite on a face of the simplex", {
     )
   )
   st <- ripr_init(fam(c(0.6, 0.2, 0.2)), null)
-  ld <- ripr:::compile_engine(st@engine)
-  log_p <- ripr:::log_p_at_nodes(st, ld)
-  grad <- ripr:::linear_oracle(st, log_p, ld)$grad(c(0.5, 0.5, 0))
+  ld <- compile_engine(st@engine)
+  log_p <- log_p_at_nodes(st, ld)
+  grad <- linear_oracle(st, log_p, ld)$grad(c(0.5, 0.5, 0))
   expect_true(all(is.finite(grad)))
 })

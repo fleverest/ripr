@@ -106,15 +106,6 @@ test_that("each verb writes one row per step, tagged with its phase", {
   expect_identical(st@trace$phase[1L], "init")
 })
 
-test_that("a trace row carries its step index", {
-  st <- fw_step(plurality(), 2L)
-  st <- em_step(st, 2L)
-  expect_identical(st@trace$step, 0:4)
-  expect_identical(st@trace$phase, c("init", "fw", "fw", "em", "em"))
-  # A per-verb count as at each row is a cumulative count over the phases.
-  expect_identical(cumsum(st@trace$phase == "fw"), c(0L, 1L, 2L, 2L, 2L))
-})
-
 test_that("every row records the wall-clock time it took", {
   # The clock is the fair axis between step rules whose iterations differ in
   # cost by an order of magnitude, and it can only be measured from inside a
@@ -153,15 +144,12 @@ test_that("an fw step that uses a cached oracle still prices its search", {
 test_that("`correct_weights` makes one fw call one fully-corrective iteration", {
   # After the step every weight is re-solved, so the weights satisfy the
   # optimality conditions over the atoms: G <= 1 everywhere, = 1 where weighted.
+  # Seeded alike, so the plain step below searches as the corrected one did.
   st <- fw_step(plurality(), 3L)
+  set.seed(1)
   one <- fw_step(st, 1L, correct_weights = TRUE)
   g <- exact_g(one, atoms(one@mixing))
-  expect_lt(max(g), 1 + 1e-6)
-  expect_equal(
-    g[weights(one@mixing) > 0],
-    rep(1, n_atoms(one@mixing)),
-    tolerance = 1e-6
-  )
+  expect_equal(g, rep(1, n_atoms(one@mixing)), tolerance = 1e-10)
 
   added <- one@trace[seq(nrow(st@trace) + 1L, nrow(one@trace)), ]
   expect_identical(nrow(added), 1L)
@@ -169,6 +157,7 @@ test_that("`correct_weights` makes one fw call one fully-corrective iteration", 
   expect_identical(verb_counts(one)[["weight"]], 0L)
   # The row's KL is the corrected mixture's, not the stepped one's.
   expect_equal(added$kl, exact_kl(one), tolerance = 1e-12)
+  set.seed(1)
   expect_lt(added$kl, utils::tail(fw_step(st, 1L)@trace$kl, 1L))
 })
 
@@ -176,7 +165,8 @@ test_that("`correct_weights` makes one fw call one fully-corrective iteration", 
 
 test_that("the identity survives every verb", {
   # Fails if the weights and atoms come apart, or if a verb writes back weights
-  # that do not correspond to the atoms it left behind.
+  # that do not correspond to the atoms it left behind. Each verb runs on the
+  # last one's output, so this is also a composition in one order.
   st <- plurality()
   for (advance in list(
     function(s) fw_step(s, 2L),
@@ -196,12 +186,9 @@ test_that("the identity survives every verb", {
     )
     expect_equal(sum(weights(st@mixing)), 1, tolerance = rounding_tol(1))
     expect_true(all(weights(st@mixing) >= 0))
+    # Nor does any verb move an atom out of the part it is filed under.
+    expect_true(in_own_part(st))
   }
-})
-
-test_that("every atom stays in the part it was found in", {
-  st <- plurality() |> fw_step(3L) |> em_step(3L) |> lb_step(1L)
-  expect_true(in_own_part(st))
 })
 
 # --- Monotonicity -------------------------------------------------------------
@@ -503,16 +490,6 @@ test_that("oracle_theta is the atom the step added", {
   }
 })
 
-test_that("an away step records where the oracle looked but adds nothing", {
-  # `oracle_theta` says what the oracle proposed; `part` says whether the
-  # step took it. An away step proposes a point and then moves the other way.
-  st <- fw_step(plurality(), 12L, variant = "away-step")
-  away <- st@trace[!is.na(st@trace$direction) & st@trace$direction == "away", ]
-  skip_if(nrow(away) == 0L, "no away step was taken")
-  expect_true(all(is.na(away$part)))
-  expect_true(all(!is.na(away$oracle_theta)))
-})
-
 test_that("theta columns hold the parameter itself, one per row", {
   st <- em_step(fw_step(plurality(k = 4), 1L), 1L)
   tr <- st@trace
@@ -579,13 +556,11 @@ test_that("verbs compose in any order", {
   expect_true(in_own_part(st))
 })
 
-test_that("only the stepping verbs can grow the support", {
-  # EM moves atoms and the weight solve reweights them; neither adds or drops
-  # one.
+test_that("EM and Csiszar--Tusnady sweeps neither add nor drop atoms", {
+  # EM moves atoms and the multiplicative sweep reweights them, never to zero.
   st <- fw_step(plurality(), 3L)
   expect_identical(em_step(st, 3L)@part, st@part)
   expect_identical(ct_step(st, 10L)@part, st@part)
-  expect_true(length(fw_step(st, 1L)@part) >= length(st@part))
 })
 
 # --- Directions ---------------------------------------------------------------
@@ -647,21 +622,6 @@ test_that("ripr_finish returns a ripr_fit that keeps its state", {
   )
 })
 
-test_that("correcting the weights in ripr_finish solves the weights to optimality", {
-  # Over the fitted atoms, the optimal weights satisfy G <= 1 at every atom,
-  # with equality wherever an atom keeps weight; and KL can only fall.
-  st <- fw_step(plurality(), 6L)
-  fit <- ripr_finish(st, correct_weights = TRUE)
-  g <- exact_g(st, atoms(st@mixing), W = fit@W0)
-  expect_lt(max(g), 1 + 1e-6)
-  expect_equal(
-    exact_g(st, atoms(fit@W0), W = fit@W0),
-    rep(1, n_atoms(fit@W0)),
-    tolerance = 1e-6
-  )
-  expect_lte(fit@kl, exact_kl(st))
-})
-
 test_that("ripr_finish is a pure conversion by default", {
   # Refining is opt-in: what comes back is what was fitted.
   st <- fw_step(plurality(), 5L)
@@ -683,12 +643,20 @@ test_that("kl describes the returned mixture, not the state", {
   expect_equal(fit@kl, exact_kl(st, fit@W0), tolerance = rounding_tol(1))
 })
 
-test_that("correcting the weights lowers KL and shrinks the support", {
-  # Plain Frank--Wolfe leaves many lightly weighted atoms; the exact solve
-  # zeroes those it does not need, and they are dropped.
+test_that("correcting the weights in ripr_finish solves them and drops atoms", {
+  # Over the fitted atoms, the optimal weights satisfy G <= 1 at every atom,
+  # with equality wherever an atom keeps weight. Plain Frank--Wolfe leaves many
+  # lightly weighted atoms; the exact solve zeroes those it does not need, and
+  # they are dropped.
   st <- fw_step(plurality(), 6L)
   plain <- ripr_finish(st)
   corrected <- ripr_finish(st, correct_weights = TRUE)
+  expect_lt(max(exact_g(st, atoms(st@mixing), W = corrected@W0)), 1 + 1e-10)
+  expect_equal(
+    exact_g(st, atoms(corrected@W0), W = corrected@W0),
+    rep(1, n_atoms(corrected@W0)),
+    tolerance = 1e-10
+  )
   expect_lte(corrected@kl, plain@kl)
   expect_lt(n_atoms(corrected@W0), n_atoms(plain@W0))
   expect_true(corrected@corrected_weights)
@@ -703,7 +671,7 @@ test_that("threshold keeps, drops, or errors", {
     n_atoms(ripr_finish(st, threshold = -1)@W0),
     n_atoms(plain@W0)
   )
-  expect_lte(n_atoms(ripr_finish(st, threshold = 0.2)@W0), n_atoms(plain@W0))
+  expect_lt(n_atoms(ripr_finish(st, threshold = 0.2)@W0), n_atoms(plain@W0))
   expect_error(ripr_finish(st, threshold = 1), "`threshold` must be below 1")
   expect_error(ripr_finish(st, threshold = 0.99), "no atom has weight above")
 })

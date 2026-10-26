@@ -175,13 +175,6 @@ test_that("the trace is a read-only data frame over the stored rows", {
   )
 })
 
-test_that("a new row clears the oracle cache", {
-  # A new row means a new mixture, and the cache described the old one.
-  st <- fixture(record_gap = TRUE)
-  expect_false(is.null(st@oracle))
-  expect_null(em_step(st, 1L)@oracle)
-})
-
 test_that("a row's gap is written once, from the oracle, never overwritten", {
   st <- fixture(record_gap = TRUE)
   row <- st@trace

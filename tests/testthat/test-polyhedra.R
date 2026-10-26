@@ -114,14 +114,14 @@ test_that("conversion to rationals is exact for the double", {
   # Nothing rounds, so this is an identity, not an approximation. `1/3` becomes
   # the rational the double actually is -- long, and not one third.
   x <- c(0.5, 1 / 3, 0, -0.25, 2, pi, 55 / 10000024)
-  expect_identical(rcdd::q2d(ripr:::as_qmatrix(x)), x)
-  expect_equal(ripr:::as_qmatrix(0.5), "1/2")
+  expect_identical(rcdd::q2d(as_qmatrix(x)), x)
+  expect_equal(as_qmatrix(0.5), "1/2")
 })
 
 
 test_that("as_qmatrix keeps the shape of its input", {
   m <- matrix(c(0.5, 1 / 3, 0.25, 0.75), 2L, 2L)
-  expect_identical(rcdd::q2d(ripr:::as_qmatrix(m)), m)
+  expect_identical(rcdd::q2d(as_qmatrix(m)), m)
 })
 
 
@@ -129,13 +129,13 @@ test_that("the same double always gives the same rational", {
   # This is the facet-sharing property the package relies on: two cells handed
   # the same vertex are seen to share it. It holds because the conversion is a
   # function of the double and nothing rounds.
-  expect_identical(ripr:::as_qmatrix(1 / 3), ripr:::as_qmatrix((1 / 6) * 2))
+  expect_identical(as_qmatrix(1 / 3), as_qmatrix((1 / 6) * 2))
 
   # And the honest limit of it: one ulp apart is a different point, and is
   # treated as one. A consumer needing more than this needs a tolerance-based
   # facet matcher, not a different encoding here.
   expect_false(identical(1 / 3, 1 - 2 / 3))
-  expect_false(ripr:::as_qmatrix(1 / 3) == ripr:::as_qmatrix(1 - 2 / 3))
+  expect_false(as_qmatrix(1 / 3) == as_qmatrix(1 - 2 / 3))
 })
 
 
@@ -163,7 +163,7 @@ test_that("a double H-representation is a lossy intermediate for derived facets"
 
 
 test_that("a value with no rational form is refused by name", {
-  expect_error(ripr:::as_qmatrix(NA_real_), "finite")
+  expect_error(as_qmatrix(NA_real_), "finite")
 })
 
 
@@ -194,11 +194,11 @@ test_that("is_empty is TRUE for contradictory constraints", {
     b = c(0, -0.5, 0, 0, 0, 1),
     eq = c(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)
   )
-  expect_true(ripr:::h_is_empty(h))
+  expect_true(h_is_empty(h))
 
   # Drop the contradictory row and it is the sub-simplex `{theta_1 <= 0}`.
   keep <- -2L
-  expect_false(ripr:::h_is_empty(
+  expect_false(h_is_empty(
     list(a = h$a[keep, ], b = h$b[keep], eq = h$eq[keep])
   ))
 })

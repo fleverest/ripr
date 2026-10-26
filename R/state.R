@@ -97,18 +97,17 @@ method(print, ripr_state) <- function(x, ...) {
   tr <- x@trace
   kl <- if (nrow(tr)) format(signif(utils::tail(tr$kl, 1L), 6L)) else NA
 
-  # The cached oracle is the only gap known to describe the current mixture;
-  # a recorded one without it belongs to an iterate that has since moved on.
-  g_any <- tr$gap_after[!is.na(tr$gap_after)]
-  gap <- if (!is.null(x@oracle)) {
-    format(signif(x@oracle$value - 1, 3L))
-  } else if (length(g_any)) {
-    paste(
-      format(signif(utils::tail(g_any, 1L), 3L)),
-      "at an earlier iterate"
-    )
-  } else {
+  g <- last_gap(x)
+  gap <- if (is.null(g)) {
     "none recorded"
+  } else if (g$current) {
+    format(signif(g$value, 3L))
+  } else {
+    sprintf(
+      "%s at step %d, an earlier iterate",
+      format(signif(g$value, 3L)),
+      g$step
+    )
   }
   counts <- phase_counts(tr)
 
@@ -381,6 +380,31 @@ fill_gap <- function(state, gap, theta, part, elapsed) {
   rows[[i]][["gap_after_part"]] <- as.integer(part)
   rows[[i]][["gap_after_elapsed"]] <- elapsed
   S7::set_props(state, trace_rows = rows, .check = FALSE)
+}
+
+#' The most recent Frank--Wolfe gap recorded on a state
+#'
+#' The last row whose `gap_after` is filled. `current` says whether that is
+#' the last row, so that the gap describes the current mixture rather than an
+#' ealier iterate. Returns `list(value, theta, part, step, current)`, or `NULL`
+#' if no gap has been recorded.
+#' @keywords internal
+#' @noRd
+last_gap <- function(state) {
+  rows <- state@trace_rows
+  for (i in rev(seq_along(rows))) {
+    row <- rows[[i]]
+    if (!is.na(row$gap_after)) {
+      return(list(
+        value = row$gap_after,
+        theta = row$gap_after_theta,
+        part = row$gap_after_part,
+        step = row$step,
+        current = i == length(rows)
+      ))
+    }
+  }
+  NULL
 }
 
 

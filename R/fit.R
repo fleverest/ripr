@@ -1092,8 +1092,7 @@ ripr_finish <- function(state, correct_weights = FALSE, record_gap = FALSE) {
     weights = w[by_order] / sum(w)
   )
   log_p <- mixture_log_p(ld(mixing@atoms), mixing@weights)
-  gaps <- state@trace$gap_after
-  gaps <- gaps[!is.na(gaps)]
+  fitted_gap <- last_gap(state)
 
   ripr_fit(
     W0 = mixing,
@@ -1101,7 +1100,7 @@ ripr_finish <- function(state, correct_weights = FALSE, record_gap = FALSE) {
     part = state@part[by_order],
     # Of the returned mixture, not the state's.
     kl = kl_at(engine, log_p),
-    gap_fit = if (length(gaps)) utils::tail(gaps, 1L) else NA_real_,
+    gap_fit = if (is.null(fitted_gap)) NA_real_ else fitted_gap$value,
     gap_final = if (record_gap) {
       oracle <- linear_oracle(state, log_p, ld)
       search_null(state, oracle, seeds = mixing@atoms)$value - 1

@@ -251,7 +251,7 @@ test_that("a state prints a summary, not a property dump", {
   expect_no_match(out, "@")
   # The step's search filled the init row, and nothing has measured the
   # mixture the step made: that gap belongs to an earlier iterate.
-  expect_match(out, "at an earlier iterate", fixed = TRUE)
+  expect_match(out, "at step 0, an earlier iterate", fixed = TRUE)
   expect_match(
     paste(capture.output(print(fixture())), collapse = "\n"),
     "gap      none recorded",
@@ -270,7 +270,7 @@ test_that("a state prints a summary, not a property dump", {
   )
   expect_match(
     paste(capture.output(print(em_step(measured, 1L))), collapse = "\n"),
-    paste(gap, "at an earlier iterate"),
+    paste(gap, "at step 1, an earlier iterate"),
     fixed = TRUE
   )
 })

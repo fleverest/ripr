@@ -291,7 +291,10 @@ test_that("the finishing weight solve respects both its budget and tolerance", {
   full <- finish()
   loose_sqp <- finish(weight_sqp_tol = 1e-2)
   loose_slsqp <- finish(weight_solver = "slsqp", weight_slsqp_tol = 1e10)
-  capped <- finish(weight_max_iter = 2L)
+  expect_warning(
+    capped <- finish(weight_max_iter = 2L),
+    class = "ripr_weight_solve_warning"
+  )
   expect_gte(loose_sqp@kl, full@kl - 1e-12)
   expect_gte(loose_slsqp@kl, full@kl - 1e-12)
   expect_gte(capped@kl, full@kl - 1e-12)

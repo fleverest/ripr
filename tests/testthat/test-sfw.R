@@ -58,7 +58,7 @@ test_that("sfw_step honours until and a tiny slide budget", {
   long <- sfw_step(st) # No max_eval
   set.seed(1)
   st@control$slide_max_eval <- 2L
-  short <- sfw_step(st) # max_eval is 2
+  expect_warning(short <- sfw_step(st), class = "ripr_slide_warning")
   expect_lte(
     utils::tail(long@trace$kl, 1L),
     utils::tail(short@trace$kl, 1L)
@@ -260,8 +260,8 @@ test_that("the slide merges nearly coincident pairs it would leave apart", {
     )
     ld <- ripr:::compile_engine(st@engine)
     dg <- ripr:::compile_engine_grad(st@engine)
-    apart <- ripr:::slide_state(st, ld, dg, tol = 0)
-    merged <- ripr:::slide_state(st, ld, dg)
+    apart <- ripr:::slide_state(st, ld, dg, tol = 0)$state
+    merged <- ripr:::slide_state(st, ld, dg)$state
     stalled <- stalled + near_pairs(apart, st@control$near_tol)
     expect_identical(near_pairs(merged, st@control$near_tol), 0L)
     expect_lte(exact_kl(merged), exact_kl(apart) + 1e-12)
@@ -306,7 +306,7 @@ test_that("the slide's merge never costs KL", {
   expect_gt(n_atoms(st@mixing), 1L)
   ld <- ripr:::compile_engine(st@engine)
   dg <- ripr:::compile_engine_grad(st@engine)
-  wide <- ripr:::slide_state(st, ld, dg, tol = 1)
+  wide <- ripr:::slide_state(st, ld, dg, tol = 1)$state
   expect_identical(n_atoms(wide@mixing), n_atoms(st@mixing))
   expect_lte(exact_kl(wide), exact_kl(st) + 1e-12)
 })

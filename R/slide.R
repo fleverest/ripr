@@ -12,7 +12,9 @@
 #' Jacobian.
 #'
 #' Returns the descended `atoms` and `weights`, never with higher KL than the
-#' start: a failed or worsening descent returns the start unchanged.
+#' start: a failed or worsening descent returns the start unchanged. `capped`
+#' says whether the descent stopped by hitting `slide_max_eval` rather than
+#' converging.
 #' @keywords internal
 #' @noRd
 slide_sweep <- function(state, ld, dg) {
@@ -76,7 +78,7 @@ slide_sweep <- function(state, ld, dg) {
     unlist(lapply(seq_len(n), \(c_i) charts[[c_i]]$from_theta(atoms[c_i, ])))
   )
   start <- fg(x0)$value
-  unchanged <- list(atoms = atoms, weights = w)
+  unchanged <- list(atoms = atoms, weights = w, capped = FALSE)
   fit <- tryCatch(
     nloptr::slsqp(
       x0,
@@ -95,6 +97,8 @@ slide_sweep <- function(state, ld, dg) {
   if (is.null(fit)) {
     return(unchanged)
   }
+  # NLopt's status 5: the descent ran out of evaluations before converging.
+  unchanged$capped <- capped <- identical(fit$convergence, 5L)
 
   # SLSQP meets its constraints only to tolerance: snap weights back onto the
   # simplex (exact zeros below rounding, so they drop) and atoms into their
@@ -110,7 +114,7 @@ slide_sweep <- function(state, ld, dg) {
   if (!is.finite(kl_new) || kl_new > start) {
     return(unchanged)
   }
-  list(atoms = theta, weights = w_new)
+  list(atoms = theta, weights = w_new, capped = capped)
 }
 
 
@@ -124,7 +128,8 @@ slide_sweep <- function(state, ld, dg) {
 #' Same-part pairs within `tol` (`near_tol` in [ripr_control()]) are then merged
 #' too, the weights re-solved, and the result kept only if KL rises by no more
 #' than `1e-12` relative. Atoms that are genuinely distinct worsen KL, and stay
-#' apart.
+#' apart. Returns `list(state, kkt, capped)`: the slid state, its weights' KKT
+#' residual, and whether the descent hit `slide_max_eval`.
 #' @keywords internal
 #' @noRd
 slide_state <- function(
@@ -146,8 +151,9 @@ slide_state <- function(
     atol = tol,
     rtol = tol
   )
+  out <- list(state = st, kkt = corrected$kkt, capped = slid$capped)
   if (nrow(m$atoms) == n_atoms(st@mixing)) {
-    return(st)
+    return(out)
   }
   merged <- correct_state(
     set_mixture(st, atoms = m$atoms, weights = m$weights, part = m$part),
@@ -155,8 +161,8 @@ slide_state <- function(
   )
   kl <- kl_at(st@engine, corrected$log_p)
   if (kl_at(st@engine, merged$log_p) <= kl + 1e-12 * max(1, abs(kl))) {
-    merged$state
-  } else {
-    st
+    out$state <- merged$state
+    out$kkt <- merged$kkt
   }
+  out
 }

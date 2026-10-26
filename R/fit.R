@@ -245,6 +245,7 @@ run_steps <- function(
   check_until(until)
   stopifnot(phase %in% step_phases)
   ld <- compile_engine(state@engine)
+  rows_before <- nrow(state@trace)
 
   for (i in seq_len(times)) {
     if (uses_oracle && is.null(state@oracle)) {
@@ -268,7 +269,58 @@ run_steps <- function(
       state <- snapshot_state(state, phase)
     }
   }
+  warn_short_solves(state@trace$solve_kkt[-seq_len(rows_before)], state@control)
   state
+}
+
+
+#' Warn when weight solve stops short of the tolerance
+#'
+#' `kkt` holds the KKT residuals of the solves to check (`NA` for steps
+#' without one). Only the SQP solver has a target to fall short of: SLSQP
+#' stops when KL stops changing, so its residual is not a failure signal.
+#' @keywords internal
+#' @noRd
+warn_short_solves <- function(kkt, control) {
+  kkt <- kkt[!is.na(kkt)]
+  if (!identical(control$weight_solver, "sqp") || !length(kkt)) {
+    return(invisible())
+  }
+  short <- kkt > control$weight_sqp_tol
+  if (!any(short)) {
+    return(invisible())
+  }
+  worst <- format(signif(max(kkt), 2L))
+  rlang::warn(
+    c(
+      if (length(kkt) == 1L) {
+        sprintf(
+          paste(
+            "The weight solve stopped short of `weight_sqp_tol`",
+            "(KKT residual %s > %s)."
+          ),
+          worst,
+          control$weight_sqp_tol
+        )
+      } else {
+        sprintf(
+          paste(
+            "%d of %d weight solves stopped short of `weight_sqp_tol`",
+            "(worst KKT residual %s > %s)."
+          ),
+          sum(short),
+          length(kkt),
+          worst,
+          control$weight_sqp_tol
+        )
+      },
+      i = paste(
+        "See the trace's `solve_kkt`; raise `weight_max_iter` in",
+        "`ripr_control()` if this persists."
+      )
+    ),
+    class = "ripr_weight_solve_warning"
+  )
 }
 
 
@@ -333,7 +385,8 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
       oracle_theta = found$theta,
       part = if (planned$uses_candidate) found$part else NA_integer_,
       step_size = planned$gamma,
-      direction = planned$direction
+      direction = planned$direction,
+      solve_kkt = if (is.null(planned$kkt)) NA_real_ else planned$kkt
     )
   )
 }
@@ -459,7 +512,8 @@ check_step_rule_unused <- function(correct_weights, specified) {
   if (correct_weights && any(specified)) {
     args <- paste0("`", names(specified)[specified], "`", collapse = " and ")
     stop(
-      args, " cannot be set with `correct_weights = TRUE`: the weight solve ",
+      args,
+      " cannot be set with `correct_weights = TRUE`: the weight solve ",
       "replaces the step they choose, so they would have no effect.",
       call. = FALSE
     )
@@ -703,7 +757,8 @@ weight_step <- function(state, times = 1L, record_gap = FALSE, until = NULL) {
         row = list(
           kl = kl_at(state@engine, corrected$log_p),
           # As for `ct_step()`, the pre-solve support gap.
-          oracle_value = gap + 1
+          oracle_value = gap + 1,
+          solve_kkt = corrected$kkt
         )
       )
     }
@@ -764,8 +819,16 @@ sfw_step <- function(
   until = NULL
 ) {
   dg <- compile_engine_grad(state@engine)
+  slides <- 0L
+  capped <- 0L
+  slide <- function(state, ld) {
+    s <- slide_state(state, ld, dg)
+    slides <<- slides + 1L
+    capped <<- capped + s$capped
+    s
+  }
 
-  run_steps(
+  fitted <- run_steps(
     state,
     times,
     until,
@@ -775,8 +838,11 @@ sfw_step <- function(
     advance = function(state, ld) {
       found <- state@oracle
       log_p <- log_p_at_nodes(state, ld)
+      pre_kkt <- NA_real_
       if (!identical(last_row(state)$phase, "sfw")) {
-        state <- slide_state(state, ld, dg)
+        pre <- slide(state, ld)
+        state <- pre$state
+        pre_kkt <- pre$kkt
         log_p <- log_p_at_nodes(state, ld)
         found <- search_null(state, linear_oracle(state, log_p, ld))
       }
@@ -789,13 +855,33 @@ sfw_step <- function(
         ld,
         correct_weights = TRUE
       )
-      slid <- slide_state(inserted$state, ld, dg)
-      log_p <- log_p_at_nodes(slid, ld)
+      slid <- slide(inserted$state, ld)
+      log_p <- log_p_at_nodes(slid$state, ld)
       row <- inserted$row
-      row$kl <- kl_at(slid@engine, log_p)
-      list(state = slid, log_p = log_p, row = row)
+      row$kl <- kl_at(slid$state@engine, log_p)
+      # The worst of the step's weight solves.
+      row$solve_kkt <- max(pre_kkt, row$solve_kkt, slid$kkt, na.rm = TRUE)
+      list(state = slid$state, log_p = log_p, row = row)
     }
   )
+  if (capped > 0L) {
+    rlang::warn(
+      c(
+        sprintf(
+          paste(
+            "%d of %d slides stopped at `slide_max_eval` (%d evaluations)",
+            "before converging."
+          ),
+          capped,
+          slides,
+          state@control$slide_max_eval
+        ),
+        i = "Raise `slide_max_eval` in `ripr_control()` if this persists."
+      ),
+      class = "ripr_slide_warning"
+    )
+  }
+  fitted
 }
 
 
@@ -998,7 +1084,9 @@ ripr_finish <- function(
   w <- weights(state@mixing)
 
   if (correct_weights) {
-    w <- solve_weights(ld_all, w, engine, ctl)
+    solved <- solve_weights(ld_all, w, engine, ctl)
+    w <- solved$weights
+    warn_short_solves(solved$kkt, ctl)
   }
 
   # Group atoms by part, so `W0` lines up with `part`.

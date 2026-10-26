@@ -5,8 +5,9 @@
 #' The fully-corrective update for verbs that re-solve the weights after
 #' moving or adding atoms: merge coincident atoms (two copies of one atom make
 #' the hessian degenerate), then `solve_weights()` from the current weights,
-#' kept only if it does not raise KL. Returns `list(state, log_p)`, `log_p` being
-#' the new mixture's at the engine's nodes.
+#' kept only if it does not raise KL beyond rounding. Returns
+#' `list(state, log_p, kkt)`, `log_p` being the new mixture's at the engine's
+#' nodes and `kkt` its weights' KKT residual (`weight_kkt()`).
 #' @keywords internal
 #' @noRd
 correct_state <- function(state, ld) {
@@ -15,15 +16,41 @@ correct_state <- function(state, ld) {
   ld_all <- ld(state@mixing@atoms)
   w <- state@mixing@weights
   log_p <- mixture_log_p(ld_all, w)
+  # A single atom's weight is 1 and optimal: its G is exactly 1.
+  kkt <- 0
   if (length(w) > 1L) {
     solved <- solve_weights(ld_all, w, engine, state@control)
-    solved_log_p <- mixture_log_p(ld_all, solved)
-    if (kl_at(engine, solved_log_p) <= kl_at(engine, log_p)) {
-      w <- solved
+    solved_log_p <- mixture_log_p(ld_all, solved$weights)
+    # The solve is convex, so a KL that "rises" by rounding is not worse; a
+    # strict comparison would reject exact solves and keep stale weights.
+    kl <- kl_at(engine, log_p)
+    if (kl_at(engine, solved_log_p) <= kl + 1e-14 * max(1, abs(kl))) {
+      w <- solved$weights
       log_p <- solved_log_p
+      kkt <- solved$kkt
+    } else {
+      kkt <- weight_kkt(ld_all, w, engine)
     }
   }
-  list(state = drop_empty(set_mixture(state, weights = w)), log_p = log_p)
+  list(
+    state = drop_empty(set_mixture(state, weights = w)),
+    log_p = log_p,
+    kkt = kkt
+  )
+}
+
+
+#' KKT residual of weights `w` over the atoms of `ld_all`
+#'
+#' The largest of \eqn{|G_c - 1|} over atoms with weight and the positive
+#' part of \eqn{G_c - 1} over atoms without: zero exactly at the optimal
+#' weights for these atoms.
+#' @keywords internal
+#' @noRd
+weight_kkt <- function(ld_all, w, engine) {
+  g <- atom_g(ld_all, mixture_log_p(ld_all, w), engine)
+  on <- w > 0
+  max(c(abs(g[on] - 1), g[!on] - 1, 0))
 }
 
 
@@ -49,18 +76,22 @@ weight_sweep <- function(ld_all, w, log_p, engine) {
 #' `sqp_weights()` to a KKT residual of `weight_sqp_tol`, falling back to
 #' SLSQP from where it stopped (keeping whichever has the lower KL) if it
 #' stops short; `"slsqp"` runs `slsqp_weights()` alone. Each takes at most
-#' `weight_max_iter` iterations or evaluations.
+#' `weight_max_iter` iterations or evaluations. Returns `list(weights, kkt)`,
+#' `kkt` being the returned weights' KKT residual (`weight_kkt()`). Residuals
+#' greater than `weight_sqp_tol` indicates that the solver stopped short of
+#' convergence.
 #' @keywords internal
 #' @noRd
 solve_weights <- function(ld_all, w, engine, control) {
   if (identical(control$weight_solver, "slsqp")) {
-    return(slsqp_weights(
+    w <- slsqp_weights(
       ld_all,
       w,
       engine,
       control$weight_slsqp_tol,
       control$weight_max_iter
-    ))
+    )
+    return(list(weights = w, kkt = weight_kkt(ld_all, w, engine)))
   }
   fit <- sqp_weights(
     ld_all,
@@ -70,7 +101,7 @@ solve_weights <- function(ld_all, w, engine, control) {
     max_iter = control$weight_max_iter
   )
   if (fit$kkt <= control$weight_sqp_tol) {
-    return(fit$weights)
+    return(fit[c("weights", "kkt")])
   }
   fallback <- slsqp_weights(
     ld_all,
@@ -80,7 +111,8 @@ solve_weights <- function(ld_all, w, engine, control) {
     control$weight_max_iter
   )
   kl <- \(x) kl_at(engine, mixture_log_p(ld_all, x))
-  if (kl(fallback) < kl(fit$weights)) fallback else fit$weights
+  w <- if (kl(fallback) < kl(fit$weights)) fallback else fit$weights
+  list(weights = w, kkt = weight_kkt(ld_all, w, engine))
 }
 
 

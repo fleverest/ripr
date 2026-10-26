@@ -259,6 +259,7 @@ trace_row <- function(
   part = NA_integer_,
   step_size = NA_real_,
   direction = NA_character_,
+  solve_kkt = NA_real_,
   elapsed = NA_real_
 ) {
   list(
@@ -274,6 +275,7 @@ trace_row <- function(
     part = as.integer(part),
     step_size = step_size,
     direction = direction,
+    solve_kkt = solve_kkt,
     support_size = length(w),
     max_weight = if (length(w)) max(w) else NA_real_,
     elapsed = elapsed

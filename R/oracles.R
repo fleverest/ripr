@@ -60,6 +60,11 @@
 #'   \item{`part`, `step_size`, `direction`, `support_size`, `max_weight`}{
 #'   Where an oracle step put its atom (`NA` if none), the step length and
 #'   direction, and the size and heaviest weight of the produced mixture.}
+#'   \item{`solve_kkt`}{For a step that re-solved the weights (any step with
+#'   `correct_weights = TRUE`, [weight_step()], [sfw_step()]), the KKT
+#'   residual of the weights the solve returned, the worst over the step's
+#'   solves: at most `weight_sqp_tol` when the solve converged. `NA` for steps
+#'   without one.}
 #'   \item{`elapsed`}{Seconds of the step rule's work, excluding diagnostics
 #'   (`record_gap`, `snapshot`, `until`). An [fw_step()] row includes the
 #'   linear-oracle search it consumed, even if cached. Per step; use
@@ -152,7 +157,9 @@ plan_step <- function(
       gamma_fixed = gamma_fixed
     )
     if (correct_weights) {
-      res$weights <- solve_weights(ld_all, res$weights, engine, ctl)
+      solved <- solve_weights(ld_all, res$weights, engine, ctl)
+      res$weights <- solved$weights
+      res$kkt <- solved$kkt
       res$log_p <- mixture_log_p(ld_all, res$weights)
       res$kl <- kl_at(engine, res$log_p)
       res$uses_candidate <- res$weights[length(res$weights)] > 0

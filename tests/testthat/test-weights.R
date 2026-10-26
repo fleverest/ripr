@@ -89,7 +89,7 @@ test_that("a solve that stops short falls back to SLSQP, from where SQP stopped"
     max_iter = 2L
   )
   expect_gt(short$kkt, ctl$weight_sqp_tol)
-  w <- ripr:::solve_weights(ld_all, w0, st@engine, ctl)
+  w <- ripr:::solve_weights(ld_all, w0, st@engine, ctl)$weights
   expect_length(starts, 1L)
   expect_equal(starts[[1L]], short$weights)
   expect_lte(kl(w), kl(short$weights))
@@ -131,4 +131,42 @@ test_that("weight_step merges duplicate atoms before solving, leaving the mixtur
   expect_equal(exact_kl(merged), exact_kl(dup), tolerance = 1e-14)
   solved <- weight_step(dup)
   expect_lte(n_atoms(solved@mixing), 3L)
+})
+
+# --- Solve diagnostics --------------------------------------------------------
+
+test_that("each corrective step records its weight solve's KKT residual", {
+  # `solve_kkt` is at most `weight_sqp_tol` whenever the solve converged, and
+  # `NA` on steps that solve nothing. A slide's re-solve is exact too: a KL
+  # that rises only by rounding must not make it keep the slide's weights.
+  tol <- ripr_control()$weight_sqp_tol
+  set.seed(1)
+  st <- weights_fixture()
+  plain <- fw_step(st, 1L)
+  expect_true(is.na(utils::tail(plain@trace$solve_kkt, 1L)))
+  expect_lte(utils::tail(weight_step(st)@trace$solve_kkt, 1L), tol)
+  corrected <- fw_step(st, 2L, correct_weights = TRUE)
+  expect_true(all(utils::tail(corrected@trace$solve_kkt, 2L) <= tol))
+  slid <- sfw_step(sfw_step(fw_step(st, 2L)), 2L)
+  kkt <- slid@trace$solve_kkt[slid@trace$phase == "sfw"]
+  expect_length(kkt, 3L)
+  expect_true(all(kkt <= tol))
+})
+
+test_that("a weight solve that stops short warns, once per call", {
+  # One iteration cannot reach the tolerance. SLSQP has no tolerance on the
+  # residual to fall short of, so it never warns.
+  capped <- weights_fixture(control = ripr_control(weight_max_iter = 1L))
+  expect_warning(weight_step(capped), class = "ripr_weight_solve_warning")
+  expect_warning(
+    ripr_finish(capped, correct_weights = TRUE),
+    class = "ripr_weight_solve_warning"
+  )
+  w <- testthat::capture_warnings(weight_step(capped, times = 3L))
+  expect_length(w, 1L)
+  expect_match(w, "3 of 3 weight solves stopped short", fixed = TRUE)
+  slsqp <- weights_fixture(
+    control = ripr_control(weight_solver = "slsqp", weight_max_iter = 1L)
+  )
+  expect_no_warning(weight_step(slsqp))
 })

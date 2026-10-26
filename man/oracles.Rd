@@ -62,6 +62,11 @@ took.}
 \item{\code{part}, \code{step_size}, \code{direction}, \code{support_size}, \code{max_weight}}{
 Where an oracle step put its atom (\code{NA} if none), the step length and
 direction, and the size and heaviest weight of the produced mixture.}
+\item{\code{solve_kkt}}{For a step that re-solved the weights (any step with
+\code{correct_weights = TRUE}, \code{\link[=weight_step]{weight_step()}}, \code{\link[=sfw_step]{sfw_step()}}), the KKT
+residual of the weights the solve returned, the worst over the step's
+solves: at most \code{weight_sqp_tol} when the solve converged. \code{NA} for steps
+without one.}
 \item{\code{elapsed}}{Seconds of the step rule's work, excluding diagnostics
 (\code{record_gap}, \code{snapshot}, \code{until}). An \code{\link[=fw_step]{fw_step()}} row includes the
 linear-oracle search it consumed, even if cached. Per step; use

@@ -26,11 +26,14 @@ test_that("each method stops on the gap and returns a finished fit", {
     expect_s3_class(fit, "ripr::ripr_fit")
     expect_lt(fit@gap_final, 1e-6)
     expect_lt(nrow(fit@state@trace) - 1L, 100L)
-    expect_true(all(fit@state@trace$phase[-1L] == c(
-      sfw = "sfw",
-      pdap = "fw",
-      fcfw = "fw"
-    )[[method]]))
+    expect_true(all(
+      fit@state@trace$phase[-1L] ==
+        c(
+          sfw = "sfw",
+          pdap = "fw",
+          fcfw = "fw"
+        )[[method]]
+    ))
   }
 })
 

@@ -387,7 +387,11 @@ step_towards <- function(state, found, oracle_value, log_p, ld, ...) {
       step_size = planned$gamma,
       direction = planned$direction,
       solve_kkt = if (is.null(planned$kkt)) NA_real_ else planned$kkt,
-      solve_converged = if (is.null(planned$converged)) NA else planned$converged
+      solve_converged = if (is.null(planned$converged)) {
+        NA
+      } else {
+        planned$converged
+      }
     )
   )
 }

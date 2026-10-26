@@ -1038,13 +1038,9 @@ method(format, ripr_fit) <- function(x, ...) {
 #' no-op after a verb that already solved them ([sfw_step()], [weight_step()],
 #' or `correct_weights = TRUE`), and lowers KL after one that did not.
 #'
-#' Atoms with weight at or below `threshold` are then dropped. A positive
-#' value may raise KL.
-#'
 #' @param state A [ripr_state].
-#' @param threshold Drop atoms with weight at or below this. Must be below 1.
-#' @param correct_weights Re-solve the weights before dropping any. Off by
-#'   default.
+#' @param correct_weights Re-solve the weights, dropping atoms left at zero.
+#'   Off by default.
 #' @param record_gap Sweep the Frank--Wolfe oracle over the *returned* mixture,
 #'   filling `gap_final`. Off by default, since it costs a full oracle sweep.
 #' @return A [ripr_fit], whose `W0` is the mixing measure (a [finite_dist]),
@@ -1070,21 +1066,9 @@ method(format, ripr_fit) <- function(x, ...) {
 #' fit@gap_fit
 #' fit@gap_final
 #' @export
-ripr_finish <- function(
-  state,
-  threshold = 0,
-  correct_weights = FALSE,
-  record_gap = FALSE
-) {
-  rlang::check_number_decimal(threshold)
+ripr_finish <- function(state, correct_weights = FALSE, record_gap = FALSE) {
   rlang::check_bool(correct_weights)
   rlang::check_bool(record_gap)
-  if (threshold >= 1) {
-    stop(
-      "`threshold` must be below 1; every weight is at most 1.",
-      call. = FALSE
-    )
-  }
 
   engine <- state@engine
   ctl <- state@control
@@ -1099,12 +1083,13 @@ ripr_finish <- function(
     warn_short_solves(solved$converged, solved$kkt, ctl)
   }
 
-  # Group atoms by part, so `W0` lines up with `part`.
+  # Group atoms by part, so `W0` lines up with `part`, and drop any the solve
+  # left at zero.
   by_order <- order(state@part)
-  w <- w[by_order] / sum(w)
-  mixing <- prune(
-    finite_dist(atoms = support[by_order, , drop = FALSE], weights = w),
-    threshold = threshold
+  by_order <- by_order[w[by_order] > 0]
+  mixing <- finite_dist(
+    atoms = support[by_order, , drop = FALSE],
+    weights = w[by_order] / sum(w)
   )
   log_p <- mixture_log_p(ld(mixing@atoms), mixing@weights)
   gaps <- state@trace$gap_after
@@ -1113,7 +1098,7 @@ ripr_finish <- function(
   ripr_fit(
     W0 = mixing,
     P_star = mixture(engine@family, mixing),
-    part = state@part[by_order][w > threshold],
+    part = state@part[by_order],
     # Of the returned mixture, not the state's.
     kl = kl_at(engine, log_p),
     gap_fit = if (length(gaps)) utils::tail(gaps, 1L) else NA_real_,

@@ -4,15 +4,13 @@
 \alias{ripr_finish}
 \title{Turn a fitted state into a mixture}
 \usage{
-ripr_finish(state, threshold = 0, correct_weights = FALSE, record_gap = FALSE)
+ripr_finish(state, correct_weights = FALSE, record_gap = FALSE)
 }
 \arguments{
 \item{state}{A \link{ripr_state}.}
 
-\item{threshold}{Drop atoms with weight at or below this. Must be below 1.}
-
-\item{correct_weights}{Re-solve the weights before dropping any. Off by
-default.}
+\item{correct_weights}{Re-solve the weights, dropping atoms left at zero.
+Off by default.}
 
 \item{record_gap}{Sweep the Frank--Wolfe oracle over the \emph{returned} mixture,
 filling \code{gap_final}. Off by default, since it costs a full oracle sweep.}
@@ -32,9 +30,6 @@ as they stand and nothing is dropped.
 \code{\link[=weight_step]{weight_step()}} does, and drops atoms the solve leaves at zero. It is a
 no-op after a verb that already solved them (\code{\link[=sfw_step]{sfw_step()}}, \code{\link[=weight_step]{weight_step()}},
 or \code{correct_weights = TRUE}), and lowers KL after one that did not.
-
-Atoms with weight at or below \code{threshold} are then dropped. A positive
-value may raise KL.
 }
 \examples{
 set.seed(1)

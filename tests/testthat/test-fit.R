@@ -636,10 +636,10 @@ test_that("ripr_finish is a pure conversion by default", {
 })
 
 test_that("kl describes the returned mixture, not the state", {
-  # Refining and pruning both change the mixture, so a `kl` taken from the state
+  # Correcting the weights changes the mixture, so a `kl` taken from the state
   # would describe something the caller was not given.
   st <- fw_step(plurality(), 5L)
-  fit <- ripr_finish(st, correct_weights = TRUE, threshold = 0.05)
+  fit <- ripr_finish(st, correct_weights = TRUE)
   expect_equal(fit@kl, exact_kl(st, fit@W0), tolerance = rounding_tol(1))
 })
 
@@ -662,18 +662,6 @@ test_that("correcting the weights in ripr_finish solves them and drops atoms", {
   expect_true(corrected@corrected_weights)
   out <- paste(capture.output(print(corrected)), collapse = "\n")
   expect_match(out, "weights  re-solved", fixed = TRUE)
-})
-
-test_that("threshold keeps, drops, or errors", {
-  st <- fw_step(plurality(), 5L)
-  plain <- ripr_finish(st)
-  expect_identical(
-    n_atoms(ripr_finish(st, threshold = -1)@W0),
-    n_atoms(plain@W0)
-  )
-  expect_lt(n_atoms(ripr_finish(st, threshold = 0.2)@W0), n_atoms(plain@W0))
-  expect_error(ripr_finish(st, threshold = 1), "`threshold` must be below 1")
-  expect_error(ripr_finish(st, threshold = 0.99), "no atom has weight above")
 })
 
 test_that("the returned mixture is a distribution", {

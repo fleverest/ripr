@@ -285,9 +285,8 @@ test_that("Gauss-Hermite works for a Gaussian-prior alternative", {
   expect_lt(abs(e_q(eng, (x - 0.5)^2) - 3), rounding_tol(3))
 })
 
-test_that("only a single-atom finite mixing measure is Gaussian", {
-  # One atom is a Gaussian alternative with the family's own covariance; two
-  # atoms make a Gaussian mixture, which the rule cannot take.
+test_that("a finite mixing measure gets one grid per atom", {
+  # One atom is a Gaussian alternative with the family's own covariance.
   fam <- gaussian_family(d = 1L, sigma = matrix(2))
   one <- resolved(
     gh_engine(10L),
@@ -297,13 +296,28 @@ test_that("only a single-atom finite mixing measure is Gaussian", {
   expect_lt(abs(e_q(one, x) - 1.5), rounding_tol(1.5))
   expect_lt(abs(e_q(one, (x - 1.5)^2) - 2), rounding_tol(2))
 
-  two <- finite_dist(atoms = rbind(0, 1), weights = c(0.5, 0.5))
+  # Two atoms make a Gaussian mixture: mean 0.25, and variance the family's 2
+  # plus the atoms' spread 0.25 * 0.75.
+  two <- finite_dist(atoms = rbind(0, 1), weights = c(0.75, 0.25))
+  mix <- resolved(
+    gh_engine(10L),
+    list(family = fam, Q = mixture(fam, two), at = 0)
+  )
+  expect_identical(nrow(mix@nodes), 20L)
+  x <- mix@nodes[, 1]
+  expect_lt(abs(e_q(mix, x) - 0.25), rounding_tol(0.25))
+  expect_lt(abs(e_q(mix, (x - 0.25)^2) - 2.1875), rounding_tol(2.1875))
+})
+
+test_that("the node budget counts every component's grid", {
+  fam <- gaussian_family(d = 1L)
+  three <- finite_dist(atoms = rbind(0, 1, 2), weights = rep(1 / 3, 3))
   expect_error(
     resolved(
-      gh_engine(10L),
-      list(family = fam, Q = mixture(fam, two), at = 0)
+      gh_engine(10L, max_nodes = 25),
+      list(family = fam, Q = mixture(fam, three), at = 0)
     ),
-    "needs a Gaussian alternative"
+    "over 3 components needs 30 nodes"
   )
 })
 

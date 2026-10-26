@@ -242,24 +242,26 @@ resolve_engine <- function(spec, alternative, family, tol = 1e-8) {
 
 # --- Gauss-Hermite ------------------------------------------------------------
 
-#' Mean and covariance of the induced mixture, when that mixture is Gaussian
+#' Gaussian components of the induced mixture, when it is a Gaussian mixture
 #'
-#' Used by [gh_engine()]. These are the moments of \eqn{P_W}{P_W}, not
-#' \eqn{W}{W} (e.g. \eqn{\Sigma + V}{sigma + V} for a Gaussian prior on a
-#' Gaussian mean). `NULL` for any non-Gaussian mixture.
+#' Used by [gh_engine()]. These describe \eqn{P_W}{P_W}, not \eqn{W}{W}
+#' (e.g. covariance \eqn{\Sigma + V}{sigma + V} for a Gaussian prior on a
+#' Gaussian mean). `NULL` for any mixture that is not a finite mixture of
+#' Gaussians.
 #'
 #' @param mixing A [distribution] over the family's parameter space.
 #' @param family A [parametric_family].
-#' @return `list(mean = , cov = )`, or `NULL`.
+#' @return A list of components, each `list(mean = , cov = , weight = )` with
+#'   the weights summing to one, or `NULL`.
 #' @keywords internal
-mixture_gaussian_moments <- new_generic(
-  "mixture_gaussian_moments",
+mixture_gaussian_components <- new_generic(
+  "mixture_gaussian_components",
   c("mixing", "family"),
   function(mixing, family) S7::S7_dispatch()
 )
 
 method(
-  mixture_gaussian_moments,
+  mixture_gaussian_components,
   list(distribution, parametric_family)
 ) <- function(mixing, family) {
   NULL
@@ -269,12 +271,14 @@ method(
 #' Gauss-Hermite quadrature against a Gaussian alternative
 #'
 #' A deterministic rule for continuous families, applicable only when the
-#' alternative is Gaussian (as decided by [mixture_gaussian_moments()]). Nodes
-#' are an affine image of a tensor-product Gauss-Hermite grid, exact for
-#' polynomials of degree up to `2 * n_nodes - 1`.
+#' alternative is Gaussian or a finite mixture of Gaussians (as decided by
+#' [mixture_gaussian_components()]). Each component gets an affine image of a
+#' tensor-product Gauss-Hermite grid, weighted by the component's weight, so
+#' the rule is exact for polynomials of degree up to `2 * n_nodes - 1` under
+#' each component.
 #'
-#' The grid has `n_nodes^d` points, so it suits only a few dimensions. Its error
-#' is bias, not variance: raise `n_nodes` and compare.
+#' The grid has `n_nodes^d` points per component, so it suits only a few
+#' dimensions. Its error is bias, not variance: raise `n_nodes` and compare.
 #'
 #' @param n_nodes Univariate nodes per dimension.
 #' @param max_nodes Refuse grids larger than this.
@@ -285,6 +289,10 @@ method(
 #' fam <- gaussian_family(d = 2L)
 #' null <- null_model(fam, halfspace_region(normal = c(1, -1)))
 #' ripr_init(fam(c(1, 0)), null, engine = gh_engine(n_nodes = 10L))
+#'
+#' # A finite mixture alternative gets one grid per atom.
+#' Q <- fam(finite_dist(atoms = rbind(c(1, 0), c(0, -1)), weights = c(0.7, 0.3)))
+#' ripr_init(Q, null, engine = gh_engine(n_nodes = 10L))
 #' @export
 gh_engine <- function(n_nodes, max_nodes = 1e6) {
   n_nodes <- as.integer(n_nodes)
@@ -293,25 +301,27 @@ gh_engine <- function(n_nodes, max_nodes = 1e6) {
   }
 
   resolve <- function(alternative, family) {
-    mom <- if (S7_inherits(alternative, mixture)) {
-      mixture_gaussian_moments(alternative@mixing, alternative@family)
+    components <- if (S7_inherits(alternative, mixture)) {
+      mixture_gaussian_components(alternative@mixing, alternative@family)
     }
-    if (is.null(mom)) {
+    if (is.null(components)) {
       stop(
-        "Gauss-Hermite quadrature needs a Gaussian alternative; this one is ",
-        "not. Use `mc_engine()` instead.",
+        "Gauss-Hermite quadrature needs a Gaussian alternative, or a finite ",
+        "mixture of Gaussians. Use `mc_engine()` instead.",
         call. = FALSE
       )
     }
-    d <- length(mom$mean)
-    total <- n_nodes^d
+    d <- length(components[[1L]]$mean)
+    total <- length(components) * n_nodes^d
     if (total > max_nodes) {
       stop(
         "a ",
         n_nodes,
         "-point grid in ",
         d,
-        " dimensions needs ",
+        " dimensions over ",
+        count_label(length(components), "component"),
+        " needs ",
         total,
         " nodes, above `max_nodes` (",
         max_nodes,
@@ -322,11 +332,23 @@ gh_engine <- function(n_nodes, max_nodes = 1e6) {
     }
 
     grid <- tensor_rule(rep(list(gauss_hermite(n_nodes)), d))
-    nodes <- add_by_col(sqrt(2) * grid$nodes %*% chol(mom$cov), mom$mean)
+    # Normalise the Hermite mass pi^(d/2) to one.
+    unit_log_w <- grid$log_w - 0.5 * d * log(pi)
+    # One affine image of the grid per component, weighted by the component.
+    nodes <- do.call(
+      rbind,
+      lapply(components, function(comp) {
+        add_by_col(sqrt(2) * grid$nodes %*% chol(comp$cov), comp$mean)
+      })
+    )
+    log_w <- unlist(lapply(components, function(comp) {
+      unit_log_w + log(comp$weight)
+    }))
+    live <- is.finite(log_w)
+    nodes <- nodes[live, , drop = FALSE]
     quadrature(
       nodes = nodes,
-      # Normalise the Hermite mass pi^(d/2) to one.
-      log_w = grid$log_w - 0.5 * d * log(pi),
+      log_w = log_w[live],
       log_q = log_density(alternative, nodes),
       family = family,
       deterministic = TRUE

@@ -199,29 +199,25 @@ method(log_density, gaussian_dist) <- function(dist, x) {
 method(reference_point, gaussian_dist) <- function(x) x@mean
 
 
-# --- Moments, for Gauss-Hermite quadrature ------------------------------------
+# --- Components, for Gauss-Hermite quadrature ---------------------------------
 
 method(
-  mixture_gaussian_moments,
+  mixture_gaussian_components,
   list(finite_dist, gaussian_family)
-) <- function(
-  mixing,
-  family
-) {
-  # Only a point mass leaves the mixture Gaussian.
-  if (nrow(mixing@atoms) != 1L) {
-    return(NULL)
-  }
-  list(mean = mixing@atoms[1L, ], cov = family@sigma)
+) <- function(mixing, family) {
+  lapply(seq_len(nrow(mixing@atoms)), function(i) {
+    list(
+      mean = mixing@atoms[i, ],
+      cov = family@sigma,
+      weight = mixing@weights[[i]]
+    )
+  })
 }
 
 
 method(
-  mixture_gaussian_moments,
+  mixture_gaussian_components,
   list(gaussian_dist, gaussian_family)
-) <- function(
-  mixing,
-  family
-) {
-  list(mean = mixing@mean, cov = family@sigma + mixing@cov)
+) <- function(mixing, family) {
+  list(list(mean = mixing@mean, cov = family@sigma + mixing@cov, weight = 1))
 }

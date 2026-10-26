@@ -16,18 +16,24 @@ An engine spec, to pass as the \code{engine} argument of \code{\link[=ripr_init]
 }
 \description{
 A deterministic rule for continuous families, applicable only when the
-alternative is Gaussian (as decided by \code{\link[=mixture_gaussian_moments]{mixture_gaussian_moments()}}). Nodes
-are an affine image of a tensor-product Gauss-Hermite grid, exact for
-polynomials of degree up to \code{2 * n_nodes - 1}.
+alternative is Gaussian or a finite mixture of Gaussians (as decided by
+\code{\link[=mixture_gaussian_components]{mixture_gaussian_components()}}). Each component gets an affine image of a
+tensor-product Gauss-Hermite grid, weighted by the component's weight, so
+the rule is exact for polynomials of degree up to \code{2 * n_nodes - 1} under
+each component.
 }
 \details{
-The grid has \code{n_nodes^d} points, so it suits only a few dimensions. Its error
-is bias, not variance: raise \code{n_nodes} and compare.
+The grid has \code{n_nodes^d} points per component, so it suits only a few
+dimensions. Its error is bias, not variance: raise \code{n_nodes} and compare.
 }
 \examples{
 fam <- gaussian_family(d = 2L)
 null <- null_model(fam, halfspace_region(normal = c(1, -1)))
 ripr_init(fam(c(1, 0)), null, engine = gh_engine(n_nodes = 10L))
+
+# A finite mixture alternative gets one grid per atom.
+Q <- fam(finite_dist(atoms = rbind(c(1, 0), c(0, -1)), weights = c(0.7, 0.3)))
+ripr_init(Q, null, engine = gh_engine(n_nodes = 10L))
 }
 \references{
 \insertRef{GolubWelsch1969}{ripr}

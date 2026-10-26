@@ -141,6 +141,7 @@ reference:
   - certify
   - ripr_certificate
   - e_variable
+  - growth_rate
   - certify_trace
   - search_sup
   - ripr_search

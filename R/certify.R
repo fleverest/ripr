@@ -649,6 +649,66 @@ method(e_variable, ripr_search) <- function(x, ...) {
 }
 
 
+#' Growth rate of an e-variable under an alternative
+#'
+#' The e-power \eqn{E_Q[\log X]}{E_Q[log X]}, i.e. the expected log e-value,
+#' interpreted as the rate at which evidence accumulates under the alternative
+#' `Q` over repeated, independent realisations of `X`. A negative growth rate
+#' means evidence is lost on average, even when `Q` is true: such an e-variable
+#' is still valid for the null, but useless if `Q` is the true data generating
+#' process.
+#'
+#' For `X = (Q / P) / b`, e.g. from a certificate with bound `b`, the growth
+#' rate is exactly \eqn{\mathrm{KL}(Q \| P) - \log b}{KL(Q || P) - log b}. When
+#' `P` is a fitted projection, the fit's (true) `kl` bounds the optimal growth
+#' rate above, and this bounds it below, so the price (in growth) of an
+#' imperfect fit is `log b`.
+#'
+#' A variable with a log form (e.g. from [e_variable()]) is integrated in log
+#' space, so the result stays finite where `E` underflows.
+#' @param x A [random_variable], typically from [e_variable()].
+#' @param alternative The alternative \eqn{Q}{Q}, a [mixture].
+#' @param engine An engine spec for the expectation under `Q`:
+#'   [exact_engine()] for an enumerable sample space, or [gh_engine()] or
+#'   [mc_engine()] otherwise.
+#' @return A single number.
+#' @seealso [e_variable()], [certify()]
+#' @examples
+#' fam <- multinomial_family(n_trials = 4L, k = 3L)
+#' plurality <- null_model(
+#'   fam,
+#'   list(
+#'     simplex_region(vertices = rbind(c(0.5, 0.5, 0), c(0, 1, 0), c(0, 0, 1))),
+#'     simplex_region(vertices = rbind(c(0.5, 0, 0.5), c(0, 1, 0), c(0, 0, 1)))
+#'   )
+#' )
+#' Q <- fam(c(0.4, 0.35, 0.25))
+#' fit <- ripr(Q, plurality, tol = 1e-8)
+#' cert <- certify(fit, tol = 1e-8)
+#' growth_rate(e_variable(cert), Q)
+#'
+#' # The same, from the fit's KL divergence and the certified bound.
+#' fit@kl - log(cert@sup_ub)
+#' @export
+growth_rate <- function(x, alternative, engine = exact_engine()) {
+  if (!S7_inherits(x, random_variable)) {
+    stop("`x` must be a `random_variable`.", call. = FALSE)
+  }
+  if (!S7_inherits(alternative, mixture)) {
+    stop(
+      "`alternative` must be a `mixture`, e.g. `family(theta)`.",
+      call. = FALSE
+    )
+  }
+  rule <- resolve_engine(engine, alternative, alternative@family)
+  log_e <- if (has_log_form(x)) x@log_f(rule@nodes) else log(x(rule@nodes))
+  # `0 * log 0` is 0: nodes of zero weight contribute nothing.
+  w <- exp(rule@log_w)
+  live <- w > 0
+  sum(w[live] * log_e[live])
+}
+
+
 #' Estimate the largest null expectation of a random variable
 #'
 #' Multi-start local ascent, giving a **lower** bound on the supremum: a larger

@@ -246,18 +246,9 @@ Both rescale to valid e-variables.
 What differentiates them is e-power: the log-growth, or expected log e-value under the alternative:
 
 ```{r growth}
-growth <- function(E, Q) {
-  outcomes <- enumerate_space(E@sample_space)
-  e_values <- E(outcomes)
-  Q_expectation <- log_density(Q, outcomes) |>
-    exp() %*%
-    log(e_values)
-  c(Q_expectation) # return as scalar
-}
+E_gr <- growth_rate(E, Q)
 
-E_gr <- growth(E, Q)
-
-c(good = E_gr, bad = growth(e_variable(cert_bad), Q))
+c(good = E_gr, bad = growth_rate(e_variable(cert_bad), Q))
 ```
 
 A negative growth rate means evidence is lost on average even when the alternative is true.
@@ -266,13 +257,15 @@ This means our e-variable is useless, but not invalid.
 
 When `P*` is the true RIPr of `Q` onto the null, the attained KL divergence `KL(Q || P*)` is precisely the growth rate of the resulting e-variable.
 For any fitted `P` the KL divergence sits above that optimum, so `fit@kl` upper bounds the optimal growth rate.
-The true optimum therefore lies somewhere between the growth this fit achieved and `fit@kl`:
+The true optimum therefore lies somewhere between the growth this fit achieved and `fit@kl`.
+The width of that interval is exactly the log of the certified bound, since `E = X / b` gives `E_Q[log E] = KL(Q || P*) - log b`:
 
 ```{r growth-kl-gap}
 c(
   lower = E_gr,
   upper = fit@kl,
-  width = fit@kl - E_gr
+  width = fit@kl - E_gr,
+  log_bound = log(cert@sup_ub)
 )
 ```
 

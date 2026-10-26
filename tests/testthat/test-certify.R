@@ -1277,3 +1277,36 @@ test_that("e_variable() on a fit certifies and rescales in one step", {
   outcomes <- enumerate_space(null@family@sample_space)
   expect_equal(E(outcomes), E_manual(outcomes))
 })
+
+
+# --- Growth rate -----------------------------------------------------------------
+
+test_that("growth_rate() is the fit's KL less the log of the bound", {
+  null <- plurality_null(n = 6L, k = 3L)
+  Q <- null@family(c(0.4, 0.35, 0.25))
+  bad <- likelihood(Q) / likelihood(null@family(rep(1 / 3, 3)))
+  cert <- certify(bad, null, tol = 1e-9)
+  expect_gt(cert@sup_ub, 1)
+  outcomes <- enumerate_space(null@family@sample_space)
+  kl <- sum(exp(log_density(Q, outcomes)) * log(bad(outcomes)))
+  expect_equal(
+    growth_rate(e_variable(cert), Q),
+    kl - log(cert@sup_ub),
+    tolerance = 1e-10
+  )
+})
+
+test_that("growth_rate() integrates in log space where E underflows", {
+  null <- plurality_null(n = 6L, k = 3L)
+  Q <- null@family(c(0.4, 0.35, 0.25))
+  tiny <- likelihood(Q) / likelihood(null@family(c(0.4, 0.35, 0.25))) / 1e300
+  tiny <- tiny / 1e300
+  expect_equal(growth_rate(tiny, Q), -600 * log(10), tolerance = 1e-10)
+})
+
+test_that("growth_rate() refuses what it cannot integrate", {
+  null <- plurality_null(n = 4L, k = 3L)
+  Q <- null@family(c(0.4, 0.35, 0.25))
+  expect_error(growth_rate(function(x) 1, Q), "must be a `random_variable`")
+  expect_error(growth_rate(likelihood(Q), "Q"), "must be a `mixture`")
+})

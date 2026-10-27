@@ -644,7 +644,7 @@ outright:</p>
 <span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; Error:</span></span>
 <span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="co">#&gt; ! Cannot certify:</span></span>
 <span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="co">#&gt; No bounding method is implemented for gaussian_family expectations over halfspace_region.</span></span>
-<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; Certifying this requires deriving and implementing a bound on gaussian_family expectations over halfspace_region. Nothing here says one does not exist. In the meantime, `search_sup()` still searches, and reports a lower bound.</span></span></code></pre></div>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; Certifying this requires deriving and implementing one. In the meantime, `search_sup()` can search and approximate the least upper bound.</span></span></code></pre></div>
 <p><code>search_sup()</code> still works here as it needs no bounding
 method, only a search. The Gaussian sample space cannot be enumerated,
 so the expectation at each parameter is taken by quadrature instead: the
@@ -663,7 +663,7 @@ alternative.</p>
 <span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a><span class="co">#&gt;   X = P[theta = (0, 0)]</span></span>
 <span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a><span class="co">#&gt;   under null_model: gaussian_family over 1 part</span></span>
 <span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a><span class="co">#&gt;   sup E[X] &gt;= 0.07957749  (searched, not certified)</span></span>
-<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a><span class="co">#&gt;   attained at theta = (1.23e-10, 1.23e-10), in part 1</span></span></code></pre></div>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a><span class="co">#&gt;   attained at theta = (1.35e-10, 1.35e-10), in part 1</span></span></code></pre></div>
 </div>
 <div id="where-to-go-next" class="section level2">
 <h2>Where to go next</h2>

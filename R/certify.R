@@ -1,243 +1,11 @@
-#' @include random_variable.R null.R bernstein.R
+#' @include random_variable.R null.R enclosure.R
 NULL
 
 # Bounds on the expectation of a random variable under a null. `search_sup()`
 # searches for the supremum via local gradient ascent (yielding a lower bound),
-# while `certify()` encloses the supremum over regions. Per cell, `certify()`
-# uses evaluation for a `point_region` and the Bernstein enclosure otherwise
-# (multinomial family, simplex in the standard one).
-
-#' Why a cell cannot be certified under a family, or `NULL` if it can
-#'
-#' `NULL` also fixes the method: `"point"` for a [point_region], `"bernstein"`
-#' otherwise. Messages say what is missing (a condition, or an unimplemented
-#' method), never that the expectation is unbounded.
-#' @keywords internal
-#' @noRd
-certify_obstruction <- function(cell, family) {
-  is_point <- S7_inherits(cell, point_region)
-  enumerable <- is_finite_space(family@sample_space)
-  if (is_point && enumerable && contains(family@parameter_space, cell@theta)) {
-    return(NULL)
-  }
-  why <- NULL
-  if (is_point && !enumerable) {
-    subject <- "Evaluation at a point"
-    why <- point_unenumerable(family)
-  } else if (S7_inherits(family, multinomial_family)) {
-    # Blame the region only for a family the enclosure claims; otherwise the
-    # family is what is missing.
-    subject <- "The Bernstein enclosure"
-    why <- bernstein_obstruction(cell)
-    if (is.null(why) && !is_point) {
-      return(NULL)
-    }
-  }
-  geometry <- class_name(cell)
-  if (!is.null(why)) {
-    return(paste0(
-      subject,
-      " cannot bound ",
-      class_name(family),
-      " expectations over this ",
-      geometry,
-      ", because ",
-      why$because,
-      ".\n",
-      why$remedy
-    ))
-  }
-  paste0(
-    "No bounding method is implemented for ",
-    class_name(family),
-    " expectations over ",
-    geometry,
-    ".\n",
-    "Certifying this requires deriving and implementing a bound on ",
-    class_name(family),
-    " expectations over ",
-    geometry,
-    ". Nothing here says one does not exist. In the meantime, `search_sup()` ",
-    "still searches, and reports a lower bound."
-  )
-}
-
-
-#' Why evaluation at a point cannot certify under this family
-#'
-#' The expectation must be exact, i.e. a sum over an enumerable sample space,
-#' not quadrature or Monte Carlo. A `theta` outside the parameter space is left
-#' to the family to explain. Returns `list(because, remedy)`.
-#' @keywords internal
-#' @noRd
-point_unenumerable <- function(family) {
-  list(
-    because = paste0(
-      "its expectation is an integral over a `",
-      class_name(family@sample_space),
-      "` rather than a sum over an enumerable one"
-    ),
-    remedy = paste0(
-      "The expectation has to be computed exactly, i.e. not via quadrature or ",
-      "Monte Carlo estimates, for certification. Only certification is ",
-      "affected: the region charts, projects and fits like any other, and ",
-      "`search_sup()` still searches it."
-    )
-  )
-}
-
-
-#' Why the Bernstein enclosure cannot handle this region, or `NULL` if it can
-#'
-#' `NULL` exactly when `reparametrise_to()` will accept the vertices: a simplex
-#' inside the standard simplex. Returns `list(because, remedy)`, where `because`
-#' completes "... cannot bound this region, because ...", `remedy` is complete
-#' and says only certification is affected except when the region leaves the
-#' parameter space.
-#' @keywords internal
-#' @noRd
-bernstein_obstruction <- function(space) {
-  only_cert_affected_msg <- paste0(
-    "Only certification is affected: the region ",
-    "charts, projects and fits like any other, and `search_sup()` still ",
-    "searches it."
-  )
-  # Before the class tests: it applies to any unbounded region.
-  if (!is_bounded(space)) {
-    return(list(
-      because = paste0(
-        "it is unbounded, and no finite set of simplices covers an unbounded ",
-        "region"
-      ),
-      remedy = paste0(
-        "The Bernstein enclosure only works for bounded polytopes. State the ",
-        "null over a bounded region instead. ",
-        only_cert_affected_msg
-      )
-    ))
-  }
-  not_simplex <- list(
-    because = paste0("it is a `", class_name(space), "` rather than a simplex"),
-    remedy = paste0(
-      "The enclosure reparametrises onto a simplex's vertices, and `cells()` ",
-      "triangulates every bounded polytope into simplices before it gets ",
-      "here, so this region is one it could not triangulate. ",
-      only_cert_affected_msg
-    )
-  )
-  # Bounded cells arrive triangulated: `simplex_region` or `point_region`.
-  if (!S7_inherits(space, polytope_region)) {
-    return(not_simplex)
-  }
-  v <- space@vertices
-  departure <- simplex_departure(v)
-  if (!is.null(departure)) {
-    return(list(
-      because = paste0("its vertices leave the standard simplex: ", departure),
-      remedy = paste0(
-        "A region reaching outside the standard simplex cannot be bounded by ",
-        "its Bernstein coefficients, as the Bernstein basis polynomials may ",
-        "take negative values there."
-      )
-    ))
-  }
-  if (ncol(v) < 2L) {
-    return(list(
-      because = "it has a single coordinate, so its simplex is one point",
-      remedy = paste0(
-        "A one-category multinomial has a single outcome, and its expectation ",
-        "is that outcome's value at every parameter; there is nothing to bound."
-      )
-    ))
-  }
-  if (!S7_inherits(space, simplex_region)) {
-    return(not_simplex)
-  }
-  NULL
-}
-
-
-#' Bernstein enclosure over simplices, for multinomial expectations
-#'
-#' The multinomial pmf is the Bernstein basis, so `x` on the sample space is
-#' already the coefficient vector. All `cells` share one lattice and one
-#' evaluation of `x`. `incumbent` (the best value attained on the null so far)
-#' is raised as the runs go and each prunes against it.
-#' @keywords internal
-#' @noRd
-bernstein_bound <- function(
-  x,
-  family,
-  cells,
-  tol,
-  max_splits,
-  max_coefficients,
-  incumbent = -Inf
-) {
-  check_bernstein_size(family@n_trials, family@k, max_coefficients)
-
-  values <- evaluate_on_space(x, family)
-  lattice <- bernstein_lattice(family@n_trials, family@k)
-  boxes <- lapply(cells, function(s) {
-    V <- pad_vertices(s@vertices, lattice$K)
-    list(V = V, coef = reparametrise_to(values, lattice, V))
-  })
-  incumbent <- max(incumbent, boxes_best(boxes, lattice)$value)
-  lapply(boxes, function(box) {
-    result <- certify_sup(
-      box,
-      lattice,
-      tol = tol,
-      max_iter = max_splits,
-      shared_incumbent = incumbent
-    )
-    incumbent <<- max(incumbent, result$incumbent)
-    result
-  })
-}
-
-
-#' `x` on the whole enumerable sample space; errors unless finite everywhere
-#' @keywords internal
-#' @noRd
-evaluate_on_space <- function(x, family) {
-  values <- x(enumerate_space(family@sample_space))
-  if (any(!is.finite(values))) {
-    stop(
-      "Cannot certify: the variable is not finite everywhere on the sample ",
-      "space, so its null expectation is unbounded.",
-      call. = FALSE
-    )
-  }
-  values
-}
-
-
-#' Exact evaluation at a single parameter, for any enumerable family
-#'
-#' The supremum over `{theta_0}` is `E_theta0[X]`: one weighted sum, no
-#' enclosure. Returns the `certify_sup()` fields [certify()] reduces, per cell.
-#' @keywords internal
-#' @noRd
-point_bound <- function(x, family, cells) {
-  outcomes <- enumerate_space(family@sample_space)
-  values <- evaluate_on_space(x, family)
-  loglik <- compile_loglik(family, outcomes)
-  lapply(cells, function(cell) {
-    log_p <- as.vector(loglik(matrix(cell@theta, nrow = 1L)))
-    # `exp(-Inf) * x` is a clean 0 for finite `x`.
-    value <- sum(exp(log_p) * values)
-    list(
-      bound = value,
-      incumbent = value,
-      theta = cell@theta,
-      iterations = 0L,
-      converged = TRUE,
-      budget_hit = FALSE
-    )
-  })
-}
-
+# while `certify()` encloses the supremum over regions, by branch and bound
+# over each cell with whichever `enclosure` `bounding_method()` picks for it
+# (see `enclosure.R` and `bounding_methods.R`).
 
 #' The value(s) that `certify()`'s `incumbent_at` seeds the search with
 #' @keywords internal
@@ -264,15 +32,8 @@ seed_incumbents <- function(x, null, at) {
       call. = FALSE
     )
   }
-  values <- vapply(
-    point_bound(
-      x,
-      null@family,
-      lapply(points, \(theta) point_region(theta = theta))
-    ),
-    function(r) r$incumbent,
-    numeric(1L)
-  )
+  enc <- prepare_enclosure(point_enclosure(), x, null@family, list())
+  values <- vapply(points, \(theta) point_value(enc, theta), numeric(1L))
   if (any(!is.finite(values))) {
     stop(
       "`incumbent_at` row ",
@@ -837,7 +598,7 @@ node_table <- function(result, cell, part) {
 #'
 #' Each cell is a separate run and `id` restarts at 1 in each, so group by
 #' `cell` before matching `parent`. A triangulated part contributes one tree per
-#' cell. Point cells, bounded in closed form, contribute no rows.
+#' cell. A point cell contributes a single root node.
 #' @param x A [random_variable].
 #' @param null A [null_model].
 #' @inheritParams certify
@@ -1036,38 +797,54 @@ certify_run <- function(
   family <- null@family
   cells <- null@cells
   cell_part <- null@cell_part
-  # Deduplicated: a plurality null's cells share a geometry.
-  obstructions <- unlist(lapply(cells, certify_obstruction, family = family))
-  if (length(obstructions)) {
+  chosen <- lapply(cells, function(cell) bounding_method(family, cell))
+  refused <- vapply(chosen, is.character, logical(1L))
+  if (any(refused)) {
     stop(
       "Cannot certify:\n",
-      paste(unique(obstructions), collapse = "\n"),
+      paste(unique(unlist(chosen[refused])), collapse = "\n"),
       call. = FALSE
     )
   }
-  is_point <- vapply(cells, S7_inherits, logical(1L), point_region)
-  methods <- unique(ifelse(is_point, "point", "bernstein"))
+  labels <- vapply(chosen, function(m) m@label, character(1L))
+  methods <- unique(labels)
 
-  # Points first: they are cheap and give the Bernstein runs an incumbent.
-  per_cell <- vector("list", length(cells))
-  incumbent <- -Inf
-  if (any(is_point)) {
-    per_cell[is_point] <- point_bound(x, family, cells[is_point])
-    incumbent <- max(vapply(per_cell[is_point], function(r) r$incumbent, 0))
-  }
-  # Then the caller's seeds, by the same exact evaluation.
+  # Prepare each method; Bernstein lattice and `x` on the sample space built
+  # are shared between duplicate enclosure methods
+  control <- list(max_coefficients = max_coefficients)
+  first <- which(!duplicated(labels))
+  prepared <- lapply(
+    chosen[first], # These are the unique `bounding_method`s
+    prepare_enclosure,
+    x = x,
+    family = family,
+    control = control
+  )
+  encs <- prepared[match(labels, labels[first])]
+
+  # The attained values at the roots and seeds bound the search from below
+  roots <- lapply(seq_along(cells), function(i) {
+    enclosure_root(encs[[i]], cells[[i]])
+  })
   seeded <- seed_incumbents(x, null, incumbent_at)
-  incumbent <- max(incumbent, seeded)
-  if (!all(is_point)) {
-    per_cell[!is_point] <- bernstein_bound(
-      x,
-      family,
-      cells[!is_point],
+  root_values <- vapply(
+    seq_along(cells),
+    function(i) enclosure_best(encs[[i]], roots[[i]])$value,
+    numeric(1L)
+  )
+  incumbent <- max(root_values, seeded)
+
+  per_cell <- vector("list", length(cells))
+  for (i in seq_along(cells)) {
+    result <- branch_and_bound(
+      encs[[i]],
+      roots[[i]],
       tol = tol,
-      max_splits = max_splits,
-      max_coefficients = max_coefficients,
-      incumbent = incumbent
+      max_iter = max_splits,
+      shared_incumbent = incumbent
     )
+    per_cell[[i]] <- result
+    incumbent <- max(incumbent, result$incumbent)
   }
 
   # Reduce cells to declared parts: max bound and incumbent, total iterations,

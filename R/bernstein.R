@@ -1,7 +1,9 @@
 #' @include numerics.R
 NULL
 
-# Bernstein enclosure over a simplex, and branch and bound on top of it.
+# Bernstein enclosure over a simplex: the polynomial arithmetic behind the
+# Bernstein `enclosure` (see `bounding_methods.R`, and `enclosure.R` for the
+# branch and bound that uses it).
 #
 # `E_theta[X]` is a degree-`n_trials` polynomial in `theta`, and over a simplex
 # the multinomial basis *is* the Bernstein basis: the coefficients are the
@@ -165,15 +167,6 @@ bisect <- function(box, p, q, lat) {
   subdivide(box, lat, lambda)
 }
 
-# Endpoints of the longest edge of vertex matrix `V`.
-longest_edge <- function(V, edges) {
-  d2 <- rowSums(
-    (V[edges[1L, ], , drop = FALSE] -
-      V[edges[2L, ], , drop = FALSE])^2
-  )
-  edges[, which.max(d2)]
-}
-
 # Convex hull property (PBP 10.2, 10.3 Remark 2): G <= max coefficient.
 box_bound <- function(box) max(box$coef)
 
@@ -184,17 +177,6 @@ box_best <- function(box, lat) {
   v <- vertex_values(box, lat)
   j <- which.max(v)
   list(value = v[[j]], theta = box$V[j, ])
-}
-
-boxes_best <- function(boxes, lat) {
-  best <- list(value = -Inf, theta = NULL)
-  for (b in boxes) {
-    cand <- box_best(b, lat)
-    if (cand$value > best$value) {
-      best <- cand
-    }
-  }
-  best
 }
 
 # ---- general reparametrisation ---------------------------------------------
@@ -258,151 +240,4 @@ reparametrise_to <- function(coef, lat, vertices) {
   }
 
   fill(as.numeric(coef), 1L, lat$n)
-}
-
-# ---- branch and bound ------------------------------------------------------
-
-# A branch-and-bound node: a box plus its cached upper bound and lineage.
-node <- function(box, id, parent = NA_integer_, depth = 0L, born = 0L) {
-  box$ub <- box_bound(box)
-  box$id <- id
-  box$parent <- parent
-  box$depth <- depth
-  # With `parent` and the record's `retired`, makes the run replayable.
-  box$born <- born
-  box
-}
-
-# A node without its coefficients, for the history.
-node_stub <- function(box, retired, fate) {
-  list(
-    id = box$id,
-    parent = box$parent,
-    depth = box$depth,
-    born = box$born,
-    retired = retired,
-    fate = fate,
-    ub = box$ub,
-    V = box$V
-  )
-}
-
-node_ubs <- function(nodes) vapply(nodes, function(b) b$ub, numeric(1L))
-
-
-# Why the search should stop, or `NULL`. Only "budget_hit" qualifies the
-# result.
-stop_reason <- function(n_active, gap, tol, it, max_iter) {
-  if (n_active == 0L) {
-    return("converged")
-  }
-  if (gap <= tol) {
-    return("converged")
-  }
-  if (it >= max_iter) {
-    return("budget_hit")
-  }
-  NULL
-}
-
-
-# Global upper bound on `sup G` over one sub-simplex.
-#
-# `bound` is valid (up to rounding) at every iteration. It includes the largest
-# bound ever pruned, since a pruned node may still hold the supremum.
-# `shared_incumbent` is a value attained elsewhere (e.g. another cell of the
-# same null), used only for pruning and stopping. Exactly one of `converged` and
-# `budget_hit` is `TRUE`.
-certify_sup <- function(
-  box,
-  lat,
-  tol = 1e-3,
-  max_iter = 500L,
-  shared_incumbent = -Inf
-) {
-  max_iter <- as.integer(max_iter)
-
-  active <- list(node(box, id = 1L))
-  ubs <- node_ubs(active)
-  next_id <- 2L
-  best <- box_best(box, lat)
-  incumbent_trace <- numeric(max_iter)
-  retired_nodes <- list()
-  trace <- numeric(max_iter)
-  it <- 0L
-  reason <- NULL
-
-  pruned_ub <- -Inf
-
-  repeat {
-    incumbent <- max(best$value, shared_incumbent)
-    bound <- max(best$value, ubs, pruned_ub)
-
-    reason <- stop_reason(
-      length(active),
-      bound - incumbent,
-      tol,
-      it,
-      max_iter
-    )
-    if (!is.null(reason)) {
-      break
-    }
-
-    it <- it + 1L
-
-    j <- which.max(ubs)
-    parent <- active[[j]]
-    e <- longest_edge(parent$V, lat$edges)
-    kids <- bisect(parent, e[1L], e[2L], lat)
-    kids <- lapply(seq_along(kids), function(i) {
-      node(
-        kids[[i]],
-        id = next_id + i - 1L,
-        parent = parent$id,
-        depth = parent$depth + 1L,
-        born = it
-      )
-    })
-    next_id <- next_id + length(kids)
-    retired_nodes[[length(retired_nodes) + 1L]] <-
-      node_stub(parent, it, "split")
-    active <- c(active[-j], kids)
-    ubs <- c(ubs[-j], node_ubs(kids))
-    kid_best <- boxes_best(kids, lat)
-    if (kid_best$value > best$value) {
-      best <- kid_best
-    }
-
-    # Leroy Lemma 3.2 cut-off: drop nodes whose bound can't beat the incumbent
-    # (ties too).
-    incumbent <- max(best$value, shared_incumbent)
-    keep <- ubs > incumbent
-    if (!all(keep)) {
-      pruned_ub <- max(pruned_ub, ubs[!keep])
-      for (b in active[!keep]) {
-        retired_nodes[[length(retired_nodes) + 1L]] <-
-          node_stub(b, it, "pruned")
-      }
-      active <- active[keep]
-      ubs <- ubs[keep]
-    }
-    trace[it] <- max(best$value, ubs, pruned_ub)
-    incumbent_trace[it] <- best$value
-  }
-
-  list(
-    bound = bound,
-    incumbent = best$value,
-    theta = best$theta,
-    iterations = it,
-    history = c(
-      retired_nodes,
-      lapply(active, node_stub, retired = NA_integer_, fate = "active")
-    ),
-    converged = identical(reason, "converged"),
-    budget_hit = identical(reason, "budget_hit"),
-    trace = trace[seq_len(it)],
-    incumbent_trace = incumbent_trace[seq_len(it)]
-  )
 }

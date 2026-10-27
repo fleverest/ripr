@@ -507,12 +507,13 @@ test_that("vertex values are exact, so box_best() is attained", {
   expect_lte(best$value, box_bound(box))
 })
 
-test_that("boxes_best() picks the best box", {
+test_that("best_of() picks the best box", {
   lat <- bernstein_lattice(2L, 3L)
+  enc <- bernstein_enclosure(lattice = lat)
   a <- list(V = diag(3L), coef = rep(1, lat$n_coef))
   b <- list(V = diag(3L), coef = rep(2, lat$n_coef))
-  expect_equal(boxes_best(list(a, b), lat)$value, 2)
-  expect_equal(boxes_best(list(b, a), lat)$value, 2)
+  expect_equal(best_of(enc, list(a, b))$value, 2)
+  expect_equal(best_of(enc, list(b, a))$value, 2)
 })
 
 test_that("longest_edge() returns the longest edge", {
@@ -695,11 +696,16 @@ test_that("simplex_departure() names the first way out of the simplex", {
 # A fixed, reproducible seed box on the standard simplex.
 seed_box <- function(lat, coef) list(V = diag(lat$K), coef = coef)
 
-test_that("certify_sup() brackets the true supremum", {
+# The branch-and-bound driver over a bare Bernstein enclosure on `lat`.
+bernstein_bb <- function(box, lat, ...) {
+  branch_and_bound(bernstein_enclosure(lattice = lat), box, ...)
+}
+
+test_that("branch and bound brackets the true supremum", {
   set.seed(20)
   lat <- bernstein_lattice(6L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
-  res <- certify_sup(
+  res <- bernstein_bb(
     seed_box(lat, coef),
     lat,
     tol = 1e-9,
@@ -723,7 +729,7 @@ test_that("the bound is valid at every iteration, not just at convergence", {
   set.seed(21)
   lat <- bernstein_lattice(6L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
-  truth <- certify_sup(
+  truth <- bernstein_bb(
     seed_box(lat, coef),
     lat,
     tol = 1e-12,
@@ -733,7 +739,7 @@ test_that("the bound is valid at every iteration, not just at convergence", {
   bounds <- vapply(
     c(0L, 1L, 2L, 5L, 20L, 100L),
     function(m) {
-      certify_sup(seed_box(lat, coef), lat, tol = 0, max_iter = m)$bound
+      bernstein_bb(seed_box(lat, coef), lat, tol = 0, max_iter = m)$bound
     },
     numeric(1L)
   )
@@ -748,7 +754,7 @@ test_that("the bound is non-increasing as the tolerance tightens", {
   bounds <- vapply(
     c(1, 1e-1, 1e-3, 1e-6),
     function(tol) {
-      certify_sup(
+      bernstein_bb(
         seed_box(lat, coef),
         lat,
         tol = tol,
@@ -760,12 +766,12 @@ test_that("the bound is non-increasing as the tolerance tightens", {
   expect_false(is.unsorted(rev(bounds)))
 })
 
-test_that("certify_sup() stops within tol of the incumbent", {
+test_that("branch and bound stops within tol of the incumbent", {
   set.seed(23)
   lat <- bernstein_lattice(5L, 3L)
   coef <- stats::rnorm(lat$n_coef, sd = 2)
   tol <- 1e-4
-  res <- certify_sup(
+  res <- bernstein_bb(
     seed_box(lat, coef),
     lat,
     tol = tol,
@@ -777,7 +783,7 @@ test_that("certify_sup() stops within tol of the incumbent", {
 
 test_that("a constant polynomial is certified without any subdivision", {
   lat <- bernstein_lattice(4L, 3L)
-  res <- certify_sup(seed_box(lat, rep(2.5, lat$n_coef)), lat, tol = 1e-9)
+  res <- bernstein_bb(seed_box(lat, rep(2.5, lat$n_coef)), lat, tol = 1e-9)
   expect_identical(res$iterations, 0L)
   expect_equal(res$incumbent, 2.5)
   expect_equal(res$bound, 2.5)
@@ -795,13 +801,13 @@ test_that("a run that prunes all nodes converges rather than running out", {
   while (max(coef) == box_best(seed_box(lat, coef), lat)$value) {
     coef[which.max(coef)] <- min(coef) - 1
   }
-  truth <- certify_sup(seed_box(lat, coef), lat, tol = 1e-12, max_iter = 5000L)
+  truth <- bernstein_bb(seed_box(lat, coef), lat, tol = 1e-12, max_iter = 5000L)
   # A value attained elsewhere, strictly between the supremum and the seed's
   # bound: the run can never close the gap against it, so it can only stop by
   # pruning every node.
   expect_gt(max(coef), truth$bound)
   shared <- (truth$bound + max(coef)) / 2
-  res <- certify_sup(
+  res <- bernstein_bb(
     seed_box(lat, coef),
     lat,
     tol = 0,
@@ -819,13 +825,13 @@ test_that("a run that prunes all nodes converges rather than running out", {
 
 # --- Regression ---------------------------------------------------------------
 
-test_that("certify_sup() returns the bound it has always returned", {
+test_that("branch and bound returns the bound it has always returned", {
   # A pinned value on a fixed input. Everything else here tests properties,
   # which a systematically shifted bound would still satisfy.
   set.seed(55)
   lat <- bernstein_lattice(10L, 3L)
   coef <- abs(stats::rnorm(lat$n_coef, sd = 2))^2
-  res <- certify_sup(
+  res <- bernstein_bb(
     list(V = diag(3L), coef = coef),
     lat,
     tol = 1e-9,

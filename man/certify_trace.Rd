@@ -46,7 +46,7 @@ draws the partition at every step.
 \details{
 Each cell is a separate run and \code{id} restarts at 1 in each, so group by
 \code{cell} before matching \code{parent}. A triangulated part contributes one tree per
-cell. Point cells, bounded in closed form, contribute no rows.
+cell. A point cell contributes a single root node.
 }
 \examples{
 fam <- multinomial_family(n_trials = 4L, k = 3L)

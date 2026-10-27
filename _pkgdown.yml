@@ -145,3 +145,9 @@ reference:
   - certify_trace
   - search_sup
   - ripr_search
+- title: Extending certification
+  desc: >
+    The interface that bounding methods implement, so that `certify()` can
+    bound the supremum of the expectation for a given family and geometry.
+  contents:
+  - enclosure

@@ -675,13 +675,15 @@ test_that("a point null is certified by evaluation, exactly", {
       values
   )
 
-  expect_identical(res@method, "point")
+  # A point is a one-vertex simplex: the Bernstein coefficients are just the
+  # value at that point, so the root's bound is attained and nothing is split.
   expect_identical(res@iterations, 0L)
   expect_true(all(res@converged))
   expect_false(any(res@budget_hit))
 
-  # The attained value is the evaluation itself, to the last bit.
-  expect_identical(res@sup_lb, direct)
+  # The attained value is the evaluation itself, up to the order de Casteljau
+  # adds in.
+  expect_equal(res@sup_lb, direct, tolerance = 1e-12)
   # A point's certificate is its value
   expect_identical(res@sup_ub, res@sup_lb)
 })
@@ -748,9 +750,9 @@ test_that("a point outside the parameter space is refused, not evaluated", {
 })
 
 
-test_that("a null mixing a point with a simplex certifies under both methods", {
-  # A null whose cells differ is split across methods rather than refused:
-  # each part goes to what can take it, and one certificate comes back.
+test_that("a null contianing a point and a simplex certifies", {
+  # The cells differ in shape, not in method: the point is a one-vertex
+  # simplex, so both go to the Bernstein enclosure.
   set.seed(10)
   family <- multinomial_family(n_trials = 6L, k = 3L)
   outcomes <- enumerate_space(family@sample_space)
@@ -764,7 +766,7 @@ test_that("a null mixing a point with a simplex certifies under both methods", {
   )
 
   res <- certify(x, null, tol = 1e-9)
-  expect_setequal(res@method, c("point", "bernstein"))
+  expect_identical(res@method, "bernstein")
   expect_length(res@bounds, 2L)
   expect_identical(res@iterations[[1L]], 0L)
   expect_gt(res@iterations[[2L]], 0L)
@@ -843,7 +845,10 @@ test_that("search_sup() rejects a non-random_variable", {
 test_that("search_sup() rejects an `engine` that is not an engine spec", {
   null <- plurality_null(n = 4L, k = 3L)
   x <- likelihood(null@family(c(0.4, 0.35, 0.25)))
-  expect_error(search_sup(x, null, engine = gh_engine), "must be an engine spec")
+  expect_error(
+    search_sup(x, null, engine = gh_engine),
+    "must be an engine spec"
+  )
 })
 
 test_that("search_sup() searches a sample space it cannot enumerate", {
@@ -901,7 +906,10 @@ test_that("search_sup() reads a ratio at nodes where the ratio itself is NaN", {
     function(y) x(y),
     sample_space = family@sample_space
   )
-  expect_error(search_sup(direct, null, engine = engine), "is `NaN` at every part")
+  expect_error(
+    search_sup(direct, null, engine = engine),
+    "is `NaN` at every part"
+  )
 })
 
 test_that("log space changes the range of search_sup(), not its answer", {
@@ -1053,14 +1061,15 @@ test_that("the incumbent carries from the point cells to the Bernstein runs", {
   )
   expect_gt(alone@iterations, 0L)
 
-  # Declared after the facet, the point is still evaluated first, and what it
-  # attains already beats the facet's seed bound: nothing is left to split.
+  # Declared after the facet, the point's value still seeds the incumbent, as
+  # every cell's root value does before any cell is split, and what it attains
+  # already beats the facet's seed bound: nothing is left to split.
   res <- certify(
     x,
     null_model(family, list(simplex_region(vertices = facet), point)),
     tol = 1e-9
   )
-  expect_identical(res@method, c("bernstein", "point"))
+  expect_identical(res@method, "bernstein")
   expect_gt(res@incumbents[[2L]], res@bounds[[1L]])
   expect_identical(res@iterations[[1L]], 0L)
   expect_true(all(res@converged))
@@ -1309,4 +1318,19 @@ test_that("growth_rate() refuses what it cannot integrate", {
   Q <- null@family(c(0.4, 0.35, 0.25))
   expect_error(growth_rate(function(x) 1, Q), "must be a `random_variable`")
   expect_error(growth_rate(likelihood(Q), "Q"), "must be a `mixture`")
+})
+
+
+test_that("a bounded region that is not a simplex is reported as a bug", {
+  # `cells()` triangulates every bounded region, so nothing reaches the
+  # Bernstein enclosure in this shape through `certify()`. If something ever
+  # does, the user cannot fix it by changing their null, and the message says
+  # so rather than blaming the region.
+  stray <- polyhedron_region(
+    vertices = rbind(c(0, 0, 1), c(1, 0, 0), c(0, 1, 0))
+  )
+  expect_true(is_bounded(stray))
+  why <- bernstein_obstruction(stray)
+  expect_match(why$because, "should have triangulated")
+  expect_match(why$remedy, "github.com/fleverest/ripr/issues", fixed = TRUE)
 })

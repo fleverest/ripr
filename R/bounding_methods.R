@@ -138,7 +138,7 @@ bernstein_obstruction <- function(space) {
     remedy = paste0(
       "This is a bug in ripr: `cells()` should have triangulated every ",
       "bounded region into simplices before getting here. Please report it at ",
-      "<https://github.com/fleverest/ripr/issues>, including how the reproduce ",
+      "<https://github.com/fleverest/ripr/issues>, including how to reproduce ",
       "the error. ",
       only_cert_affected_msg
     )
@@ -154,7 +154,7 @@ bernstein_obstruction <- function(space) {
       remedy = paste0(
         "A region that leaves the standard simplex cannot be bounded by ",
         "its Bernstein coefficients, as the Bernstein basis polynomials take ",
-        "take negative values there."
+        "negative values there."
       )
     ))
   }

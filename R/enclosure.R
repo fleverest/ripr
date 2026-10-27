@@ -46,12 +46,12 @@ NULL
 #'   covering `box` resulting from cutting the edge between vertex rows
 #'   `edge[1]` and `edge[2]`.}
 #'   \item{`enclosure_edge(enclosure, box)`}{Optional: selects the edge to
-#'   bisect. The default is to select the the longest (in Euclidean distance)
+#'   bisect. The default is to select the longest (in Euclidean distance)
 #'   edge.}
 #' }
 #'
 #' An effective enclosure should shrink with the size of the box. For instance,
-#' Bernstein branch and bound converges at a rate of O(h^-2), where h is the box
+#' Bernstein branch and bound converges at a rate of O(h^2), where h is the box
 #' diameter.
 #'
 #' @param label Name of the method, reported in a certificate's `method`.

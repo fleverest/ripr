@@ -750,7 +750,7 @@ test_that("a point outside the parameter space is refused, not evaluated", {
 })
 
 
-test_that("a null contianing a point and a simplex certifies", {
+test_that("a null containing a point and a simplex certifies", {
   # The cells differ in shape, not in method: the point is a one-vertex
   # simplex, so both go to the Bernstein enclosure.
   set.seed(10)
@@ -1331,6 +1331,6 @@ test_that("a bounded region that is not a simplex is reported as a bug", {
   )
   expect_true(is_bounded(stray))
   why <- bernstein_obstruction(stray)
-  expect_match(why$because, "should have triangulated")
+  expect_match(why$remedy, "should have triangulated")
   expect_match(why$remedy, "github.com/fleverest/ripr/issues", fixed = TRUE)
 })

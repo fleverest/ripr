@@ -1,12 +1,11 @@
 # Gauss quadrature rules: 1D quadrature rules from statmod, multivariate rules
 # via tensor products of those.
 
-#' Gauss-Hermite rule for the weight `exp(-t^2)`; weights sum to `sqrt(pi)`
+#' Gauss-Hermite rule for the standard normal; weights sum to one
 #' @keywords internal
 #' @noRd
-gauss_hermite <- function(n) {
-  rule <- statmod::gauss.quad(n, kind = "hermite")
-  list(nodes = rule$nodes, weights = rule$weights)
+gauss_normal <- function(n) {
+  statmod::gauss.quad.prob(n, dist = "normal")
 }
 
 

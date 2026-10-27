@@ -331,18 +331,17 @@ gh_engine <- function(n_nodes, max_nodes = 1e6) {
       )
     }
 
-    grid <- tensor_rule(rep(list(gauss_hermite(n_nodes)), d))
-    # Normalise the Hermite mass pi^(d/2) to one.
-    unit_log_w <- grid$log_w - 0.5 * d * log(pi)
-    # One affine image of the grid per component, weighted by the component.
+    # A standard normal grid, one affine image of it per component, weighted
+    # by the component.
+    grid <- tensor_rule(rep(list(gauss_normal(n_nodes)), d))
     nodes <- do.call(
       rbind,
       lapply(components, function(comp) {
-        add_by_col(sqrt(2) * grid$nodes %*% chol(comp$cov), comp$mean)
+        add_by_col(grid$nodes %*% chol(comp$cov), comp$mean)
       })
     )
     log_w <- unlist(lapply(components, function(comp) {
-      unit_log_w + log(comp$weight)
+      grid$log_w + log(comp$weight)
     }))
     live <- is.finite(log_w)
     nodes <- nodes[live, , drop = FALSE]

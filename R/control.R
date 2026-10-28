@@ -1,6 +1,3 @@
-#' @include ripr-package.R
-NULL
-
 #' Tuning for the RIPr optimiser
 #'
 #' These settings often will not require adjustment on your part, they are

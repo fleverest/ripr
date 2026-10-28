@@ -1,4 +1,4 @@
-#' @include family.R mixing.R distribution.R quadrature.R
+#' @include family.R mixing.R distribution.R quadrature.R space.R
 NULL
 
 

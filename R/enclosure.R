@@ -1,6 +1,3 @@
-#' @include region.R family.R
-NULL
-
 # The interface certify() bounds expectations through, and the branch and
 # bound that drives it. A bounding method is an `enclosure` subclass: the
 # driver owns the simplicial geometry (which edge to bisect, the node tree,

@@ -1,4 +1,4 @@
-#' @include family.R distribution.R gauss.R
+#' @include family.R distribution.R
 NULL
 
 #' Quadrature rule for expectations under the alternative

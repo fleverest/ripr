@@ -1,4 +1,4 @@
-#' @include simplex_region.R
+#' @include simplex_region.R polyhedron_region.R region.R space.R
 NULL
 
 # --- Point region --------------------------------------------------------

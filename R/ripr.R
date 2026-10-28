@@ -1,6 +1,3 @@
-#' @include fit.R
-NULL
-
 #' Fit the RIPr in one call
 #'
 #' Runs one of the recommended fitting methods until the Frank--Wolfe gap is

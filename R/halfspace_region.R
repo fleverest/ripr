@@ -1,4 +1,4 @@
-#' @include polyhedron_region.R
+#' @include polyhedron_region.R region.R space.R
 NULL
 
 # --- Halfspace region --------------------------------------------------------

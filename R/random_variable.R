@@ -1,4 +1,4 @@
-#' @include space.R distribution.R
+#' @include space.R
 NULL
 
 # Random variables on a sample space, and arithmetic over them.

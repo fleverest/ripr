@@ -1,4 +1,4 @@
-#' @include polytope_region.R
+#' @include polytope_region.R space.R
 NULL
 
 # --- Simplex region ----------------------------------------------------------

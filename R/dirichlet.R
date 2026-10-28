@@ -1,5 +1,4 @@
-#' @include mixing.R distribution.R multinomial.R region.R
-#' @include polytope_region.R gauss.R
+#' @include mixing.R distribution.R multinomial.R region.R space.R
 NULL
 
 # Dirichlet priors, untruncated and truncated. The induced mixture over counts

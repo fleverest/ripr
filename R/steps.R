@@ -1,6 +1,3 @@
-#' @include null.R quadrature.R numerics.R state.R weights.R em.R oracles.R step_rules.R
-NULL
-
 # Oracles and step rules
 #
 # Oracles propose where a new atom should go. Step rules decide whether or not

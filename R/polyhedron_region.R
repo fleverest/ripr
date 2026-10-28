@@ -1,5 +1,4 @@
-#' @include region.R
-#' @include polyhedra.R
+#' @include region.R polyhedra.R space.R
 NULL
 
 # --- Polyhedron region --------------------------------------------------------

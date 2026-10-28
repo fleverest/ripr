@@ -1,4 +1,4 @@
-#' @include family.R mixing.R distribution.R quadrature.R
+#' @include family.R
 NULL
 
 #' Log multinomial coefficient `log(n! / prod x_j!)` per row of `x`.

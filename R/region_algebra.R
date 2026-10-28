@@ -1,4 +1,4 @@
-#' @include region.R
+#' @include region.R polyhedron_region.R space.R
 NULL
 
 # --- Set algebra on regions ---------------------------------------------------

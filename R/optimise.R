@@ -1,6 +1,3 @@
-#' @include region.R
-NULL
-
 # --- Optimisation over a convex_region's chart ---------------------------------
 
 #' Bundle an objective for [maximise_over()]

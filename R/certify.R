@@ -1,4 +1,4 @@
-#' @include random_variable.R null.R enclosure.R
+#' @include random_variable.R null.R
 NULL
 
 # Bounds on the expectation of a random variable under a null. `search_sup()`

@@ -1,4 +1,4 @@
-#' @include control.R mixing.R state.R steps.R
+#' @include mixing.R state.R certify.R distribution.R
 NULL
 
 # Fitting the RIPr mixture. There is no fixed pipeline: the algorithm is the

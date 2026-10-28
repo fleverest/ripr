@@ -1,4 +1,4 @@
-#' @include enclosure.R bernstein.R multinomial.R point_region.R
+#' @include enclosure.R multinomial.R point_region.R family.R region.R
 NULL
 
 # Our bounding methods: exact evaluation for a point null on any family

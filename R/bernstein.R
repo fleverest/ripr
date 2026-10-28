@@ -1,6 +1,3 @@
-#' @include numerics.R
-NULL
-
 # Bernstein enclosure over a simplex: the polynomial arithmetic behind the
 # Bernstein `enclosure` (see `bounding_methods.R`, and `enclosure.R` for the
 # branch and bound that uses it).

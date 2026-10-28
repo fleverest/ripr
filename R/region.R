@@ -1,5 +1,4 @@
 #' @include space.R
-#' @include polyhedra.R
 NULL
 
 # --- The region hierarchy -----------------------------------------------------

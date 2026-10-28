@@ -220,14 +220,13 @@ reparametrise_to <- function(coef, lat, vertices) {
     )
   )
 
+  last <- multinomial_weights(lat, V[lat$K, ])
+
   # This recursion visits multi-indices in `enumerate_counts()` order, so the
   # parts concatenate straight into coefficient order.
   fill <- function(cur, j, remaining) {
     if (j == lat$K) {
-      for (deg in rev(seq_len(remaining))) {
-        cur <- dc_step(cur, deg, V[j, ], lat)
-      }
-      return(cur)
+      return(sum(cur * last[[remaining + 1L]]))
     }
     parts <- vector("list", remaining + 1L)
     for (a in 0:remaining) {
@@ -240,4 +239,21 @@ reparametrise_to <- function(coef, lat, vertices) {
   }
 
   fill(as.numeric(coef), 1L, lat$n)
+}
+
+
+# `Multinomial(m, v)` probabilities over the degree-`m` multi-indices, in
+# lattice order, for every `m` from 0 to `n`.
+multinomial_weights <- function(lat, v) {
+  w <- vector("list", lat$n + 1L)
+  w[[1L]] <- 1
+  for (m in seq_len(lat$n)) {
+    idx <- lat$up[[m + 1L]]
+    cur <- numeric(max(idx))
+    for (i in seq_len(lat$K)) {
+      cur[idx[, i]] <- cur[idx[, i]] + v[[i]] * w[[m]]
+    }
+    w[[m + 1L]] <- cur
+  }
+  w
 }

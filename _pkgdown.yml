@@ -152,3 +152,4 @@ reference:
     bound the supremum of the expectation for a given family and geometry.
   contents:
   - enclosure
+  - dc_enclosure

@@ -143,3 +143,72 @@ test_that("a Gaussian mixing measure prints its mean and covariance", {
   out <- paste(capture.output(print(wide)), collapse = "\n")
   expect_match(out, "covariance 9 x 9 matrix", fixed = TRUE)
 })
+
+
+# The DC enclosure for the Gaussian family: closed-form vertex values,
+# the bound on a simplex, and certify() on Gaussian nulls.
+
+correlated_family <- function() {
+  gaussian_family(d = 2L, sigma = matrix(c(1, 0.3, 0.3, 2), 2L))
+}
+
+# `log E_theta[X]` by 40-point Gauss-Hermite under `P_theta`.
+quadrature_log_g <- function(x, family, theta, n = 40L) {
+  apply(theta, 1L, function(t) {
+    rule <- resolve_engine(gh_engine(n), family(t), family)
+    matrixStats::logSumExp(rule@log_w + x@log_f(rule@nodes))
+  })
+}
+
+# `log E_theta[X]` in closed form, at each row of `theta`.
+exact_log_g <- function(x, family, theta) {
+  log_expectation_bounds(family, x)(as_row_matrix(theta))[, 1L]
+}
+
+
+# --- Vertex values ------------------------------------------------------------
+
+test_that("vertex values match quadrature for every supported X", {
+  set.seed(1)
+  fam <- correlated_family()
+  cases <- list(
+    point = likelihood(fam(c(1, 0.5))) / likelihood(fam(c(0, 0))),
+    spread = likelihood(fam(gaussian_dist(c(1, 0.5), diag(c(0.5, 0.2))))) /
+      likelihood(fam(c(0.2, -0.1))),
+    mixture_over_gaussian = likelihood(
+      fam(finite_dist(rbind(c(1, 0), c(-0.5, 0.8)), c(0.6, 0.4)))
+    ) /
+      likelihood(fam(gaussian_dist(c(0, 0), 0.7 * diag(2)))),
+    lone = likelihood(fam(c(0.3, 0.2)))
+  )
+  theta <- matrix(stats::rnorm(10L), ncol = 2L)
+  for (x in cases) {
+    expect_equal(
+      exact_log_g(x, fam, theta),
+      quadrature_log_g(x, fam, theta),
+      tolerance = 1e-10
+    )
+  }
+})
+
+test_that("Q heavier-tailed than P gives an infinite expectation", {
+  # With `P` from the null's own family its covariance is at least `Sigma`, so
+  # the integral always converges. A `P` from a tighter family, under `Q =
+  # N(0, 10)`, leaves `H = 1 + 1/10 - 1/0.1 < 0`, and the integral diverges.
+  fam <- gaussian_family(d = 1L)
+  tight <- gaussian_family(d = 1L, sigma = matrix(0.1))
+  x <- likelihood(fam(gaussian_dist(0, matrix(9)))) / likelihood(tight(0))
+  expect_identical(exact_log_g(x, fam, 0), Inf)
+})
+
+
+test_that("a P with several atoms has no closed form, and says so", {
+  fam <- correlated_family()
+  P <- fam(finite_dist(rbind(c(0, 0), c(-1, -1)), c(0.5, 0.5)))
+  why <- log_expectation_bounds(fam, likelihood(fam(c(1, 0))) / likelihood(P))
+  expect_type(why, "character")
+  expect_match(why, "several atoms")
+  # Anything that is not a likelihood ratio falls through to the default.
+  y <- random_variable(function(z) rep(1, nrow(z)), fam@sample_space)
+  expect_match(log_expectation_bounds(fam, y), "`random_variable`")
+})

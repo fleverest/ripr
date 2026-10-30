@@ -63,6 +63,7 @@ Collate:
     'certify.R'
     'control.R'
     'count_space.R'
+    'dc_enclosure.R'
     'mixing.R'
     'dirichlet.R'
     'em.R'

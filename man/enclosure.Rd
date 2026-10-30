@@ -13,7 +13,7 @@
 \usage{
 enclosure(label = character(0))
 
-bounding_method(family, cell)
+bounding_method(family, cell, x)
 
 prepare_enclosure(enclosure, x, family, control)
 
@@ -34,10 +34,10 @@ enclosure_edge(enclosure, box)
 
 \item{cell}{A \link{convex_region}, one cell of a null.}
 
+\item{x}{A \link{random_variable}.}
+
 \item{enclosure}{An \code{enclosure}: unprepared for \code{prepare_enclosure()},
 prepared for the rest.}
-
-\item{x}{A \link{random_variable}.}
 
 \item{control}{A list of options, e.g. \code{max_coefficients} for the enclosure
 method.}
@@ -65,10 +65,13 @@ interface for splitting.
 \code{enclosure} is abstract. A new bounding method subclasses it and implements:
 
 \describe{
-\item{\code{bounding_method(family, cell)}}{Registered on the pairs of
+\item{\code{bounding_method(family, cell, x)}}{Registered on the pairs of
 \link{parametric_family} and \link{convex_region} the method covers. Returns an
 unprepared instance of the method's class, or a string saying why the
-cell cannot be bounded. The default simply raises an error.}
+cell cannot be bounded. The \code{x} argument is used for methods that need
+\code{x} to have some particular structure or form, e.g. a bound that integrates
+a likelihood ratio in closed form, say. The default simply raises an
+error.}
 \item{\code{prepare_enclosure(enclosure, x, family, control)}}{Precomputes
 whatever the method needs once per \code{\link[=certify]{certify()}} call, shared by every cell
 that uses it (e.g. the Bernstein lattice for multinomial random variables,

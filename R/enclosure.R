@@ -23,10 +23,13 @@
 #' `enclosure` is abstract. A new bounding method subclasses it and implements:
 #'
 #' \describe{
-#'   \item{`bounding_method(family, cell)`}{Registered on the pairs of
+#'   \item{`bounding_method(family, cell, x)`}{Registered on the pairs of
 #'   [parametric_family] and [convex_region] the method covers. Returns an
 #'   unprepared instance of the method's class, or a string saying why the
-#'   cell cannot be bounded. The default simply raises an error.}
+#'   cell cannot be bounded. The `x` argument is used for methods that need
+#'   `x` to have some particular structure or form, e.g. a bound that integrates
+#'   a likelihood ratio in closed form, say. The default simply raises an
+#'   error.}
 #'   \item{`prepare_enclosure(enclosure, x, family, control)`}{Precomputes
 #'   whatever the method needs once per [certify()] call, shared by every cell
 #'   that uses it (e.g. the Bernstein lattice for multinomial random variables,
@@ -65,18 +68,18 @@ enclosure <- new_class(
 #' @rdname enclosure
 #' @param family A [parametric_family].
 #' @param cell A [convex_region], one cell of a null.
+#' @param x A [random_variable].
 #' @export
 bounding_method <- new_generic(
   "bounding_method",
   c("family", "cell"),
-  function(family, cell) S7::S7_dispatch()
+  function(family, cell, x) S7::S7_dispatch()
 )
 
 
 #' @rdname enclosure
 #' @param enclosure An `enclosure`: unprepared for `prepare_enclosure()`,
 #'   prepared for the rest.
-#' @param x A [random_variable].
 #' @param control A list of options, e.g. `max_coefficients` for the enclosure
 #'   method.
 #' @export

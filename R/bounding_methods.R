@@ -29,7 +29,8 @@ no_method_message <- function(family, cell) {
 
 method(bounding_method, list(parametric_family, region)) <- function(
   family,
-  cell
+  cell,
+  x
 ) {
   no_method_message(family, cell)
 }
@@ -38,7 +39,8 @@ method(bounding_method, list(parametric_family, region)) <- function(
 # Default to evaluation at a point null for enumerable families
 method(bounding_method, list(parametric_family, point_region)) <- function(
   family,
-  cell
+  cell,
+  x
 ) {
   if (!is_finite_space(family@sample_space)) {
     return(refusal_message(
@@ -57,7 +59,8 @@ method(bounding_method, list(parametric_family, point_region)) <- function(
 # Bernstein for multinomial
 method(bounding_method, list(multinomial_family, convex_region)) <- function(
   family,
-  cell
+  cell,
+  x
 ) {
   why <- bernstein_obstruction(cell)
   if (is.null(why)) {

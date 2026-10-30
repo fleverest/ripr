@@ -797,7 +797,7 @@ certify_run <- function(
   family <- null@family
   cells <- null@cells
   cell_part <- null@cell_part
-  chosen <- lapply(cells, function(cell) bounding_method(family, cell))
+  chosen <- lapply(cells, function(cell) bounding_method(family, cell, x))
   refused <- vapply(chosen, is.character, logical(1L))
   if (any(refused)) {
     stop(

@@ -84,7 +84,8 @@ test_that("the default edge is the longest", {
 test_that("bounding_method() errors if the pair is not implemented", {
   fam <- gaussian_family(d = 2L)
   cell <- simplex_region(vertices = rbind(c(0, 0), c(1, 0), c(0, 1)))
-  why <- bounding_method(fam, cell)
+  x <- random_variable(function(z) rep(1, nrow(z)), fam@sample_space)
+  why <- bounding_method(fam, cell, x)
   expect_type(why, "character")
   expect_match(why, "No bounding method is implemented for gaussian_family")
 })
@@ -92,12 +93,13 @@ test_that("bounding_method() errors if the pair is not implemented", {
 test_that("bounding_method() selects bernstein for multinomial", {
   # Points included: a point is a one-vertex simplex, bounded exactly.
   fam <- multinomial_family(n_trials = 4L, k = 3L)
+  x <- likelihood(fam(c(0.5, 0.3, 0.2)))
   expect_true(S7::S7_inherits(
-    bounding_method(fam, simplex_region(vertices = diag(3))),
+    bounding_method(fam, simplex_region(vertices = diag(3)), x),
     bernstein_enclosure
   ))
   expect_true(S7::S7_inherits(
-    bounding_method(fam, point_region(theta = c(0.5, 0.3, 0.2))),
+    bounding_method(fam, point_region(theta = c(0.5, 0.3, 0.2)), x),
     bernstein_enclosure
   ))
 })
@@ -109,12 +111,13 @@ test_that("a family with no enclosure of its own gets point evaluation", {
     sample_space = count_space(n_trials = 4L, k = 3L),
     parameter_space = simplex_region(vertices = diag(3))
   )
+  x <- random_variable(function(z) rep(1, nrow(z)), fam@sample_space)
   expect_true(S7::S7_inherits(
-    bounding_method(fam, point_region(theta = c(0.5, 0.3, 0.2))),
+    bounding_method(fam, point_region(theta = c(0.5, 0.3, 0.2)), x),
     point_enclosure
   ))
   expect_match(
-    bounding_method(fam, simplex_region(vertices = diag(3))),
+    bounding_method(fam, simplex_region(vertices = diag(3)), x),
     "No bounding method is implemented"
   )
 })

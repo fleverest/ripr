@@ -9,8 +9,8 @@ likelihood_ratio(numerator, denominator = NULL, label = NULL)
 \arguments{
 \item{numerator}{A \link{distribution} or \code{\link[=likelihood]{likelihood()}}.}
 
-\item{denominator}{A \link{distribution} or \code{\link[=likelihood]{likelihood()}}, or \code{NULL} when the
-a likelihood is desired rather than a ratio.}
+\item{denominator}{A \link{distribution} or \code{\link[=likelihood]{likelihood()}}, or \code{NULL} when a
+likelihood is desired rather than a ratio.}
 
 \item{label}{How to name a likelihood alone when printing; see
 \code{\link[=likelihood]{likelihood()}}. A ratio prints as the quotient of its two likelihoods, so

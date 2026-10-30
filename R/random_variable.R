@@ -180,8 +180,8 @@ likelihood <- function(dist, label = NULL) {
 #' a likelihood ratio mathematically, but it is not simplified.
 #'
 #' @param numerator A [distribution] or [likelihood()].
-#' @param denominator A [distribution] or [likelihood()], or `NULL` when the
-#'   a likelihood is desired rather than a ratio.
+#' @param denominator A [distribution] or [likelihood()], or `NULL` when a
+#'   likelihood is desired rather than a ratio.
 #' @param label How to name a likelihood alone when printing; see
 #'   [likelihood()]. A ratio prints as the quotient of its two likelihoods, so
 #'   it takes no label.

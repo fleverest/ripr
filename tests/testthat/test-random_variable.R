@@ -119,7 +119,7 @@ test_that("likelihood ratio tracks numerator and denominator distributions", {
   expect_match(error_message(likelihood_ratio(R, f$P)), "no denominator")
   expect_match(
     error_message(likelihood_ratio(f$Q, f$P, label = "R")),
-    "takes no `label`"
+    "does not accept a `label`"
   )
 })
 

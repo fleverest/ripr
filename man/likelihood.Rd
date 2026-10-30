@@ -14,7 +14,7 @@ distribution, e.g. \verb{P[theta = (0.5, 0.5)]} or \verb{P[mixed over 3 atoms]};
 pass a short name such as \code{"Q"} when printing ratios.}
 }
 \value{
-A \link{random_variable}.
+A \link{likelihood_ratio} with no denominator.
 }
 \description{
 \eqn{X(x) = P(x)}{X(x) = P(x)}. A likelihood ratio is then a quotient of two
@@ -28,5 +28,5 @@ Q(c(2, 2))
 likelihood(fam(c(0.5, 0.5)), label = "Q")
 }
 \seealso{
-\link{random_variable_arithmetic}
+\link{likelihood_ratio}, \link{random_variable_arithmetic}
 }

@@ -144,7 +144,7 @@ method(print, random_variable) <- function(x, ...) {
 method(format, random_variable) <- function(x, ...) rv_expression(x)
 
 
-# --- Likelihood RV ------------------------------------------------------------
+# --- Likelihoods and likelihood ratios ----------------------------------------
 
 #' The likelihood of a distribution, as a random variable
 #'
@@ -154,8 +154,8 @@ method(format, random_variable) <- function(x, ...) rv_expression(x)
 #' @param label How to name it when printing. `NULL` describes the
 #'   distribution, e.g. `P[theta = (0.5, 0.5)]` or `P[mixed over 3 atoms]`;
 #'   pass a short name such as `"Q"` when printing ratios.
-#' @return A [random_variable].
-#' @seealso [random_variable_arithmetic]
+#' @return A [likelihood_ratio] with no denominator.
+#' @seealso [likelihood_ratio], [random_variable_arithmetic]
 #' @examples
 #' fam <- gaussian_family(d = 2)
 #' Q <- likelihood(mixture(fam, dirac(c(0.5, 0.5))))
@@ -164,61 +164,103 @@ method(format, random_variable) <- function(x, ...) rv_expression(x)
 #' likelihood(fam(c(0.5, 0.5)), label = "Q")
 #' @export
 likelihood <- function(dist, label = NULL) {
-  if (is.null(label)) {
-    label <- likelihood_label(dist)
-  }
-  if (!is.character(label) || length(label) != 1L || is.na(label)) {
-    stop("`label` must be a single string, or NULL.", call. = FALSE)
-  }
-  likelihood_variable(dist, label)
+  likelihood_ratio(dist, label = label)
 }
 
 
-#' A likelihood that remembers its distribution
+#' A likelihood ratio, as a random variable
 #'
-#' What [likelihood()] returns: a [random_variable] that also keeps `dist`, so
-#' a bounding method can recognise a likelihood ratio and integrate it in
-#' closed form rather than treating it as an opaque function.
-#' @keywords internal
-#' @noRd
-likelihood_variable <- new_class(
-  "likelihood_variable",
+#' The density of `numerator` with respect to `denominator`, or with respect to
+#' the sample space's reference measure when `denominator` is `NULL` (so a
+#' plain [likelihood()] is a `likelihood_ratio` too).
+#'
+#' Dividing one likelihood by another, `likelihood(Q) / likelihood(P)`, gives
+#' a `likelihood_ratio`. Any other arithmetic gives a plain [random_variable],
+#' including a quotient of two ratios that already have denominators: that is
+#' a likelihood ratio mathematically, but it is not simplified.
+#'
+#' @param numerator A [distribution] or [likelihood()].
+#' @param denominator A [distribution] or [likelihood()], or `NULL` when the
+#'   a likelihood is desired rather than a ratio.
+#' @param label How to name a likelihood alone when printing; see
+#'   [likelihood()]. A ratio prints as the quotient of its two likelihoods, so
+#'   it takes no label.
+#' @return A callable `likelihood_ratio`, a subclass of [random_variable].
+#' @seealso [likelihood()]
+#' @examples
+#' fam <- gaussian_family(d = 1)
+#' X <- likelihood_ratio(fam(1), fam(0))
+#' X
+#' X(as.matrix(0:2))
+#' # The same, from likelihoods, keeping their labels.
+#' likelihood(fam(1), label = "Q") / likelihood(fam(0), label = "P")
+#' @export
+likelihood_ratio <- new_class(
+  "likelihood_ratio",
   parent = random_variable,
-  properties = list(dist = distribution),
-  constructor = function(dist, label) {
-    force(dist)
+  properties = list(
+    numerator = distribution,
+    denominator = NULL | distribution
+  ),
+  constructor = function(numerator, denominator = NULL, label = NULL) {
+    force(numerator)
+    force(denominator)
+    if (!is.null(denominator)) {
+      if (!is.null(label)) {
+        stop(
+          "A likelihood ratio does not accept a `label`. ",
+          "Label the individual likelihoods instead.",
+          call. = FALSE
+        )
+      }
+      top <- as_likelihood(numerator, "numerator")
+      bottom <- as_likelihood(denominator, "denominator")
+      return(new_object(
+        combine_rv(top, bottom, "/"),
+        numerator = top@numerator,
+        denominator = bottom@numerator
+      ))
+    }
+    if (!S7_inherits(numerator, distribution)) {
+      stop("`numerator` must be a distribution.", call. = FALSE)
+    }
+    if (is.null(label)) {
+      label <- likelihood_label(numerator)
+    }
+    if (!is.character(label) || length(label) != 1L || is.na(label)) {
+      stop("`label` must be a single string, or NULL.", call. = FALSE)
+    }
     new_object(
       random_variable(
-        function(x) exp(log_density(dist, x)),
-        sample_space = dist@sample_space,
+        function(x) exp(log_density(numerator, x)),
+        sample_space = numerator@sample_space,
         label = label,
-        log_f = function(x) log_density(dist, x)
+        log_f = function(x) log_density(numerator, x)
       ),
-      dist = dist
+      numerator = numerator,
+      denominator = NULL
     )
   }
 )
 
 
-#' The distributions behind a likelihood or a ratio of two
-#'
-#' `list(numerator, denominator)` for `likelihood(Q) / likelihood(P)`, with
-#' `denominator = NULL` for `likelihood(Q)` alone, or `NULL` for anything
-#' else.
+#' A ratio's operand as a likelihood alone: a [likelihood()] as is, or a
+#' distribution's likelihood with its default label.
 #' @keywords internal
 #' @noRd
-likelihood_parts <- function(x) {
-  if (S7_inherits(x, likelihood_variable)) {
-    return(list(numerator = x@dist, denominator = NULL))
+as_likelihood <- function(x, arg) {
+  if (S7_inherits(x, distribution)) {
+    return(likelihood_ratio(x))
   }
-  operands <- x@operands
-  is_ratio <- identical(x@op, "/") &&
-    length(operands) == 2L &&
-    all(vapply(operands, S7_inherits, logical(1L), likelihood_variable))
-  if (!is_ratio) {
-    return(NULL)
+  if (S7_inherits(x, likelihood_ratio) && is.null(x@denominator)) {
+    return(x)
   }
-  list(numerator = operands[[1L]]@dist, denominator = operands[[2L]]@dist)
+  stop(
+    "`",
+    arg,
+    "` must be a distribution, or a likelihood with no denominator.",
+    call. = FALSE
+  )
 }
 
 
@@ -398,3 +440,15 @@ local({
     }
   }
 })
+
+
+#' A likelihood over a likelihood is a likelihood ratio; anything else divided
+#' is a plain quotient.
+#' @keywords internal
+#' @noRd
+method(`/`, list(likelihood_ratio, likelihood_ratio)) <- function(e1, e2) {
+  if (is.null(e1@denominator) && is.null(e2@denominator)) {
+    return(likelihood_ratio(e1, e2))
+  }
+  combine_rv(e1, e2, "/")
+}

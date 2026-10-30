@@ -1,4 +1,4 @@
-#' @include space.R
+#' @include space.R distribution.R
 NULL
 
 # Random variables on a sample space, and arithmetic over them.
@@ -170,13 +170,55 @@ likelihood <- function(dist, label = NULL) {
   if (!is.character(label) || length(label) != 1L || is.na(label)) {
     stop("`label` must be a single string, or NULL.", call. = FALSE)
   }
-  force(dist)
-  random_variable(
-    function(x) exp(log_density(dist, x)),
-    sample_space = dist@sample_space,
-    label = label,
-    log_f = function(x) log_density(dist, x)
-  )
+  likelihood_variable(dist, label)
+}
+
+
+#' A likelihood that remembers its distribution
+#'
+#' What [likelihood()] returns: a [random_variable] that also keeps `dist`, so
+#' a bounding method can recognise a likelihood ratio and integrate it in
+#' closed form rather than treating it as an opaque function.
+#' @keywords internal
+#' @noRd
+likelihood_variable <- new_class(
+  "likelihood_variable",
+  parent = random_variable,
+  properties = list(dist = distribution),
+  constructor = function(dist, label) {
+    force(dist)
+    new_object(
+      random_variable(
+        function(x) exp(log_density(dist, x)),
+        sample_space = dist@sample_space,
+        label = label,
+        log_f = function(x) log_density(dist, x)
+      ),
+      dist = dist
+    )
+  }
+)
+
+
+#' The distributions behind a likelihood or a ratio of two
+#'
+#' `list(numerator, denominator)` for `likelihood(Q) / likelihood(P)`, with
+#' `denominator = NULL` for `likelihood(Q)` alone, or `NULL` for anything
+#' else.
+#' @keywords internal
+#' @noRd
+likelihood_parts <- function(x) {
+  if (S7_inherits(x, likelihood_variable)) {
+    return(list(numerator = x@dist, denominator = NULL))
+  }
+  operands <- x@operands
+  is_ratio <- identical(x@op, "/") &&
+    length(operands) == 2L &&
+    all(vapply(operands, S7_inherits, logical(1L), likelihood_variable))
+  if (!is_ratio) {
+    return(NULL)
+  }
+  list(numerator = operands[[1L]]@dist, denominator = operands[[2L]]@dist)
 }
 
 

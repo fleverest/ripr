@@ -89,6 +89,26 @@ test_that("a ratio integrates to 1 against its own denominator", {
   )
 })
 
+test_that("likelihood ratio tracks numerator and denominator distributions", {
+  f <- fixture()
+  L <- likelihood(f$Q)
+  expect_true(S7::S7_inherits(L, likelihood_variable))
+  expect_identical(
+    likelihood_parts(L),
+    list(numerator = f$Q, denominator = NULL)
+  )
+  expect_identical(
+    likelihood_parts(likelihood(f$Q) / likelihood(f$P)),
+    list(numerator = f$Q, denominator = f$P)
+  )
+  # Anything else is not a likelihood ratio, even when built from likelihoods.
+  expect_null(likelihood_parts(likelihood(f$Q) * likelihood(f$P)))
+  expect_null(likelihood_parts(likelihood(f$Q) / 2))
+  expect_null(likelihood_parts(
+    random_variable(function(x) rep(1, nrow(x)), f$space)
+  ))
+})
+
 test_that("infinite values are allowed", {
   # A ratio is genuinely infinite where its denominator vanishes and its
   # numerator does not, and that is reachable: a mixture with an atom at a
